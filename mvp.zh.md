@@ -2,12 +2,12 @@
 
 ## 目标
 
-构建第一版 CLI 原型：输入一个本地视频或音频文件，通过 OpenAI 兼容的语音 API 和 `translators` 包生成字幕文件。
+构建第一版 CLI 原型：输入一个本地视频/音频文件，或一个包含视频/音频文件的本地目录，通过 OpenAI 兼容的语音 API 和 `translators` 包生成字幕文件。
 
 第一版聚焦一个可靠的命令行流程：
 
 ```text
-video.mp4/audio.wav -> 准备音频 -> 语音转写 -> 可选翻译 -> 字幕文件
+video.mp4/audio.wav 或媒体目录 -> 准备音频 -> 语音转写 -> 可选翻译 -> 字幕文件
 ```
 
 工具命令名为 `sub-gen`。
@@ -20,7 +20,7 @@ video.mp4/audio.wav -> 准备音频 -> 语音转写 -> 可选翻译 -> 字幕文
 
 - GUI 或 Web UI
 - 视频字幕烧录
-- 批量目录处理
+- 递归批量目录处理
 - 说话人分离
 - 手动字幕编辑
 - 实时转写
@@ -124,8 +124,11 @@ sub-gen video.mp4 \
 - `--max-audio-mb`：准备后音频的上传大小限制；官方 OpenAI 默认 `25`
 - `--max-line-chars`：单行字幕的软性字符限制
 - `--bilingual-order`：`original-first` 或 `translated-first`
+- `--original-only`：快捷参数，等价于本次运行强制使用 `--mode original`
 - `--keep-temp`：保留临时音频和中间 JSON 文件
 - `--config`：从 TOML 配置文件加载选项
+
+当输入路径是目录时，CLI 会处理该目录第一层中支持的视频/音频文件。v0.1 不递归处理子目录。如果目录输入时提供 `--output`，它会被解释为输出目录。目录运行会把 `.sub-gen-progress.json` 写到输出目录；如果省略 `--output`，则写到输入目录，因此命令中断后再次运行可以跳过已完成文件继续处理。
 
 ## 配置文件
 
@@ -278,6 +281,30 @@ sub-gen audio.wav \
   --stt-model Systran/faster-whisper-small
 ```
 
+支持直接输入目录，处理目录第一层中的媒体文件：
+
+```bash
+sub-gen ./media \
+  --mode original \
+  --source-lang auto \
+  --stt-base-url http://localhost:8000/v1 \
+  --stt-api-key dummy \
+  --stt-model Systran/faster-whisper-small \
+  --output ./subtitles
+```
+
+Windows PowerShell 中可以直接使用 UNC 共享路径，建议用引号包起来：
+
+```powershell
+uv run sub-gen "\\NAS\data\others\资料\others\sample-user\1" `
+  --original-only `
+  --source-lang auto `
+  --stt-base-url http://localhost:8000/v1 `
+  --stt-api-key dummy `
+  --stt-model Systran/faster-whisper-small `
+  --output "\\NAS\data\others\资料\others\sample-user\1\subtitles"
+```
+
 ```bash
 sub-gen video.mp4 \
   --mode bilingual \
@@ -307,6 +334,8 @@ sub-gen video.mp4 \
 13. 双语 SRT 默认原文在前。
 14. 省略 `--output` 时自动生成输出文件名。
 15. v0.1 不计划支持已有 `.srt` 输入翻译。
+16. 目录输入只处理顶层目录中的支持文件。
+17. 目录输入会写入进度文件，重新运行时从未完成文件继续。
 
 ## 待确认问题
 

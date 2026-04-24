@@ -3,6 +3,7 @@
 .sub-gen/
 .pytest-tmp*/
 .tmp/
+.test-work/
 .pytest_cache/
 .ruff_cache/
 pytest-cache-files-*/

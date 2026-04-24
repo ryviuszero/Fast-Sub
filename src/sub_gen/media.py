@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import locale
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,6 +19,19 @@ AUDIO_EXTENSIONS = {
     ".webm",
     ".wma",
 }
+VIDEO_EXTENSIONS = {
+    ".avi",
+    ".flv",
+    ".m4v",
+    ".mkv",
+    ".mov",
+    ".mp4",
+    ".mpeg",
+    ".mpg",
+    ".webm",
+    ".wmv",
+}
+MEDIA_EXTENSIONS = AUDIO_EXTENSIONS | VIDEO_EXTENSIONS
 
 
 def ensure_media_tools() -> None:
@@ -29,6 +43,14 @@ def ensure_media_tools() -> None:
 
 def is_audio_file(path: Path) -> bool:
     return path.suffix.lower() in AUDIO_EXTENSIONS
+
+
+def is_media_file(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS
+
+
+def list_media_files(directory: Path) -> list[Path]:
+    return sorted(path for path in directory.iterdir() if is_media_file(path))
 
 
 def prepare_audio(input_file: Path, output: Path) -> None:
@@ -55,8 +77,20 @@ def _convert_to_wav(input_file: Path, output: Path) -> None:
         "wav",
         str(output),
     ]
-    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    completed = subprocess.run(command, capture_output=True, check=False)
     if completed.returncode != 0:
-        message = completed.stderr.strip() or completed.stdout.strip()
+        message = _decode_process_output(completed.stderr).strip() or _decode_process_output(
+            completed.stdout
+        ).strip()
         raise SubGenError(f"ffmpeg failed to prepare audio: {message}")
+
+
+def _decode_process_output(output: bytes) -> str:
+    encodings = ("utf-8", locale.getpreferredencoding(False), "gbk")
+    for encoding in encodings:
+        try:
+            return output.decode(encoding)
+        except UnicodeDecodeError:
+            pass
+    return output.decode("utf-8", errors="replace")
 

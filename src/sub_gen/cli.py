@@ -11,7 +11,13 @@ from rich.console import Console
 
 from sub_gen.config import AppConfig, load_config
 from sub_gen.errors import ProviderResponseError, SubGenError
-from sub_gen.media import ensure_media_tools, is_audio_file, prepare_audio
+from sub_gen.media import (
+    ensure_media_tools,
+    is_audio_file,
+    is_media_file,
+    list_media_files,
+    prepare_audio,
+)
 from sub_gen.models import BilingualOrder, Mode, SubtitleFormat, TranslationError, TranslationResult
 from sub_gen.paths import default_output_path, job_dir
 from sub_gen.stt import transcribe_segments, transcribe_srt
@@ -29,6 +35,7 @@ OPENAI_TRANSCRIBE_JSON_ONLY_MODELS = {
     "gpt-4o-transcribe-diarize",
 }
 LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,3}(?:-[A-Za-z0-9]+)?$")
+DIRECTORY_PROGRESS_FILE = ".sub-gen-progress.json"
 
 
 def main() -> None:
@@ -36,8 +43,14 @@ def main() -> None:
 
 
 def run(
-    input_file: Annotated[Path, typer.Argument(help="Input video or audio path.")],
+    input_file: Annotated[Path, typer.Argument(help="Input video/audio file or directory.")],
     mode: Annotated[Mode | None, typer.Option(help="Subtitle mode.")] = None,
+    original_only: Annotated[
+        bool,
+        typer.Option(
+            help="Shortcut for --mode original. Generates source-language subtitles only."
+        ),
+    ] = False,
     source_lang: Annotated[
         str | None, typer.Option(help="Source language, for example en.")
     ] = None,
@@ -61,7 +74,12 @@ def run(
         str | None,
         typer.Option(help="translators service name, for example bing or alibaba."),
     ] = None,
-    output: Annotated[Path | None, typer.Option(help="Output subtitle path.")] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            help="Output subtitle path. For directory input, this is an output directory."
+        ),
+    ] = None,
     subtitle_format: Annotated[
         SubtitleFormat | None, typer.Option("--format", help="Subtitle format. v0.1 supports srt.")
     ] = None,
@@ -78,6 +96,7 @@ def run(
         options = _resolve_options(
             config_path=config,
             mode=mode,
+            original_only=original_only,
             source_lang=source_lang,
             target_lang=target_lang,
             stt_base_url=stt_base_url,
@@ -90,15 +109,153 @@ def run(
             max_line_chars=max_line_chars,
             bilingual_order=bilingual_order,
         )
-        _run_pipeline(
-            input_file=input_file,
-            output=output,
-            options=options,
-            keep_temp=keep_temp,
-        )
+        _run_input(input_file=input_file, output=output, options=options, keep_temp=keep_temp)
     except SubGenError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc
+
+
+def _run_input(
+    input_file: Path,
+    output: Path | None,
+    options: AppConfig,
+    keep_temp: bool,
+) -> None:
+    if input_file.is_dir():
+        _run_directory(input_file, output, options, keep_temp)
+        return
+    _run_pipeline(input_file, output, options, keep_temp)
+
+
+def _run_directory(
+    input_dir: Path,
+    output_dir: Path | None,
+    options: AppConfig,
+    keep_temp: bool,
+) -> None:
+    _validate_directory_input(input_dir, output_dir, options)
+    media_files = list_media_files(input_dir)
+    if not media_files:
+        raise SubGenError(f"No supported video or audio files found in: {input_dir}")
+
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    progress_path = _directory_progress_path(input_dir, output_dir)
+    progress = _load_directory_progress(progress_path)
+    console.print(
+        f"[cyan]Found {len(media_files)} media file(s). Progress:[/cyan] {progress_path}"
+    )
+
+    failures: list[tuple[Path, str]] = []
+    for index, media_file in enumerate(media_files, start=1):
+        item_output = _directory_item_output_path(media_file, output_dir, options)
+        if _is_directory_item_complete(media_file, item_output, progress):
+            console.print(
+                f"[green]Skipping completed:[/green] {media_file} ({index}/{len(media_files)})"
+            )
+            continue
+
+        console.print(f"[cyan]Processing ({index}/{len(media_files)}):[/cyan] {media_file}")
+        try:
+            _run_pipeline(media_file, item_output, options, keep_temp)
+            _mark_directory_item_complete(media_file, item_output, progress)
+            _write_directory_progress(progress_path, progress)
+            console.print(f"[green]Updated progress:[/green] {progress_path}")
+        except SubGenError as exc:
+            failures.append((media_file, str(exc)))
+            console.print(f"[red]Failed:[/red] {media_file} - {exc}")
+
+    if failures:
+        raise SubGenError(
+            f"Failed to generate subtitles for {len(failures)} of {len(media_files)} file(s)."
+        )
+
+
+def _directory_item_output_path(
+    input_file: Path,
+    output_dir: Path | None,
+    options: AppConfig,
+) -> Path:
+    assert options.subtitle.mode is not None
+    assert options.subtitle.source_lang is not None
+    output_path = default_output_path(
+        input_file,
+        options.subtitle.mode,
+        options.subtitle.source_lang,
+        options.subtitle.target_lang,
+    )
+    if output_dir is None:
+        return output_path
+    return output_dir / output_path.name
+
+
+def _directory_progress_path(input_dir: Path, output_dir: Path | None) -> Path:
+    return (output_dir or input_dir) / DIRECTORY_PROGRESS_FILE
+
+
+def _load_directory_progress(progress_path: Path) -> dict[str, object]:
+    if not progress_path.exists():
+        return {"version": 1, "completed": {}}
+    try:
+        content = json.loads(progress_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SubGenError(f"Progress file is not valid JSON: {progress_path}") from exc
+    if not isinstance(content, dict):
+        raise SubGenError(f"Progress file has invalid shape: {progress_path}")
+    completed = content.get("completed")
+    if not isinstance(completed, dict):
+        content["completed"] = {}
+    content["version"] = 1
+    return content
+
+
+def _write_directory_progress(progress_path: Path, progress: dict[str, object]) -> None:
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    progress_path.write_text(json.dumps(progress, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _is_directory_item_complete(
+    input_file: Path,
+    output_path: Path,
+    progress: dict[str, object],
+) -> bool:
+    completed = progress.get("completed", {})
+    if not isinstance(completed, dict):
+        return False
+    entry = completed.get(_directory_item_key(input_file))
+    if not isinstance(entry, dict):
+        return False
+    signature = _directory_item_signature(input_file)
+    return (
+        entry.get("size") == signature["size"]
+        and entry.get("mtime_ns") == signature["mtime_ns"]
+        and output_path.exists()
+    )
+
+
+def _mark_directory_item_complete(
+    input_file: Path,
+    output_path: Path,
+    progress: dict[str, object],
+) -> None:
+    completed = progress.setdefault("completed", {})
+    if not isinstance(completed, dict):
+        completed = {}
+        progress["completed"] = completed
+    completed[_directory_item_key(input_file)] = {
+        **_directory_item_signature(input_file),
+        "output": str(output_path),
+    }
+
+
+def _directory_item_key(input_file: Path) -> str:
+    return str(input_file.resolve())
+
+
+def _directory_item_signature(input_file: Path) -> dict[str, int]:
+    stat = input_file.stat()
+    return {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
 
 
 def _run_pipeline(
@@ -250,6 +407,7 @@ def _resolve_options(
     *,
     config_path: Path | None,
     mode: Mode | None,
+    original_only: bool,
     source_lang: str | None,
     target_lang: str | None,
     stt_base_url: str | None,
@@ -269,7 +427,7 @@ def _resolve_options(
     options.stt.temperature = _prefer(stt_temperature, options.stt.temperature)
     options.stt.max_audio_mb = _prefer(max_audio_mb, options.stt.max_audio_mb)
     options.translator.service = _prefer(translator, options.translator.service)
-    options.subtitle.mode = _prefer(mode, options.subtitle.mode)
+    options.subtitle.mode = Mode.ORIGINAL if original_only else _prefer(mode, options.subtitle.mode)
     options.subtitle.source_lang = _prefer(source_lang, options.subtitle.source_lang)
     options.subtitle.target_lang = _prefer(target_lang, options.subtitle.target_lang)
     options.subtitle.format = _prefer(subtitle_format, options.subtitle.format)
@@ -284,6 +442,26 @@ def _validate_input(input_file: Path, options: AppConfig) -> None:
         raise SubGenError(f"Input file does not exist: {input_file}")
     if not input_file.is_file():
         raise SubGenError(f"Input path is not a file: {input_file}")
+    if not is_media_file(input_file):
+        raise SubGenError(f"Unsupported input file type: {input_file}")
+    _validate_common_options(options)
+
+
+def _validate_directory_input(
+    input_dir: Path,
+    output_dir: Path | None,
+    options: AppConfig,
+) -> None:
+    if not input_dir.exists():
+        raise SubGenError(f"Input directory does not exist: {input_dir}")
+    if not input_dir.is_dir():
+        raise SubGenError(f"Input path is not a directory: {input_dir}")
+    if output_dir is not None and output_dir.exists() and not output_dir.is_dir():
+        raise SubGenError("--output must be a directory when input is a directory.")
+    _validate_common_options(options)
+
+
+def _validate_common_options(options: AppConfig) -> None:
     if options.subtitle.format is not SubtitleFormat.SRT:
         raise SubGenError("v0.1 only supports --format srt.")
     _validate_url(options.stt.base_url, "--stt-base-url")
@@ -366,6 +544,7 @@ def _apply_openai_defaults(options: AppConfig) -> None:
             options.stt.model = OPENAI_DEFAULT_STT_MODEL
         if options.stt.max_audio_mb is None:
             options.stt.max_audio_mb = OPENAI_DEFAULT_MAX_AUDIO_MB
+
 
 def _is_openai_base_url(value: str | None) -> bool:
     if value is None:

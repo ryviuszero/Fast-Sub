@@ -21,3 +21,11 @@ def test_default_output_path_for_audio_input() -> None:
 
     assert path == Path("speech.en.srt")
 
+
+def test_default_output_path_for_windows_unc_path() -> None:
+    path = Path(r"\\NAS\data\others\资料\others\sample-user\1\video.mp4")
+
+    assert default_output_path(path, Mode.ORIGINAL, "auto", "zh") == (
+        path.parent / "video.auto.srt"
+    )
+

@@ -2,12 +2,12 @@
 
 ## Goal
 
-Build a first CLI prototype that takes a local video or audio file and generates subtitle files by using an OpenAI-compatible speech API and the `translators` Python package.
+Build a first CLI prototype that takes a local video/audio file or a local directory of video/audio files and generates subtitle files by using an OpenAI-compatible speech API and the `translators` Python package.
 
 The first version should focus on a reliable command-line workflow:
 
 ```text
-video.mp4/audio.wav -> audio preparation -> transcription -> optional translation -> subtitle file
+video.mp4/audio.wav or media directory -> audio preparation -> transcription -> optional translation -> subtitle file(s)
 ```
 
 The tool command name is `sub-gen`.
@@ -20,7 +20,7 @@ The first version will not include:
 
 - GUI or web UI
 - Video subtitle burn-in
-- Batch directory processing
+- Recursive batch directory processing
 - Speaker diarization
 - Manual subtitle editing
 - Realtime transcription
@@ -124,8 +124,11 @@ Used for `translated` and `bilingual` modes:
 - `--max-audio-mb`: prepared audio upload size limit; official OpenAI default is `25`
 - `--max-line-chars`: soft limit for subtitle line length
 - `--bilingual-order`: `original-first` or `translated-first`
+- `--original-only`: shortcut that forces `--mode original` for this run
 - `--keep-temp`: keep temporary audio and intermediate JSON files
 - `--config`: load options from a TOML config file
+
+When the input path is a directory, the CLI processes supported video/audio files in that directory only. It does not recurse into nested directories in v0.1. If `--output` is provided for a directory input, it is treated as an output directory. Directory runs write `.sub-gen-progress.json` to the output directory, or to the input directory when `--output` is omitted, so interrupted runs can resume by skipping completed files.
 
 ## Config File
 
@@ -278,6 +281,30 @@ sub-gen audio.wav \
   --stt-model Systran/faster-whisper-small
 ```
 
+Directory input is supported for the files directly inside the directory:
+
+```bash
+sub-gen ./media \
+  --mode original \
+  --source-lang auto \
+  --stt-base-url http://localhost:8000/v1 \
+  --stt-api-key dummy \
+  --stt-model Systran/faster-whisper-small \
+  --output ./subtitles
+```
+
+Windows PowerShell can use UNC share paths directly. Quoting the path is recommended:
+
+```powershell
+uv run sub-gen "\\NAS\data\others\资料\others\sample-user\1" `
+  --original-only `
+  --source-lang auto `
+  --stt-base-url http://localhost:8000/v1 `
+  --stt-api-key dummy `
+  --stt-model Systran/faster-whisper-small `
+  --output "\\NAS\data\others\资料\others\sample-user\1\subtitles"
+```
+
 ```bash
 sub-gen video.mp4 \
   --mode bilingual \
@@ -307,6 +334,8 @@ sub-gen video.mp4 \
 13. Bilingual SRT defaults to original text first.
 14. Output file names are generated automatically when `--output` is omitted.
 15. Existing `.srt` input translation is not planned for v0.1.
+16. Directory input processes supported files in the top-level directory only.
+17. Directory input writes a progress file and resumes from completed items on rerun.
 
 ## Questions To Confirm
 

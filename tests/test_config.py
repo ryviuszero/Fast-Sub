@@ -11,6 +11,7 @@ def _resolve_minimal(**overrides):
     params = {
         "config_path": None,
         "mode": None,
+        "original_only": False,
         "source_lang": None,
         "target_lang": None,
         "stt_base_url": None,
@@ -41,6 +42,15 @@ def test_cli_values_override_config() -> None:
     assert options.subtitle.target_lang == "zh"
     assert options.stt.model == "new-model"
     assert options.translator.service == "google"
+
+
+def test_original_only_overrides_config_mode() -> None:
+    options = _resolve_minimal(
+        config_path=Path("tests/fixtures/config.toml"),
+        original_only=True,
+    )
+
+    assert options.subtitle.mode is Mode.ORIGINAL
 
 
 def test_defaults_follow_openai_api_shape(monkeypatch: pytest.MonkeyPatch) -> None:
