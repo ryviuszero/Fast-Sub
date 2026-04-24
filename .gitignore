@@ -1,0 +1,11 @@
+.venv/
+.uv-cache/
+.sub-gen/
+.pytest-tmp*/
+.tmp/
+.pytest_cache/
+.ruff_cache/
+pytest-cache-files-*/
+__pycache__/
+*.py[cod]
+local_tests/*

@@ -1,0 +1,11 @@
+[stt]
+base_url = "http://stt.local/v1"
+api_key = "dummy"
+model = "old-model"
+
+[translator]
+service = "bing"
+
+[subtitle]
+mode = "original"
+source_lang = "en"
