@@ -13,7 +13,7 @@ from rich.console import Console
 from fast_sub.analyze import AnalysisResult, analyze_media
 from fast_sub.burn import BurnOptions, burn_subtitles
 from fast_sub.config import AppConfig, load_config
-from fast_sub.errors import ProviderResponseError, SubGenError
+from fast_sub.errors import ProviderResponseError, SubGenError, WorkerRunnerError
 from fast_sub.media import (
     doctor_ok,
     doctor_status,
@@ -45,9 +45,11 @@ from fast_sub.paths import default_output_path, job_dir
 from fast_sub.providers import default_registry
 from fast_sub.stt import transcribe_segments, transcribe_segments_whisperx, transcribe_srt
 from fast_sub.subtitle import RefineOptions, refine_srt_text, render_srt
+from fast_sub.transcribe import TranscribeOptions, transcribe_media
 from fast_sub.translate import translate_segments
 
 console = Console()
+err_console = Console(stderr=True)
 T = TypeVar("T")
 app = typer.Typer(help="Fast local subtitles for video.", no_args_is_help=True)
 providers_app = typer.Typer(help="Inspect provider contracts.", no_args_is_help=True)
@@ -357,10 +359,81 @@ def burn_command(
 @app.command("transcribe")
 def transcribe_command(
     input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
+    provider: Annotated[
+        str,
+        typer.Option("--provider", help="STT provider id."),
+    ] = "local-faster-whisper",
+    model: Annotated[
+        str,
+        typer.Option("--model", help="ASR model id."),
+    ] = "whisper-small",
+    language: Annotated[
+        str,
+        typer.Option("--language", help="Language: auto, zh, en, ja, or ko."),
+    ] = "auto",
+    device: Annotated[
+        str,
+        typer.Option("--device", help="Worker device: auto, cuda, or cpu."),
+    ] = "auto",
+    compute: Annotated[
+        str,
+        typer.Option("--compute", help="Worker compute type."),
+    ] = "auto",
+    batch_size: Annotated[
+        int,
+        typer.Option("--batch-size", help="Worker batch size."),
+    ] = 8,
+    vad: Annotated[
+        str,
+        typer.Option("--vad", help="VAD mode: auto, off, normal, or aggressive."),
+    ] = "auto",
+    mode: Annotated[
+        str,
+        typer.Option("--mode", help="Transcription mode: fast, balanced, or quality."),
+    ] = "balanced",
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Output .srt path."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable result metadata."),
+    ] = False,
+    keep_temp: Annotated[
+        bool,
+        typer.Option("--keep-temp", help="Keep prepared audio and worker JSON files."),
+    ] = False,
 ) -> None:
     """Transcribe media into source-language subtitles."""
-    console.print(f"[yellow]transcribe is not implemented yet:[/yellow] {input_file}")
-    raise typer.Exit(1)
+    try:
+        result = transcribe_media(
+            input_file,
+            TranscribeOptions(
+                provider=provider,
+                model=model,
+                language=language,
+                device=device,
+                compute_type=compute,
+                batch_size=batch_size,
+                vad=vad,
+                mode=mode,
+                output=output,
+                keep_temp=keep_temp,
+            ),
+        )
+    except (SubGenError, WorkerRunnerError) as exc:
+        if json_output:
+            typer.echo(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        else:
+            err_console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    if json_output:
+        typer.echo(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
+        return
+    err_console.print(f"[green]Wrote subtitle:[/green] {result.srt_path}")
+    if result.warnings:
+        err_console.print(f"[yellow]warnings:[/yellow] {len(result.warnings)}")
 
 
 @app.command("translate")
