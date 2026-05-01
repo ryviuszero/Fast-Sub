@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "description": "Example manifest for Fast Sub benchmark and regression assets. Copy this file to local_tests/manifests/<sample-id>.json and fill real local paths/checksums.",
+  "assets": [
+    {
+      "id": "zh-interview-10m",
+      "language": "zh",
+      "duration_sec": 600,
+      "media_type": "video",
+      "noise_profile": "clean_speech",
+      "source_url": "https://example.com/zh-interview",
+      "source_accessed_at": "2026-05-01",
+      "license": "CC-BY-4.0",
+      "redistributable": false,
+      "local_path": "local_tests/media/zh-interview-10m.mp4",
+      "checksum_sha256": null,
+      "prepared_audio_path": "local_tests/audio/zh-interview-10m.16k.mono.wav",
+      "prepared_audio_checksum_sha256": null,
+      "reference_transcript_path": "local_tests/references/zh-interview-10m.txt",
+      "reference_subtitle_path": "local_tests/references/zh-interview-10m.srt",
+      "reference_redistributable": false,
+      "expected_language": "zh",
+      "domain": "interview",
+      "speaker_count": 2,
+      "has_music": false,
+      "has_overlap_speech": false,
+      "target_metrics": [
+        "rtfx",
+        "wer",
+        "cer",
+        "segments_count",
+        "invalid_segments_count"
+      ],
+      "expected_use": [
+        "probe",
+        "extract",
+        "analyze",
+        "transcribe",
+        "bench"
+      ],
+      "notes": "Replace placeholder source/license/path fields before using this for benchmark comparison."
+    },
+    {
+      "id": "en-podcast-10m",
+      "language": "en",
+      "duration_sec": 600,
+      "media_type": "audio",
+      "noise_profile": "clean_speech",
+      "source_url": "https://example.com/en-podcast",
+      "source_accessed_at": "2026-05-01",
+      "license": "CC-BY-4.0",
+      "redistributable": false,
+      "local_path": "local_tests/media/en-podcast-10m.mp3",
+      "checksum_sha256": null,
+      "prepared_audio_path": "local_tests/audio/en-podcast-10m.16k.mono.wav",
+      "prepared_audio_checksum_sha256": null,
+      "reference_transcript_path": "local_tests/references/en-podcast-10m.txt",
+      "reference_subtitle_path": "local_tests/references/en-podcast-10m.srt",
+      "reference_redistributable": false,
+      "expected_language": "en",
+      "domain": "podcast",
+      "speaker_count": 2,
+      "has_music": false,
+      "has_overlap_speech": false,
+      "target_metrics": [
+        "rtfx",
+        "wer",
+        "segments_count"
+      ],
+      "expected_use": [
+        "probe",
+        "extract",
+        "analyze",
+        "transcribe",
+        "bench"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "zh-en-mixed-10m",
+      "language": [
+        "zh",
+        "en"
+      ],
+      "duration_sec": 600,
+      "media_type": "video",
+      "noise_profile": "code_switching",
+      "source_url": "https://example.com/zh-en-mixed",
+      "source_accessed_at": "2026-05-01",
+      "license": "TBD",
+      "redistributable": false,
+      "local_path": "local_tests/media/zh-en-mixed-10m.mp4",
+      "checksum_sha256": null,
+      "prepared_audio_path": "local_tests/audio/zh-en-mixed-10m.16k.mono.wav",
+      "prepared_audio_checksum_sha256": null,
+      "reference_transcript_path": "local_tests/references/zh-en-mixed-10m.txt",
+      "reference_subtitle_path": "local_tests/references/zh-en-mixed-10m.srt",
+      "reference_redistributable": false,
+      "expected_language": "zh",
+      "domain": "mixed_language",
+      "speaker_count": 2,
+      "has_music": false,
+      "has_overlap_speech": false,
+      "target_metrics": [
+        "rtfx",
+        "wer",
+        "cer",
+        "segments_count"
+      ],
+      "expected_use": [
+        "analyze",
+        "transcribe",
+        "bench"
+      ],
+      "notes": "Use a stable excerpt with clear code switching; record language mix in reference transcript if possible."
+    },
+    {
+      "id": "noisy-music-5m",
+      "language": "unknown",
+      "duration_sec": 300,
+      "media_type": "video",
+      "noise_profile": "music_noise",
+      "source_url": "https://example.com/noisy-music",
+      "source_accessed_at": "2026-05-01",
+      "license": "TBD",
+      "redistributable": false,
+      "local_path": "local_tests/media/noisy-music-5m.mp4",
+      "checksum_sha256": null,
+      "prepared_audio_path": "local_tests/audio/noisy-music-5m.16k.mono.wav",
+      "prepared_audio_checksum_sha256": null,
+      "reference_transcript_path": "local_tests/references/noisy-music-5m.txt",
+      "reference_subtitle_path": "local_tests/references/noisy-music-5m.srt",
+      "reference_redistributable": false,
+      "expected_language": "unknown",
+      "domain": "noisy_video",
+      "speaker_count": null,
+      "has_music": true,
+      "has_overlap_speech": true,
+      "target_metrics": [
+        "rtfx",
+        "segments_count",
+        "invalid_segments_count"
+      ],
+      "expected_use": [
+        "analyze",
+        "transcribe",
+        "bench"
+      ],
+      "notes": "Useful for VAD, warning, and robustness checks; quality metrics may be unavailable if no reliable reference exists."
+    },
+    {
+      "id": "ko-talk-10m",
+      "language": "ko",
+      "duration_sec": 600,
+      "media_type": "video",
+      "noise_profile": "clean_speech",
+      "source_url": "https://example.com/ko-talk",
+      "source_accessed_at": "2026-05-01",
+      "license": "TBD",
+      "redistributable": false,
+      "local_path": "local_tests/media/ko-talk-10m.mp4",
+      "checksum_sha256": null,
+      "prepared_audio_path": "local_tests/audio/ko-talk-10m.16k.mono.wav",
+      "prepared_audio_checksum_sha256": null,
+      "reference_transcript_path": "local_tests/references/ko-talk-10m.txt",
+      "reference_subtitle_path": "local_tests/references/ko-talk-10m.srt",
+      "reference_redistributable": false,
+      "expected_language": "ko",
+      "domain": "talk",
+      "speaker_count": 1,
+      "has_music": false,
+      "has_overlap_speech": false,
+      "target_metrics": [
+        "rtfx",
+        "wer",
+        "segments_count"
+      ],
+      "expected_use": [
+        "transcribe",
+        "bench"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "ja-talk-10m",
+      "language": "ja",
+      "duration_sec": 600,
+      "media_type": "video",
+      "noise_profile": "clean_speech",
+      "source_url": "https://example.com/ja-talk",
+      "source_accessed_at": "2026-05-01",
+      "license": "TBD",
+      "redistributable": false,
+      "local_path": "local_tests/media/ja-talk-10m.mp4",
+      "checksum_sha256": null,
+      "prepared_audio_path": "local_tests/audio/ja-talk-10m.16k.mono.wav",
+      "prepared_audio_checksum_sha256": null,
+      "reference_transcript_path": "local_tests/references/ja-talk-10m.txt",
+      "reference_subtitle_path": "local_tests/references/ja-talk-10m.srt",
+      "reference_redistributable": false,
+      "expected_language": "ja",
+      "domain": "talk",
+      "speaker_count": 1,
+      "has_music": false,
+      "has_overlap_speech": false,
+      "target_metrics": [
+        "rtfx",
+        "wer",
+        "segments_count"
+      ],
+      "expected_use": [
+        "transcribe",
+        "bench"
+      ],
+      "notes": ""
+    }
+  ]
+}
