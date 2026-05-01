@@ -10,6 +10,7 @@ from typing import Annotated, Any, TypeVar
 import typer
 from rich.console import Console
 
+from fast_sub.analyze import AnalysisResult, analyze_media
 from fast_sub.config import AppConfig, load_config
 from fast_sub.errors import ProviderResponseError, SubGenError
 from fast_sub.media import (
@@ -278,10 +279,42 @@ def _validate_extract_input(input_file: Path) -> None:
 @app.command("analyze")
 def analyze_command(
     input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable JSON."),
+    ] = False,
 ) -> None:
     """Analyze audio characteristics for automatic scheduling."""
-    console.print(f"[yellow]analyze is not implemented yet:[/yellow] {input_file}")
-    raise typer.Exit(1)
+    try:
+        result = analyze_media(input_file)
+    except SubGenError as exc:
+        if json_output:
+            typer.echo(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        else:
+            console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    if json_output:
+        typer.echo(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
+        return
+    _print_analysis_result(result)
+
+
+def _print_analysis_result(result: AnalysisResult) -> None:
+    console.print("[bold]Fast Sub analyze[/bold]")
+    console.print(f"duration_sec: {result.duration_sec}")
+    console.print(f"speech_ratio: {result.speech_ratio:.4f}")
+    console.print(f"silence_ratio: {result.silence_ratio:.4f}")
+    console.print(f"mean_volume_db: {result.mean_volume_db}")
+    console.print(f"peak_volume_db: {result.peak_volume_db}")
+    console.print(f"estimated_segments: {result.estimated_segments}")
+    console.print(f"avg_segment_sec: {result.avg_segment_sec}")
+    console.print(f"recommended_vad: {result.recommended_vad}")
+    console.print(f"recommended_mode: {result.recommended_mode}")
+    if result.warnings:
+        console.print(f"warnings: {', '.join(result.warnings)}")
+    else:
+        console.print("warnings: none")
 
 
 @app.command("transcribe")
