@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import sys
 from pathlib import Path
 from typing import Annotated, TypeVar
 
@@ -35,6 +36,17 @@ from fast_sub.translate import translate_segments
 
 console = Console()
 T = TypeVar("T")
+app = typer.Typer(help="Fast local subtitles for video.", no_args_is_help=True)
+COMMAND_NAMES = {
+    "analyze",
+    "doctor",
+    "extract",
+    "probe",
+    "refine",
+    "run",
+    "transcribe",
+    "translate",
+}
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 OPENAI_DEFAULT_STT_MODEL = "whisper-1"
 OPENAI_DEFAULT_MAX_AUDIO_MB = 25.0
@@ -49,9 +61,81 @@ DIRECTORY_PROGRESS_FILE = ".fast-sub-progress.json"
 
 
 def main() -> None:
+    if _should_use_command_app(sys.argv[1:]):
+        app()
+        return
     typer.run(run)
 
 
+def _should_use_command_app(args: list[str]) -> bool:
+    if not args:
+        return True
+    first = args[0]
+    return first in COMMAND_NAMES or first in {"--help", "-h", "--version"}
+
+
+@app.command("doctor")
+def doctor_command() -> None:
+    """Check local dependencies and runtime readiness."""
+    console.print("[yellow]doctor is not implemented yet.[/yellow]")
+    raise typer.Exit(1)
+
+
+@app.command("probe")
+def probe_command(
+    input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
+) -> None:
+    """Inspect media metadata."""
+    console.print(f"[yellow]probe is not implemented yet:[/yellow] {input_file}")
+    raise typer.Exit(1)
+
+
+@app.command("extract")
+def extract_command(
+    input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
+) -> None:
+    """Extract normalized 16kHz mono wav audio."""
+    console.print(f"[yellow]extract is not implemented yet:[/yellow] {input_file}")
+    raise typer.Exit(1)
+
+
+@app.command("analyze")
+def analyze_command(
+    input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
+) -> None:
+    """Analyze audio characteristics for automatic scheduling."""
+    console.print(f"[yellow]analyze is not implemented yet:[/yellow] {input_file}")
+    raise typer.Exit(1)
+
+
+@app.command("transcribe")
+def transcribe_command(
+    input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
+) -> None:
+    """Transcribe media into source-language subtitles."""
+    console.print(f"[yellow]transcribe is not implemented yet:[/yellow] {input_file}")
+    raise typer.Exit(1)
+
+
+@app.command("translate")
+def translate_command(
+    input_file: Annotated[Path, typer.Argument(help="Input subtitle file.")],
+) -> None:
+    """Translate an existing subtitle file."""
+    console.print(f"[yellow]translate is not implemented yet:[/yellow] {input_file}")
+    raise typer.Exit(1)
+
+
+@app.command("refine")
+def refine_command(
+    input_file: Annotated[Path, typer.Argument(help="Input subtitle file.")],
+) -> None:
+    """Clean and normalize subtitle timing/text."""
+    console.print(f"[yellow]refine is not implemented yet:[/yellow] {input_file}")
+    raise typer.Exit(1)
+
+
+@app.command("run")
 def run(
     input_file: Annotated[Path, typer.Argument(help="Input video/audio file or directory.")],
     mode: Annotated[Mode | None, typer.Option(help="Subtitle mode.")] = None,

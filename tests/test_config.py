@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from fast_sub.cli import _resolve_options, _validate_input
+from fast_sub.cli import _resolve_options, _should_use_command_app, _validate_input
 from fast_sub.errors import SubGenError
 from fast_sub.models import Mode, SttProvider, SubtitleFormat
 
@@ -46,6 +46,17 @@ def test_cli_values_override_config() -> None:
     assert options.subtitle.target_lang == "zh"
     assert options.stt.model == "new-model"
     assert options.translator.service == "google"
+
+
+def test_cli_dispatches_known_commands_to_command_app() -> None:
+    assert _should_use_command_app(["doctor"])
+    assert _should_use_command_app(["probe", "video.mp4"])
+    assert _should_use_command_app(["run", "video.mp4"])
+
+
+def test_cli_keeps_bare_input_compatible_with_legacy_run() -> None:
+    assert not _should_use_command_app(["video.mp4"])
+    assert not _should_use_command_app(["C:/media/video.mp4"])
 
 
 def test_original_only_overrides_config_mode() -> None:
