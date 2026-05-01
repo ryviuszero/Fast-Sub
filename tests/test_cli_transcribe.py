@@ -26,6 +26,8 @@ def test_transcribe_command_outputs_json(monkeypatch) -> None:
             worker_elapsed_sec=1.5,
             rtfx=5.0,
             segments_count=2,
+            gpu_load=options.gpu_load,
+            batch_size=options.batch_size or 4,
             warnings=[],
         )
 
@@ -44,6 +46,8 @@ def test_transcribe_command_outputs_json(monkeypatch) -> None:
             "zh",
             "--output",
             "out.srt",
+            "--gpu-load",
+            "low",
             "--json",
             "--keep-temp",
         ],
@@ -59,6 +63,8 @@ def test_transcribe_command_outputs_json(monkeypatch) -> None:
     assert input_file == Path("input.mp4")
     assert options.language == "zh"
     assert options.output == Path("out.srt")
+    assert options.gpu_load == "low"
+    assert options.batch_size is None
     assert options.keep_temp is True
 
 

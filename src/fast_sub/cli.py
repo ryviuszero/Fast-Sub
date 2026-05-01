@@ -380,9 +380,13 @@ def transcribe_command(
         typer.Option("--compute", help="Worker compute type."),
     ] = "auto",
     batch_size: Annotated[
-        int,
-        typer.Option("--batch-size", help="Worker batch size."),
-    ] = 8,
+        int | None,
+        typer.Option("--batch-size", help="Worker batch size. Overrides --gpu-load."),
+    ] = None,
+    gpu_load: Annotated[
+        str,
+        typer.Option("--gpu-load", help="GPU load profile: low, balanced, or max."),
+    ] = "balanced",
     vad: Annotated[
         str,
         typer.Option("--vad", help="VAD mode: auto, off, normal, or aggressive."),
@@ -415,6 +419,7 @@ def transcribe_command(
                 device=device,
                 compute_type=compute,
                 batch_size=batch_size,
+                gpu_load=gpu_load,
                 vad=vad,
                 mode=mode,
                 output=output,

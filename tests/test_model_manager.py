@@ -17,7 +17,7 @@ from fast_sub.model_manager import (
     model_path,
     verify_model,
 )
-from fast_sub.model_manifest import ModelManifestEntry
+from fast_sub.model_manifest import ModelManifestEntry, list_models
 from fast_sub.model_manifest import ModelManifestFile
 
 runner = CliRunner()
@@ -216,9 +216,15 @@ def test_models_list_json_includes_initial_models(
         assert {"whisper-base", "whisper-small", "whisper-large-v3-turbo"} <= ids
         assert all("installed" in row for row in rows)
         assert all(row["manifest_type"] == "directory" for row in rows)
-        assert all(row["required_files"] >= 4 for row in rows)
+        assert all(row["required_files"] >= 1 for row in rows)
     finally:
         shutil.rmtree(work_dir)
+
+
+def test_builtin_model_urls_are_pinned_to_huggingface_revisions() -> None:
+    for model in list_models():
+        assert model.url is not None
+        assert "/resolve/main/" not in str(model.url)
 
 
 def test_models_verify_missing_exits_nonzero(

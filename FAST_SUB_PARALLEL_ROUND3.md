@@ -474,6 +474,139 @@ fast-sub transcribe tests/fixtures/sample.wav --provider local-faster-whisper --
 - slow/integration test 不作为默认测试前置条件；如果加入测试，必须标记为 slow 或写入手动验证文档。
 - `uv run pytest` 通过。
 
+### 2026-05-01 integration 验证记录
+
+环境：
+
+```text
+OS: Windows
+Python: 3.13.5
+Provider: local-faster-whisper
+Worker dependency: faster-whisper 1.2.1（手动安装到当前 .venv，仅用于本地验证）
+Model: whisper-base
+Device: cpu
+Compute type: int8
+```
+
+命令与结果：
+
+```bash
+$env:UV_CACHE_DIR='.uv-cache'; uv pip install faster-whisper
+```
+
+结果：成功安装 `faster-whisper`、`ctranslate2`、`onnxruntime` 等运行时依赖。
+
+```bash
+$env:UV_CACHE_DIR='.uv-cache'; $env:TMP='.test-work\tmp'; $env:TEMP='.test-work\tmp'; uv run fast-sub models install whisper-base
+```
+
+首次结果：失败，`config.json` sha256 与 manifest 不一致。修正 `whisper-base` 的 `config.json`、`tokenizer.json`、`vocabulary.txt` size/sha256 后重跑成功：
+
+```text
+Installed: whisper-base -> C:\Users\Example\AppData\Local\FastSub\models\whisper-base (4 file(s) verified)
+```
+
+```bash
+$env:UV_CACHE_DIR='.uv-cache'; $env:TMP='.test-work\tmp'; $env:TEMP='.test-work\tmp'; uv run fast-sub models verify whisper-base
+```
+
+结果：
+
+```text
+installed: Model directory is installed and verified (4 files).
+C:\Users\Example\AppData\Local\FastSub\models\whisper-base
+```
+
+```bash
+$env:UV_CACHE_DIR='.uv-cache'; $env:TMP='.test-work\tmp'; $env:TEMP='.test-work\tmp'; uv run fast-sub transcribe C:\Users\Example\Desktop\SaaS\P05\local_tests\happy.wav --provider local-faster-whisper --model whisper-base --device cpu --compute int8 --batch-size 1 --vad off --output .test-work\manual\happy.srt --json --keep-temp
+```
+
+结果：
+
+```json
+{
+  "srt_path": ".test-work\\manual\\happy.srt",
+  "provider": "local-faster-whisper",
+  "model": "whisper-base",
+  "language_detected": "zh",
+  "duration_sec": 1.76,
+  "elapsed_sec": 1.754,
+  "worker_elapsed_sec": 1.0869476000079885,
+  "rtfx": 1.003,
+  "segments_count": 1,
+  "warnings": []
+}
+```
+
+生成的 SRT 内容：
+
+```srt
+1
+00:00:00,000 --> 00:00:01,640
+今天天氣真好
+```
+
+额外失败路径验证：
+
+```bash
+$env:UV_CACHE_DIR='.uv-cache'; $env:TMP='.test-work\tmp'; $env:TEMP='.test-work\tmp'; uv run fast-sub transcribe tests\fixtures\sample.wav --provider local-faster-whisper --model whisper-base --device cpu --compute int8 --batch-size 1 --vad off --output .test-work\manual\sample.srt --json --keep-temp
+```
+
+结果：真实 worker 启动成功，但测试 fixture 无可转写语音，返回清晰错误：
+
+```json
+{"ok": false, "error": "Worker failed with EMPTY_SEGMENTS: faster-whisper returned no segments. stderr: EMPTY_SEGMENTS: faster-whisper returned no segments."}
+```
+
+默认测试：
+
+```bash
+$env:UV_CACHE_DIR='.uv-cache'; $env:TMP='.test-work\tmp'; $env:TEMP='.test-work\tmp'; uv run pytest
+```
+
+结果：`125 passed`，剩余一个 `.pytest_cache` 权限 warning。
+
+### 2026-05-01 最小 GPU 负载控制记录
+
+为降低长视频转写时默认占满 GPU 对用户日常使用的影响，本轮只做最小改动，不实现 chunk、sleep throttle、自动调度或 benchmark。
+
+CLI 新增参数：
+
+```bash
+fast-sub transcribe input.mp4 --gpu-load low|balanced|max
+```
+
+当前策略：
+
+```text
+low      -> batch_size=2
+balanced -> batch_size=4
+max      -> batch_size=8
+```
+
+行为约定：
+
+- 默认 `--gpu-load balanced`，因此未显式传 `--batch-size` 时实际 batch size 从 8 降为 4。
+- 用户显式传 `--batch-size` 时优先使用用户值，不被 `--gpu-load` 覆盖。
+- `TranscribeResult.as_dict()` 输出 `gpu_load` 和实际 `batch_size`，便于后续排查“GPU 跑满”反馈。
+- 暂不改变 worker schema；transcribe 主流程把资源档位解析成现有 worker `batch_size` 参数。
+
+测试：
+
+```bash
+$env:UV_CACHE_DIR='.uv-cache'; $env:TMP='.test-work\tmp'; $env:TEMP='.test-work\tmp'; uv run pytest tests\test_cli_transcribe.py tests\test_transcribe.py
+```
+
+结果：`11 passed`，剩余一个 `.pytest_cache` 权限 warning。
+
+剩余风险：
+
+- `faster-whisper` 仍是可选运行时依赖，未写入 `pyproject.toml` 默认依赖；干净环境需要用户手动安装，否则 provider resolution 会报告 `missing_dependency`。
+- 本次只校正并验证了 `whisper-base` manifest；`whisper-small`、`whisper-large-v3-turbo` 的远端 hash 仍需后续真实安装校验。
+- `tests/fixtures/sample.wav` 不适合作为真实 ASR 成功样本，会触发 `EMPTY_SEGMENTS`；后续应补一个可公开提交的小语音 fixture 或 slow/manual 样本说明。
+- 本次真实验证使用 CPU/int8 小样本，不代表 RTX 3060/CUDA 性能基线。
+- `--gpu-load` 只通过 batch size 间接降低压力，不能保证 GPU 利用率固定在某个百分比；长视频体验仍需要后续 chunk/sleep/cancel 机制继续改善。
+
 ### 启动提示
 
 ```text

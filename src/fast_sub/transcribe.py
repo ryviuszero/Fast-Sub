@@ -13,11 +13,9 @@ from typing import Any
 from fast_sub.analyze import analyze_media
 from fast_sub.errors import SubGenError
 from fast_sub.media import ensure_media_tools, is_media_file, prepare_audio, probe_media
-from fast_sub.model_manager import model_path, verify_model
-from fast_sub.model_manifest import get_model
 from fast_sub.models import Mode, Segment
 from fast_sub.paths import job_dir
-from fast_sub.providers import default_registry
+from fast_sub.provider_resolution import resolve_stt_provider
 from fast_sub.subtitle import render_srt
 from fast_sub.worker_models import SttWorkerRequest
 from fast_sub.worker_runner import run_stt_worker
@@ -27,14 +25,21 @@ DEFAULT_MODEL = "whisper-small"
 DEFAULT_LANGUAGE = "auto"
 DEFAULT_DEVICE = "auto"
 DEFAULT_COMPUTE_TYPE = "auto"
-DEFAULT_BATCH_SIZE = 8
+DEFAULT_BATCH_SIZE = 4
+DEFAULT_GPU_LOAD = "balanced"
 DEFAULT_VAD = "auto"
 DEFAULT_MODE = "balanced"
+GPU_LOAD_BATCH_SIZES = {
+    "low": 2,
+    "balanced": DEFAULT_BATCH_SIZE,
+    "max": 8,
+}
 VALID_LANGUAGES = {"auto", "zh", "en", "ja", "ko"}
 VALID_DEVICES = {"auto", "cuda", "cpu"}
 VALID_COMPUTE_TYPES = {"auto", "float16", "int8_float16", "int8"}
 VALID_VAD = {"auto", "off", "normal", "aggressive"}
 VALID_MODES = {"fast", "balanced", "quality"}
+VALID_GPU_LOADS = set(GPU_LOAD_BATCH_SIZES)
 WORKER_COMMAND_ENV = "FAST_SUB_STT_WORKER_COMMAND"
 
 
@@ -45,7 +50,8 @@ class TranscribeOptions:
     language: str = DEFAULT_LANGUAGE
     device: str = DEFAULT_DEVICE
     compute_type: str = DEFAULT_COMPUTE_TYPE
-    batch_size: int = DEFAULT_BATCH_SIZE
+    batch_size: int | None = None
+    gpu_load: str = DEFAULT_GPU_LOAD
     vad: str = DEFAULT_VAD
     mode: str = DEFAULT_MODE
     output: Path | None = None
@@ -64,6 +70,8 @@ class TranscribeResult:
     worker_elapsed_sec: float | None
     rtfx: float | None
     segments_count: int
+    gpu_load: str
+    batch_size: int
     warnings: list[str] = field(default_factory=list)
     metadata_path: Path | None = None
     work_dir: Path | None = None
@@ -79,6 +87,8 @@ class TranscribeResult:
             "worker_elapsed_sec": self.worker_elapsed_sec,
             "rtfx": self.rtfx,
             "segments_count": self.segments_count,
+            "gpu_load": self.gpu_load,
+            "batch_size": self.batch_size,
             "warnings": self.warnings,
         }
 
@@ -109,6 +119,7 @@ def transcribe_media(
         prepare_audio(input_file, audio_path)
         resolved_vad, analysis_warnings = _resolve_vad(input_file, options.vad)
         model_dir = _resolve_model_path(options.provider, options.model)
+        batch_size = _resolve_batch_size(options)
         request = SttWorkerRequest(
             job_id=work_dir.name,
             audio_path=audio_path,
@@ -116,7 +127,7 @@ def transcribe_media(
             model_path=model_dir,
             device=options.device,
             compute_type=options.compute_type,
-            batch_size=options.batch_size,
+            batch_size=batch_size,
             vad=resolved_vad,
             mode=options.mode,
         )
@@ -143,6 +154,8 @@ def transcribe_media(
             worker_elapsed_sec=response.elapsed_sec,
             rtfx=_rtfx(duration_sec, elapsed_sec),
             segments_count=len(segments),
+            gpu_load=options.gpu_load,
+            batch_size=batch_size,
             warnings=warnings,
             metadata_path=metadata_path if options.keep_temp else None,
             work_dir=work_dir if options.keep_temp else None,
@@ -203,35 +216,25 @@ def _resolve_vad(input_file: Path, vad: str) -> tuple[str, list[str]]:
 
 
 def _resolve_model_path(provider_id: str, model_id: str) -> Path:
-    registry = default_registry()
-    provider = registry.get(provider_id)
-    if provider is None:
-        raise SubGenError(f"Unknown STT provider: {provider_id}")
-    if provider.metadata.type.value != "stt":
-        raise SubGenError(f"Provider is not an STT provider: {provider_id}")
-    if provider.metadata.location.value != "local":
+    resolution = resolve_stt_provider(provider_id, model_id)
+    if resolution.provider_location == "api":
         raise SubGenError("transcribe v0 only supports local STT providers.")
     if provider_id != DEFAULT_PROVIDER:
         raise SubGenError(f"Unsupported local STT provider for transcribe v0: {provider_id}")
-
-    try:
-        model = get_model(model_id)
-    except KeyError as exc:
-        raise SubGenError(str(exc)) from exc
-    if model.type != "asr":
-        raise SubGenError(f"Model is not an ASR model: {model_id}")
-    if model.backend != "faster-whisper":
+    if resolution.status != "available":
+        raise SubGenError(_format_resolution_error(resolution))
+    if resolution.model_path is None:
         raise SubGenError(
-            f"Model backend '{model.backend}' is incompatible with provider {provider_id}."
+            f"Provider resolution did not return a local model path for {provider_id}."
         )
+    return resolution.model_path
 
-    status = verify_model(model)
-    if not status.installed:
-        raise SubGenError(
-            f"Model is not installed: {model_id}. "
-            f"Run `fast-sub models install {model_id}`. {status.message}"
-        )
-    return model_path(model)
+
+def _format_resolution_error(resolution: Any) -> str:
+    message = f"{resolution.status}: {resolution.message}"
+    if resolution.action_hint:
+        message = f"{message} {resolution.action_hint}"
+    return message
 
 
 def _resolve_worker_command(options: TranscribeOptions) -> list[str | Path]:
@@ -258,8 +261,15 @@ def _validate_options(options: TranscribeOptions) -> None:
     _require_choice(options.compute_type, VALID_COMPUTE_TYPES, "--compute")
     _require_choice(options.vad, VALID_VAD, "--vad")
     _require_choice(options.mode, VALID_MODES, "--mode")
-    if options.batch_size <= 0:
+    _require_choice(options.gpu_load, VALID_GPU_LOADS, "--gpu-load")
+    if options.batch_size is not None and options.batch_size <= 0:
         raise SubGenError("--batch-size must be greater than 0.")
+
+
+def _resolve_batch_size(options: TranscribeOptions) -> int:
+    if options.batch_size is not None:
+        return options.batch_size
+    return GPU_LOAD_BATCH_SIZES[options.gpu_load]
 
 
 def _require_choice(value: str, valid: set[str], option: str) -> None:
