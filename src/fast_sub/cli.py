@@ -5,7 +5,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
-from typing import Annotated, TypeVar
+from typing import Annotated, Any, TypeVar
 
 import typer
 from rich.console import Console
@@ -13,11 +13,14 @@ from rich.console import Console
 from fast_sub.config import AppConfig, load_config
 from fast_sub.errors import ProviderResponseError, SubGenError
 from fast_sub.media import (
+    doctor_ok,
+    doctor_status,
     ensure_media_tools,
     is_audio_file,
     is_media_file,
     list_media_files,
     prepare_audio,
+    probe_media,
 )
 from fast_sub.models import (
     BilingualOrder,
@@ -75,28 +78,105 @@ def _should_use_command_app(args: list[str]) -> bool:
 
 
 @app.command("doctor")
-def doctor_command() -> None:
+def doctor_command(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable JSON."),
+    ] = False,
+) -> None:
     """Check local dependencies and runtime readiness."""
-    console.print("[yellow]doctor is not implemented yet.[/yellow]")
-    raise typer.Exit(1)
+    status = doctor_status()
+    if json_output:
+        typer.echo(json.dumps(status, ensure_ascii=False, indent=2))
+    else:
+        _print_doctor_status(status)
+    if not doctor_ok(status):
+        raise typer.Exit(3)
 
 
 @app.command("probe")
 def probe_command(
     input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable JSON."),
+    ] = False,
 ) -> None:
     """Inspect media metadata."""
-    console.print(f"[yellow]probe is not implemented yet:[/yellow] {input_file}")
-    raise typer.Exit(1)
+    try:
+        info = probe_media(input_file)
+    except SubGenError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(2) from exc
+    if json_output:
+        typer.echo(json.dumps(info, ensure_ascii=False, indent=2))
+        return
+    _print_probe_info(info)
 
 
 @app.command("extract")
 def extract_command(
     input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Output wav path."),
+    ] = None,
+    audio_stream: Annotated[
+        int | None,
+        typer.Option("--audio-stream", help="Input ffprobe stream index to extract."),
+    ] = None,
 ) -> None:
     """Extract normalized 16kHz mono wav audio."""
-    console.print(f"[yellow]extract is not implemented yet:[/yellow] {input_file}")
-    raise typer.Exit(1)
+    try:
+        _validate_extract_input(input_file)
+        out_path = output or (job_dir(input_file) / "audio.16k.mono.wav")
+        prepare_audio(input_file, out_path, audio_stream=audio_stream)
+    except SubGenError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+    console.print(f"[green]Wrote audio:[/green] {out_path}")
+
+
+def _print_doctor_status(status: dict[str, Any]) -> None:
+    console.print("[bold]Fast Sub doctor[/bold]")
+    for tool in ("ffmpeg", "ffprobe"):
+        item = status[tool]
+        label = "[green]ok[/green]" if item["available"] else "[red]missing[/red]"
+        detail = item["path"] or "not found on PATH"
+        console.print(f"{tool}: {label} ({detail})")
+    python = status["python"]
+    py_label = "[green]ok[/green]" if python["ok"] else "[red]unsupported[/red]"
+    console.print(f"python: {py_label} ({python['version']})")
+    for key in ("cache_dir", "jobs_dir"):
+        item = status[key]
+        label = "[green]writable[/green]" if item["writable"] else "[red]not writable[/red]"
+        console.print(f"{key}: {label} ({item['path']})")
+        if item["error"]:
+            console.print(f"  [red]{item['error']}[/red]")
+
+
+def _print_probe_info(info: dict[str, Any]) -> None:
+    console.print(f"path: {info['path']}")
+    console.print(f"duration_sec: {info['duration_sec']}")
+    console.print(f"container: {info['container']}")
+    console.print(f"audio_streams: {len(info['audio_streams'])}")
+    console.print(f"video_streams: {len(info['video_streams'])}")
+    selected = info["selected_audio_stream"]
+    console.print(
+        "selected_audio_stream: "
+        f"index={selected.get('index')} codec={selected.get('codec')} "
+        f"channels={selected.get('channels')} sample_rate={selected.get('sample_rate')}"
+    )
+
+
+def _validate_extract_input(input_file: Path) -> None:
+    if not input_file.exists():
+        raise SubGenError(f"Input file does not exist: {input_file}")
+    if not input_file.is_file():
+        raise SubGenError(f"Input path is not a file: {input_file}")
+    if not is_media_file(input_file):
+        raise SubGenError(f"Unsupported input file type: {input_file}")
+    ensure_media_tools()
 
 
 @app.command("analyze")
