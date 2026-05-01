@@ -263,6 +263,48 @@ api-custom-http-translate
 
 ## Milestones
 
+## Implementation Checklist
+
+状态说明：
+
+- `[x]` 已在 `master` 合并并通过基础测试。
+- `[~]` 已有骨架或部分实现，但还不能视为完整里程碑。
+- `[ ]` 尚未开始或应在后续独立分支完成。
+
+当前主线状态：
+
+- [x] 项目重命名为 `fast-sub`，包目录改为 `src/fast_sub`。
+- [x] CLI 支持裸命令兼容：`fast-sub input.mp4` 仍进入默认 run 流程。
+- [x] `doctor`、`probe`、`extract` 媒体基础能力。
+- [x] provider contract 和 `providers list/test` 骨架。
+- [x] `refine` 字幕整理能力。
+- [x] `models list/install/verify` 模型管理基础能力。
+- [x] 模型 manifest 支持目录/多文件语义，适配 faster-whisper/CTranslate2 模型目录。
+- [x] 模型下载 hash mismatch 后清理 `.part`，避免污染后续镜像重试。
+- [x] 默认模型缓存目录统一为 `用户数据目录/FastSub/models`。
+- [~] 旧 `run` 流程仍存在 OpenAI compatible / WhisperX 路径，后续需要收敛到 provider/worker contract。
+- [~] `analyze` 命令目前还是占位，需要下一阶段实现。
+- [~] `transcribe` 命令目前还是占位，需要先完成 worker contract。
+- [~] `translate` 命令目前还是占位，需要后续 provider 化。
+- [ ] `burn` 字幕烧录。
+- [ ] `bench` benchmark 报告。
+- [ ] `auto` 自动调度。
+- [ ] Electron UI。
+- [ ] Web 版。
+
+下一轮最稳并行组合：
+
+- [ ] `codex/fast-sub-analyze`：实现音频预分析，不依赖 Whisper 模型。
+- [ ] `codex/fast-sub-worker-contract`：实现 worker request/response schema 和 runner 骨架，不接真实模型。
+- [ ] `codex/fast-sub-burn`：实现 ffmpeg 字幕烧录模块和 CLI，占用范围独立。
+- [ ] `codex/fast-sub-test-assets`：整理 benchmark/test-assets 文档、样本元数据和 fixture 策略，尽量只改文档和测试资产。
+
+暂缓并行：
+
+- [ ] `codex/fast-sub-auto`：依赖 `analyze`、worker、transcribe，等前置分支合并后再做。
+- [ ] `codex/fast-sub-transcribe-cli`：容易同时改 CLI、provider、model、worker，等 worker contract 合并后再做。
+- [ ] `codex/fast-sub-translate-cli`：等 provider contract 和主流程稳定后再做。
+
 ### Milestone 0: CLI 骨架
 
 命令：
