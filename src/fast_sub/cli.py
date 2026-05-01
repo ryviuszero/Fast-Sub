@@ -22,6 +22,13 @@ from fast_sub.media import (
     prepare_audio,
     probe_media,
 )
+from fast_sub.model_manager import (
+    ModelManagerError,
+    install_model,
+    model_path,
+    verify_model,
+)
+from fast_sub.model_manifest import get_model, list_models
 from fast_sub.models import (
     BilingualOrder,
     Mode,
@@ -42,6 +49,7 @@ console = Console()
 T = TypeVar("T")
 app = typer.Typer(help="Fast local subtitles for video.", no_args_is_help=True)
 providers_app = typer.Typer(help="Inspect provider contracts.", no_args_is_help=True)
+models_app = typer.Typer(help="Manage local model downloads.", no_args_is_help=True)
 COMMAND_NAMES = {
     "analyze",
     "doctor",
@@ -50,6 +58,7 @@ COMMAND_NAMES = {
     "providers",
     "refine",
     "run",
+    "models",
     "transcribe",
     "translate",
 }
@@ -79,6 +88,84 @@ def _should_use_command_app(args: list[str]) -> bool:
         return True
     first = args[0]
     return first in COMMAND_NAMES or first in {"--help", "-h", "--version"}
+
+
+app.add_typer(models_app, name="models")
+
+
+@models_app.command("list")
+def models_list_command(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable JSON."),
+    ] = False,
+) -> None:
+    """List known models and local installation status."""
+    rows = []
+    for model in list_models():
+        status = verify_model(model)
+        rows.append(
+            {
+                "id": model.id,
+                "name": model.name,
+                "type": model.type,
+                "backend": model.backend,
+                "size_bytes": model.size_bytes,
+                "license": model.license,
+                "installed": status.installed,
+                "status": status.status,
+                "path": str(model_path(model)),
+                "recommended_for": model.recommended_for,
+            }
+        )
+    if json_output:
+        typer.echo(json.dumps(rows, ensure_ascii=False, indent=2))
+        return
+
+    for row in rows:
+        installed = "yes" if row["installed"] else row["status"]
+        console.print(
+            f"{row['id']}\t{_format_bytes(row['size_bytes'])}\t"
+            f"{row['license']}\t{installed}"
+        )
+
+
+@models_app.command("verify")
+def models_verify_command(
+    model_id: Annotated[str, typer.Argument(help="Model id from `models list`.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable JSON."),
+    ] = False,
+) -> None:
+    """Verify a downloaded model file against the manifest sha256."""
+    try:
+        status = verify_model(get_model(model_id))
+    except KeyError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    if json_output:
+        typer.echo(json.dumps(status.as_dict(), ensure_ascii=False, indent=2))
+    else:
+        color = "green" if status.installed else "yellow"
+        console.print(f"[{color}]{status.status}:[/{color}] {status.message} {status.path}")
+    if not status.installed:
+        raise typer.Exit(1)
+
+
+@models_app.command("install")
+def models_install_command(
+    model_id: Annotated[str, typer.Argument(help="Model id from `models list`.")],
+) -> None:
+    """Download and verify a model into the local cache."""
+    try:
+        model = get_model(model_id)
+        status = install_model(model)
+    except (KeyError, ModelManagerError) as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+    console.print(f"[green]Installed:[/green] {model.id} -> {status.path}")
 
 
 @app.command("doctor")
@@ -920,3 +1007,14 @@ def _is_openai_base_url(value: str | None) -> bool:
 
 def _prefer(value: T | None, fallback: T) -> T:
     return fallback if value is None else value
+
+
+def _format_bytes(value: object) -> str:
+    size = float(value)
+    units = ["B", "KB", "MB", "GB", "TB"]
+    for unit in units:
+        if size < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(size)} {unit}"
+            return f"{size:.1f} {unit}"
+        size /= 1024

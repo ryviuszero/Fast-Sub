@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+from platformdirs import user_data_dir
+
 from fast_sub.models import Mode
 
 
@@ -15,6 +17,10 @@ def input_hash(path: Path) -> str:
 
 def job_dir(input_file: Path) -> Path:
     return Path(".fast-sub") / "jobs" / input_hash(input_file)
+
+
+def model_cache_dir() -> Path:
+    return Path(user_data_dir("FastSub", "FastSub")) / "models"
 
 
 def default_output_path(input_file: Path, mode: Mode, source_lang: str, target_lang: str) -> Path:
