@@ -30,6 +30,7 @@ from fast_sub.models import (
     WhisperXDevice,
 )
 from fast_sub.paths import default_output_path, job_dir
+from fast_sub.providers import default_registry
 from fast_sub.stt import transcribe_segments, transcribe_segments_whisperx, transcribe_srt
 from fast_sub.subtitle import RefineOptions, refine_srt_text, render_srt
 from fast_sub.translate import translate_segments
@@ -37,11 +38,13 @@ from fast_sub.translate import translate_segments
 console = Console()
 T = TypeVar("T")
 app = typer.Typer(help="Fast local subtitles for video.", no_args_is_help=True)
+providers_app = typer.Typer(help="Inspect provider contracts.", no_args_is_help=True)
 COMMAND_NAMES = {
     "analyze",
     "doctor",
     "extract",
     "probe",
+    "providers",
     "refine",
     "run",
     "transcribe",
@@ -58,6 +61,7 @@ OPENAI_TRANSCRIBE_JSON_ONLY_MODELS = {
 }
 LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,3}(?:-[A-Za-z0-9]+)?$")
 DIRECTORY_PROGRESS_FILE = ".fast-sub-progress.json"
+app.add_typer(providers_app, name="providers")
 
 
 def main() -> None:
@@ -217,6 +221,50 @@ def _validate_refine_input(
     if max_chars is not None:
         _validate_positive(max_chars, "--max-chars")
     _validate_positive(max_duration, "--max-duration")
+
+
+@providers_app.command("list")
+def providers_list_command(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output machine-readable JSON."),
+    ] = False,
+) -> None:
+    """List known STT and translation providers."""
+    providers = default_registry().list()
+    if json_output:
+        console.print_json(data=[provider.model_dump(mode="json") for provider in providers])
+        return
+
+    for provider in providers:
+        metadata = provider.metadata
+        console.print(
+            f"{metadata.id}\t{metadata.type.value}\t{metadata.location.value}\t"
+            f"{provider.status.status.value}"
+        )
+
+
+@providers_app.command("test")
+def providers_test_command(
+    provider_id: Annotated[str, typer.Argument(help="Provider id to inspect.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output machine-readable JSON."),
+    ] = False,
+) -> None:
+    """Check whether a provider contract can be selected."""
+    registry = default_registry()
+    if registry.get(provider_id) is None:
+        console.print(f"[red]Unknown provider:[/red] {provider_id}")
+        raise typer.Exit(1)
+
+    provider = registry.inspect(provider_id)
+    if json_output:
+        console.print_json(data=provider.model_dump(mode="json"))
+        return
+
+    console.print(f"{provider.metadata.id}: {provider.status.status.value}")
+    console.print(provider.status.message)
 
 
 @app.command("run")
