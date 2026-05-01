@@ -601,7 +601,7 @@ $env:UV_CACHE_DIR='.uv-cache'; $env:TMP='.test-work\tmp'; $env:TEMP='.test-work\
 
 剩余风险：
 
-- `faster-whisper` 仍是可选运行时依赖，未写入 `pyproject.toml` 默认依赖；干净环境需要用户手动安装，否则 provider resolution 会报告 `missing_dependency`。
+- `faster-whisper` 仍是可选运行时依赖；干净环境请运行 `uv sync --extra local-asr`（或 `pip install fast-sub[local-asr]`），否则 provider resolution 会报告 `missing_dependency`。
 - 本次只校正并验证了 `whisper-base` manifest；`whisper-small`、`whisper-large-v3-turbo` 的远端 hash 仍需后续真实安装校验。
 - `tests/fixtures/sample.wav` 不适合作为真实 ASR 成功样本，会触发 `EMPTY_SEGMENTS`；后续应补一个可公开提交的小语音 fixture 或 slow/manual 样本说明。
 - 本次真实验证使用 CPU/int8 小样本，不代表 RTX 3060/CUDA 性能基线。

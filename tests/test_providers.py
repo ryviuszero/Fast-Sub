@@ -1,4 +1,5 @@
 import json
+import tomllib
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -61,6 +62,32 @@ def test_default_registry_lists_required_providers(monkeypatch) -> None:
     }
     assert providers["api-openai-transcription"].status.status == "missing_api_key"
     assert providers["api-openai-chat"].status.status == "missing_api_key"
+
+
+def test_local_faster_whisper_missing_dependency_mentions_local_asr(monkeypatch) -> None:
+    original_find_spec = __import__("importlib").util.find_spec
+
+    def fake_find_spec(name: str):
+        if name == "faster_whisper":
+            return None
+        return original_find_spec(name)
+
+    monkeypatch.setattr("fast_sub.providers.importlib.util.find_spec", fake_find_spec)
+
+    provider = default_registry().inspect("local-faster-whisper")
+
+    assert provider.status.status == "missing_dependency"
+    assert "faster_whisper" in provider.status.message
+    assert "local-asr" in provider.status.message
+    assert "uv sync --extra local-asr" in provider.status.message
+
+
+def test_pyproject_declares_local_asr_extra() -> None:
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    local_asr = pyproject["project"]["optional-dependencies"]["local-asr"]
+
+    assert any(dependency.startswith("faster-whisper>=") for dependency in local_asr)
 
 
 def test_api_provider_status_does_not_expose_key(monkeypatch) -> None:

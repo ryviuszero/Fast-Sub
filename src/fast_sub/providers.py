@@ -21,6 +21,7 @@ class ProviderDefinition:
     api_key_env: str | None = None
     dependency_module: str | None = None
     model_path: Path | None = None
+    install_hint: str | None = None
 
 
 DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
@@ -38,6 +39,10 @@ DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
             privacy_note="Runs locally; audio is not uploaded by this provider.",
         ),
         dependency_module="faster_whisper",
+        install_hint=(
+            "Install local ASR dependencies with `uv sync --extra local-asr` "
+            "or `pip install fast-sub[local-asr]`."
+        ),
     ),
     ProviderDefinition(
         metadata=ProviderMetadata(
@@ -128,7 +133,7 @@ def _provider_status(definition: ProviderDefinition) -> ProviderStatus:
         return ProviderStatus(
             id=metadata.id,
             status=ProviderStatusCode.MISSING_DEPENDENCY,
-            message=f"Python module '{definition.dependency_module}' is not installed.",
+            message=_missing_dependency_message(definition),
         )
     if definition.model_path and not definition.model_path.exists():
         return ProviderStatus(
@@ -141,3 +146,10 @@ def _provider_status(definition: ProviderDefinition) -> ProviderStatus:
         status=ProviderStatusCode.AVAILABLE,
         message="Provider contract is configured.",
     )
+
+
+def _missing_dependency_message(definition: ProviderDefinition) -> str:
+    message = f"Python module '{definition.dependency_module}' is not installed."
+    if definition.install_hint:
+        return f"{message} {definition.install_hint}"
+    return message

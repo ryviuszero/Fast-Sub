@@ -18,6 +18,11 @@ dependencies = [
 fast-sub = "fast_sub.cli:main"
 fast-sub-worker-faster-whisper = "fast_sub_workers.faster_whisper:main"
 
+[project.optional-dependencies]
+local-asr = [
+    "faster-whisper>=1.0.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

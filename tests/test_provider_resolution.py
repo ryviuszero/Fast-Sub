@@ -161,6 +161,34 @@ def test_dependency_missing_is_reported_after_model_is_installed(work_dir: Path)
     assert "fast_sub_test_missing_dependency" in (result.action_hint or "")
 
 
+def test_local_asr_missing_dependency_hint_uses_extra(work_dir: Path) -> None:
+    payload = b"tiny model"
+    model = _model(payload)
+    path = work_dir / model.id / "tiny.bin"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(payload)
+
+    result = resolve_stt_provider(
+        "local-faster-whisper",
+        "tiny",
+        cache_dir=work_dir,
+        registry=_registry(
+            _local_stt_provider(
+                dependency_module="fast_sub_test_missing_dependency",
+                install_hint=(
+                    "Install local ASR dependencies with `uv sync --extra local-asr` "
+                    "or `pip install fast-sub[local-asr]`."
+                ),
+            )
+        ),
+        models=[model],
+    )
+
+    assert result.status == "missing_dependency"
+    assert "local-asr" in (result.action_hint or "")
+    assert "uv sync --extra local-asr" in (result.action_hint or "")
+
+
 def test_api_stt_provider_without_key_is_unavailable_and_does_not_leak_key(
     monkeypatch,
     work_dir: Path,
@@ -190,6 +218,7 @@ def _registry(*definitions: ProviderDefinition) -> ProviderRegistry:
 
 def _local_stt_provider(
     dependency_module: str | None = None,
+    install_hint: str | None = None,
 ) -> ProviderDefinition:
     return ProviderDefinition(
         metadata=_metadata(
@@ -199,6 +228,7 @@ def _local_stt_provider(
             "Runs locally; audio is not uploaded by this provider.",
         ),
         dependency_module=dependency_module,
+        install_hint=install_hint,
     )
 
 

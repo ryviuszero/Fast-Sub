@@ -236,6 +236,8 @@ def _provider_action_hint(definition: ProviderDefinition) -> str | None:
     if definition.api_key_env:
         return f"Set {definition.api_key_env} or choose a local provider."
     if definition.dependency_module:
+        if definition.install_hint:
+            return definition.install_hint
         return f"Install Python module '{definition.dependency_module}' in the worker environment."
     return None
 

@@ -55,27 +55,31 @@ def verify_model(model: ModelManifestEntry, cache_dir: Path | None = None) -> Mo
     if model.files:
         return _verify_directory_model(model, path)
 
-    if not path.exists():
-        return ModelStatus(
-            id=model.id,
-            path=path,
-            installed=False,
-            status="missing",
-            message="Model file is missing.",
-            manifest_type=model.manifest_type,
-        )
-    if not path.is_file():
-        return ModelStatus(
-            id=model.id,
-            path=path,
-            installed=False,
-            status="invalid_path",
-            message="Model path exists but is not a file.",
-            manifest_type=model.manifest_type,
-        )
+    try:
+        if not path.exists():
+            return ModelStatus(
+                id=model.id,
+                path=path,
+                installed=False,
+                status="missing",
+                message="Model file is missing.",
+                manifest_type=model.manifest_type,
+            )
+        if not path.is_file():
+            return ModelStatus(
+                id=model.id,
+                path=path,
+                installed=False,
+                status="invalid_path",
+                message="Model path exists but is not a file.",
+                manifest_type=model.manifest_type,
+            )
 
-    actual_size = path.stat().st_size
-    actual_sha = sha256_file(path)
+        actual_size = path.stat().st_size
+        actual_sha = sha256_file(path)
+    except OSError as exc:
+        return _inaccessible_status(model, path, exc)
+
     if actual_sha != model.sha256:
         return ModelStatus(
             id=model.id,
@@ -161,50 +165,57 @@ def _download(url: str, part_path: Path, *, timeout: float) -> None:
 
 
 def _verify_directory_model(model: ModelManifestEntry, path: Path) -> ModelStatus:
-    if not path.exists():
-        return ModelStatus(
-            id=model.id,
-            path=path,
-            installed=False,
-            status="missing",
-            message="Model directory is missing.",
-            manifest_type=model.manifest_type,
-        )
-    if not path.is_dir():
-        return ModelStatus(
-            id=model.id,
-            path=path,
-            installed=False,
-            status="invalid_path",
-            message="Model path exists but is not a directory.",
-            manifest_type=model.manifest_type,
-        )
+    try:
+        if not path.exists():
+            return ModelStatus(
+                id=model.id,
+                path=path,
+                installed=False,
+                status="missing",
+                message="Model directory is missing.",
+                manifest_type=model.manifest_type,
+            )
+        if not path.is_dir():
+            return ModelStatus(
+                id=model.id,
+                path=path,
+                installed=False,
+                status="invalid_path",
+                message="Model path exists but is not a directory.",
+                manifest_type=model.manifest_type,
+            )
+    except OSError as exc:
+        return _inaccessible_status(model, path, exc)
 
     total_size = 0
     for index, manifest_file in enumerate(model.files):
         file_path = path / manifest_file.path
-        if not file_path.exists():
-            return ModelStatus(
-                id=model.id,
-                path=file_path,
-                installed=False,
-                status="missing",
-                message=f"Required model file is missing: {manifest_file.path}",
-                checked_files=index,
-                manifest_type=model.manifest_type,
-            )
-        if not file_path.is_file():
-            return ModelStatus(
-                id=model.id,
-                path=file_path,
-                installed=False,
-                status="invalid_path",
-                message=f"Required model path is not a file: {manifest_file.path}",
-                checked_files=index,
-                manifest_type=model.manifest_type,
-            )
-        actual_size = file_path.stat().st_size
-        actual_sha = sha256_file(file_path)
+        try:
+            if not file_path.exists():
+                return ModelStatus(
+                    id=model.id,
+                    path=file_path,
+                    installed=False,
+                    status="missing",
+                    message=f"Required model file is missing: {manifest_file.path}",
+                    checked_files=index,
+                    manifest_type=model.manifest_type,
+                )
+            if not file_path.is_file():
+                return ModelStatus(
+                    id=model.id,
+                    path=file_path,
+                    installed=False,
+                    status="invalid_path",
+                    message=f"Required model path is not a file: {manifest_file.path}",
+                    checked_files=index,
+                    manifest_type=model.manifest_type,
+                )
+            actual_size = file_path.stat().st_size
+            actual_sha = sha256_file(file_path)
+        except OSError as exc:
+            return _inaccessible_status(model, file_path, exc, checked_files=index)
+
         total_size += actual_size
         if actual_sha != manifest_file.sha256:
             return ModelStatus(
@@ -230,6 +241,24 @@ def _verify_directory_model(model: ModelManifestEntry, path: Path) -> ModelStatu
         message=f"Model directory is installed and verified ({len(model.files)} files).",
         size_bytes=total_size,
         checked_files=len(model.files),
+        manifest_type=model.manifest_type,
+    )
+
+
+def _inaccessible_status(
+    model: ModelManifestEntry,
+    path: Path,
+    error: OSError,
+    *,
+    checked_files: int = 0,
+) -> ModelStatus:
+    return ModelStatus(
+        id=model.id,
+        path=path,
+        installed=False,
+        status="inaccessible",
+        message=f"Model path is inaccessible: {path} ({error})",
+        checked_files=checked_files,
         manifest_type=model.manifest_type,
     )
 

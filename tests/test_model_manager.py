@@ -106,6 +106,123 @@ def test_verify_directory_model_checks_required_file_hashes() -> None:
         shutil.rmtree(work_dir)
 
 
+def test_verify_directory_model_reports_inaccessible_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_dir = _make_work_dir()
+    try:
+        model = _directory_model({"config.json": b"config"})
+        path = model_path(model, work_dir)
+        original_exists = Path.exists
+
+        def fake_exists(self: Path) -> bool:
+            if self == path:
+                raise PermissionError("denied")
+            return original_exists(self)
+
+        monkeypatch.setattr(Path, "exists", fake_exists)
+
+        status = verify_model(model, work_dir)
+
+        assert not status.installed
+        assert status.status == "inaccessible"
+        assert status.path == path
+        assert status.manifest_type == "directory"
+        assert str(path) in status.message
+        assert "denied" in status.message
+    finally:
+        shutil.rmtree(work_dir)
+
+
+def test_verify_directory_model_reports_inaccessible_file_is_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_dir = _make_work_dir()
+    try:
+        model = _directory_model({"config.json": b"config"})
+        path = model_path(model, work_dir)
+        path.mkdir(parents=True)
+        file_path = path / "config.json"
+        file_path.write_bytes(b"config")
+        original_is_file = Path.is_file
+
+        def fake_is_file(self: Path) -> bool:
+            if self == file_path:
+                raise OSError("busy")
+            return original_is_file(self)
+
+        monkeypatch.setattr(Path, "is_file", fake_is_file)
+
+        status = verify_model(model, work_dir)
+
+        assert not status.installed
+        assert status.status == "inaccessible"
+        assert status.path == file_path
+        assert status.manifest_type == "directory"
+        assert "busy" in status.message
+    finally:
+        shutil.rmtree(work_dir)
+
+
+def test_verify_directory_model_reports_inaccessible_file_stat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_dir = _make_work_dir()
+    try:
+        model = _directory_model({"config.json": b"config"})
+        path = model_path(model, work_dir)
+        path.mkdir(parents=True)
+        file_path = path / "config.json"
+        file_path.write_bytes(b"config")
+        original_stat = Path.stat
+
+        def fake_stat(self: Path, *args, **kwargs):
+            if self == file_path:
+                raise PermissionError("cannot stat")
+            return original_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "stat", fake_stat)
+
+        status = verify_model(model, work_dir)
+
+        assert not status.installed
+        assert status.status == "inaccessible"
+        assert status.path == file_path
+        assert status.manifest_type == "directory"
+        assert "cannot stat" in status.message
+    finally:
+        shutil.rmtree(work_dir)
+
+
+def test_verify_directory_model_reports_inaccessible_file_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_dir = _make_work_dir()
+    try:
+        model = _directory_model({"config.json": b"config"})
+        path = model_path(model, work_dir)
+        path.mkdir(parents=True)
+        file_path = path / "config.json"
+        file_path.write_bytes(b"config")
+
+        def fake_sha256_file(path: Path) -> str:
+            if path == file_path:
+                raise PermissionError("cannot open")
+            return ""
+
+        monkeypatch.setattr("fast_sub.model_manager.sha256_file", fake_sha256_file)
+
+        status = verify_model(model, work_dir)
+
+        assert not status.installed
+        assert status.status == "inaccessible"
+        assert status.path == file_path
+        assert status.manifest_type == "directory"
+        assert "cannot open" in status.message
+    finally:
+        shutil.rmtree(work_dir)
+
+
 def test_install_model_writes_part_file_then_verifies(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
