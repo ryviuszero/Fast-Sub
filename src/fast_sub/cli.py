@@ -11,6 +11,7 @@ import typer
 from rich.console import Console
 
 from fast_sub.analyze import AnalysisResult, analyze_media
+from fast_sub.burn import BurnOptions, burn_subtitles
 from fast_sub.config import AppConfig, load_config
 from fast_sub.errors import ProviderResponseError, SubGenError
 from fast_sub.media import (
@@ -53,6 +54,7 @@ providers_app = typer.Typer(help="Inspect provider contracts.", no_args_is_help=
 models_app = typer.Typer(help="Manage local model downloads.", no_args_is_help=True)
 COMMAND_NAMES = {
     "analyze",
+    "burn",
     "doctor",
     "extract",
     "probe",
@@ -315,6 +317,41 @@ def _print_analysis_result(result: AnalysisResult) -> None:
         console.print(f"warnings: {', '.join(result.warnings)}")
     else:
         console.print("warnings: none")
+
+
+@app.command("burn")
+def burn_command(
+    input_file: Annotated[Path, typer.Argument(help="Input video file.")],
+    subtitle_file: Annotated[Path, typer.Argument(help="Input .srt subtitle file.")],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Output video path."),
+    ] = None,
+    font: Annotated[
+        str | None,
+        typer.Option("--font", help="Subtitle font family passed to ffmpeg force_style."),
+    ] = None,
+    font_size: Annotated[
+        int | None,
+        typer.Option("--font-size", help="Subtitle font size passed to ffmpeg force_style."),
+    ] = None,
+    preset: Annotated[
+        str,
+        typer.Option("--preset", help="Encoding preset: fast, balanced, or quality."),
+    ] = "balanced",
+) -> None:
+    """Burn SRT subtitles into a video with ffmpeg."""
+    try:
+        out_path = burn_subtitles(
+            input_file=input_file,
+            subtitle_file=subtitle_file,
+            output=output,
+            options=BurnOptions(font=font, font_size=font_size, preset=preset),
+        )
+    except SubGenError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+    console.print(f"[green]Wrote subtitled video:[/green] {out_path}")
 
 
 @app.command("transcribe")
@@ -1056,3 +1093,5 @@ def _format_bytes(value: object) -> str:
                 return f"{int(size)} {unit}"
             return f"{size:.1f} {unit}"
         size /= 1024
+
+
