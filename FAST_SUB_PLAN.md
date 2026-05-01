@@ -282,28 +282,39 @@ api-custom-http-translate
 - [x] 模型 manifest 支持目录/多文件语义，适配 faster-whisper/CTranslate2 模型目录。
 - [x] 模型下载 hash mismatch 后清理 `.part`，避免污染后续镜像重试。
 - [x] 默认模型缓存目录统一为 `用户数据目录/FastSub/models`。
+- [x] 测试素材与 benchmark 样本规划，含 `FAST_SUB_TEST_ASSETS.md` 和 manifest 示例。
+- [x] Worker request/response/error schema 和通用 worker runner 骨架。
+- [x] `analyze` 音频预分析命令，支持 JSON 输出、稳定 warning 枚举和 VAD/mode 推荐。
+- [x] `burn` 字幕烧录命令，支持 ffmpeg 参数构造、preset、字体和 Windows 路径规避策略。
 - [~] 旧 `run` 流程仍存在 OpenAI compatible / WhisperX 路径，后续需要收敛到 provider/worker contract。
-- [~] `analyze` 命令目前还是占位，需要下一阶段实现。
-- [~] `transcribe` 命令目前还是占位，需要先完成 worker contract。
+- [~] `transcribe` 命令目前还是占位，需要接入本地 faster-whisper worker。
 - [~] `translate` 命令目前还是占位，需要后续 provider 化。
-- [ ] `burn` 字幕烧录。
 - [ ] `bench` benchmark 报告。
 - [ ] `auto` 自动调度。
 - [ ] Electron UI。
 - [ ] Web 版。
 
-下一轮最稳并行组合：
+第二轮并行组合已完成：
 
-- [ ] `codex/fast-sub-analyze`：实现音频预分析，不依赖 Whisper 模型。
-- [ ] `codex/fast-sub-worker-contract`：实现 worker request/response schema 和 runner 骨架，不接真实模型。
-- [ ] `codex/fast-sub-burn`：实现 ffmpeg 字幕烧录模块和 CLI，占用范围独立。
-- [ ] `codex/fast-sub-test-assets`：整理 benchmark/test-assets 文档、样本元数据和 fixture 策略，尽量只改文档和测试资产。
+- [x] `codex/fast-sub-test-assets`：整理 benchmark/test-assets 文档、样本元数据和 fixture 策略。
+- [x] `codex/fast-sub-worker-contract`：实现 worker request/response schema 和 runner 骨架，不接真实模型。
+- [x] `codex/fast-sub-analyze`：实现音频预分析，不依赖 Whisper 模型。
+- [x] `codex/fast-sub-burn`：实现 ffmpeg 字幕烧录模块和 CLI。
 
 暂缓并行：
 
 - [ ] `codex/fast-sub-auto`：依赖 `analyze`、worker、transcribe，等前置分支合并后再做。
 - [ ] `codex/fast-sub-transcribe-cli`：容易同时改 CLI、provider、model、worker，等 worker contract 合并后再做。
 - [ ] `codex/fast-sub-translate-cli`：等 provider contract 和主流程稳定后再做。
+
+v0 剩余迭代预估：
+
+- 第三轮：`local-faster-whisper` worker 原型 + `transcribe` CLI。目标是从本地模型生成 SRT。
+- 第四轮：模型/provider 解析与 `auto` 最小链路。目标是 `doctor -> probe -> analyze -> model resolution -> transcribe -> refine` 一条命令跑通。
+- 第五轮：benchmark/report 与固定样本回归。目标是记录 RTFx、segments、错误片段、环境信息，建立 3060 基线。
+- 第六轮：v0 hardening/release。目标是统一错误码、清理旧 `run` 流程、完善文档、打包前检查和端到端 smoke tests。
+
+因此，从当前状态到可称为 v0 的本地字幕 CLI，建议还需要 4 轮迭代。若暂时不要求 `auto` 和 benchmark，只做“手动命令链路可用”的技术预览版，则还需要 2 轮：`local-faster-whisper worker` 和 `transcribe CLI`。
 
 ### Milestone 0: CLI 骨架
 
