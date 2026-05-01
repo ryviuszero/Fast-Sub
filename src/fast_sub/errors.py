@@ -8,3 +8,7 @@ class ProviderLimitError(SubGenError):
 
 class ProviderResponseError(SubGenError):
     """Raised when a provider returns an unsupported response shape."""
+
+
+class WorkerRunnerError(SubGenError):
+    """Raised when a local worker process cannot complete its contract."""
