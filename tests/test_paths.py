@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fast_sub.models import Mode
-from fast_sub.paths import default_output_path
+from fast_sub.paths import default_output_path, model_cache_dir
 
 
 def test_default_output_path_for_bilingual() -> None:
@@ -28,4 +28,21 @@ def test_default_output_path_for_windows_unc_path() -> None:
     assert default_output_path(path, Mode.ORIGINAL, "auto", "zh") == (
         path.parent / "video.auto.srt"
     )
+
+
+def test_model_cache_dir_uses_single_app_directory(monkeypatch) -> None:
+    calls = []
+
+    def fake_user_data_dir(appname, appauthor=None):
+        calls.append((appname, appauthor))
+        assert appauthor is False
+        return str(Path("AppData") / "Local" / appname)
+
+    monkeypatch.setattr(
+        "fast_sub.paths.user_data_dir",
+        fake_user_data_dir,
+    )
+
+    assert model_cache_dir() == Path("AppData") / "Local" / "FastSub" / "models"
+    assert calls == [("FastSub", False)]
 

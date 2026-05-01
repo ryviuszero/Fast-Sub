@@ -112,6 +112,8 @@ def models_list_command(
                 "backend": model.backend,
                 "size_bytes": model.size_bytes,
                 "license": model.license,
+                "manifest_type": model.manifest_type,
+                "required_files": model.required_file_count,
                 "installed": status.installed,
                 "status": status.status,
                 "path": str(model_path(model)),
@@ -126,7 +128,7 @@ def models_list_command(
         installed = "yes" if row["installed"] else row["status"]
         console.print(
             f"{row['id']}\t{_format_bytes(row['size_bytes'])}\t"
-            f"{row['license']}\t{installed}"
+            f"{row['license']}\t{row['manifest_type']}:{row['required_files']}\t{installed}"
         )
 
 
@@ -138,7 +140,7 @@ def models_verify_command(
         typer.Option("--json", help="Print machine-readable JSON."),
     ] = False,
 ) -> None:
-    """Verify a downloaded model file against the manifest sha256."""
+    """Verify a downloaded model against the manifest sha256 entries."""
     try:
         status = verify_model(get_model(model_id))
     except KeyError as exc:
@@ -165,7 +167,10 @@ def models_install_command(
     except (KeyError, ModelManagerError) as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc
-    console.print(f"[green]Installed:[/green] {model.id} -> {status.path}")
+    console.print(
+        f"[green]Installed:[/green] {model.id} -> {status.path} "
+        f"({status.checked_files} file(s) verified)"
+    )
 
 
 @app.command("doctor")

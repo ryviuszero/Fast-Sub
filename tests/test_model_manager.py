@@ -18,6 +18,7 @@ from fast_sub.model_manager import (
     verify_model,
 )
 from fast_sub.model_manifest import ModelManifestEntry
+from fast_sub.model_manifest import ModelManifestFile
 
 runner = CliRunner()
 
@@ -52,6 +53,59 @@ def test_verify_model_reports_hash_mismatch() -> None:
         shutil.rmtree(work_dir)
 
 
+def test_verify_directory_model_requires_all_manifest_files() -> None:
+    work_dir = _make_work_dir()
+    try:
+        model = _directory_model(
+            {
+                "config.json": b"config",
+                "tokenizer.json": b"tokenizer",
+                "vocabulary.txt": b"vocabulary",
+                "model.bin": b"model",
+            }
+        )
+        path = model_path(model, work_dir)
+        path.mkdir(parents=True)
+        (path / "model.bin").write_bytes(b"model")
+
+        status = verify_model(model, work_dir)
+
+        assert not status.installed
+        assert status.status == "missing"
+        assert status.path == path / "config.json"
+        assert status.manifest_type == "directory"
+    finally:
+        shutil.rmtree(work_dir)
+
+
+def test_verify_directory_model_checks_required_file_hashes() -> None:
+    work_dir = _make_work_dir()
+    try:
+        model = _directory_model(
+            {
+                "config.json": b"config",
+                "tokenizer.json": b"tokenizer",
+                "vocabulary.txt": b"vocabulary",
+                "model.bin": b"model",
+            }
+        )
+        path = model_path(model, work_dir)
+        path.mkdir(parents=True)
+        (path / "config.json").write_bytes(b"wrong")
+        (path / "tokenizer.json").write_bytes(b"tokenizer")
+        (path / "vocabulary.txt").write_bytes(b"vocabulary")
+        (path / "model.bin").write_bytes(b"model")
+
+        status = verify_model(model, work_dir)
+
+        assert not status.installed
+        assert status.status == "hash_mismatch"
+        assert status.path == path / "config.json"
+        assert status.sha256 == hashlib.sha256(b"wrong").hexdigest()
+    finally:
+        shutil.rmtree(work_dir)
+
+
 def test_install_model_writes_part_file_then_verifies(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -71,6 +125,45 @@ def test_install_model_writes_part_file_then_verifies(
 
         assert status.installed
         assert status.status == "installed"
+        assert model_path(model, work_dir).read_bytes() == payload
+        assert not model_path(model, work_dir).with_suffix(".bin.part").exists()
+    finally:
+        shutil.rmtree(work_dir)
+
+
+def test_install_model_deletes_bad_part_and_succeeds_with_mirror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_dir = _make_work_dir()
+    try:
+        payload = b"good model bytes"
+        model = ModelManifestEntry(
+            id="tiny",
+            name="Tiny",
+            type="asr",
+            backend="test",
+            size_bytes=len(payload),
+            license="MIT",
+            url="https://example.com/bad.bin",
+            mirrors=["https://mirror.example.com/good.bin"],
+            sha256=hashlib.sha256(payload).hexdigest(),
+            recommended_for="tests",
+            filename="tiny.bin",
+        )
+
+        def fake_download(url: str, part_path: Path, *, timeout: float) -> None:
+            if url == "https://example.com/bad.bin":
+                part_path.write_bytes(b"bad model bytes")
+                return
+            assert url == "https://mirror.example.com/good.bin"
+            assert not part_path.exists()
+            part_path.write_bytes(payload)
+
+        monkeypatch.setattr("fast_sub.model_manager._download", fake_download)
+
+        status = install_model(model, work_dir)
+
+        assert status.installed
         assert model_path(model, work_dir).read_bytes() == payload
         assert not model_path(model, work_dir).with_suffix(".bin.part").exists()
     finally:
@@ -122,6 +215,8 @@ def test_models_list_json_includes_initial_models(
         ids = {row["id"] for row in rows}
         assert {"whisper-base", "whisper-small", "whisper-large-v3-turbo"} <= ids
         assert all("installed" in row for row in rows)
+        assert all(row["manifest_type"] == "directory" for row in rows)
+        assert all(row["required_files"] >= 4 for row in rows)
     finally:
         shutil.rmtree(work_dir)
 
@@ -171,6 +266,28 @@ def _model(payload: bytes) -> ModelManifestEntry:
         sha256=hashlib.sha256(payload).hexdigest(),
         recommended_for="tests",
         filename="tiny.bin",
+    )
+
+
+def _directory_model(files: dict[str, bytes]) -> ModelManifestEntry:
+    return ModelManifestEntry(
+        id="tiny-dir",
+        name="Tiny Directory",
+        type="asr",
+        backend="faster-whisper",
+        size_bytes=sum(len(payload) for payload in files.values()),
+        license="MIT",
+        url="https://example.com/tiny-dir/",
+        mirrors=[],
+        recommended_for="tests",
+        files=[
+            ModelManifestFile(
+                path=path,
+                size_bytes=len(payload),
+                sha256=hashlib.sha256(payload).hexdigest(),
+            )
+            for path, payload in files.items()
+        ],
     )
 
 

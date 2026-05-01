@@ -20,7 +20,7 @@ def job_dir(input_file: Path) -> Path:
 
 
 def model_cache_dir() -> Path:
-    return Path(user_data_dir("FastSub", "FastSub")) / "models"
+    return Path(user_data_dir("FastSub", appauthor=False)) / "models"
 
 
 def default_output_path(input_file: Path, mode: Mode, source_lang: str, target_lang: str) -> Path:
