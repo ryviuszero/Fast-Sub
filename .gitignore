@@ -2,6 +2,7 @@
 .uv-cache/
 .fast-sub/
 .pytest-tmp*/
+.test-tmp/
 .tmp/
 .test-work/
 .pytest_cache/
