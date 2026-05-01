@@ -286,8 +286,13 @@ api-custom-http-translate
 - [x] Worker request/response/error schema 和通用 worker runner 骨架。
 - [x] `analyze` 音频预分析命令，支持 JSON 输出、稳定 warning 枚举和 VAD/mode 推荐。
 - [x] `burn` 字幕烧录命令，支持 ffmpeg 参数构造、preset、字体和 Windows 路径规避策略。
+- [x] STT provider/model resolution，支持本地模型状态、依赖状态和 API provider 状态表达。
+- [x] `local-faster-whisper` worker，可通过 worker request/response JSON 执行真实 faster-whisper 转写。
+- [x] `transcribe` CLI 已接通本地 faster-whisper worker，支持 JSON metadata、`--keep-temp` 和 `--gpu-load`。
+- [x] 本地 ASR 依赖提供 `local-asr` optional extra，并在缺依赖时给出安装提示。
+- [x] 模型缓存权限异常、坏目录、不可访问文件会返回结构化状态，避免 CLI traceback。
 - [~] 旧 `run` 流程仍存在 OpenAI compatible / WhisperX 路径，后续需要收敛到 provider/worker contract。
-- [~] `transcribe` 命令目前还是占位，需要接入本地 faster-whisper worker。
+- [~] `transcribe` 已可用，但还需要为 `auto` 收敛错误码、metadata 和用户提示。
 - [~] `translate` 命令目前还是占位，需要后续 provider 化。
 - [ ] `bench` benchmark 报告。
 - [ ] `auto` 自动调度。
@@ -301,20 +306,28 @@ api-custom-http-translate
 - [x] `codex/fast-sub-analyze`：实现音频预分析，不依赖 Whisper 模型。
 - [x] `codex/fast-sub-burn`：实现 ffmpeg 字幕烧录模块和 CLI。
 
-暂缓并行：
+第三轮和 round3 hardening 已完成：
 
-- [ ] `codex/fast-sub-auto`：依赖 `analyze`、worker、transcribe，等前置分支合并后再做。
-- [ ] `codex/fast-sub-transcribe-cli`：容易同时改 CLI、provider、model、worker，等 worker contract 合并后再做。
+- [x] `codex/fast-sub-stt-provider-resolution`：实现 STT provider/model resolution。
+- [x] `codex/fast-sub-faster-whisper-worker`：实现真实 faster-whisper worker。
+- [x] `codex/fast-sub-transcribe-cli`：实现 `fast-sub transcribe` 主流程。
+- [x] `codex/fast-sub-transcribe-integration`：接通真实本地转写链路并记录验证。
+- [x] `codex/fast-sub-round3-hardening`：修复模型缓存异常处理和本地 ASR 安装提示。
+
+第四轮并行计划见 `FAST_SUB_PARALLEL_ROUND4.md`：
+
+- [ ] `codex/fast-sub-auto-core`：实现 `auto` dry-run、缺模型提示、`--yes` 本地模型安装、调用 transcribe/refine 的真实最小链路。
+- [ ] `codex/fast-sub-transcribe-hardening`：为自动链路收敛转写错误、metadata 和 keep-temp 行为。
 - [ ] `codex/fast-sub-translate-cli`：等 provider contract 和主流程稳定后再做。
 
 v0 剩余迭代预估：
 
-- 第三轮：`local-faster-whisper` worker 原型 + `transcribe` CLI。目标是从本地模型生成 SRT。
-- 第四轮：模型/provider 解析与 `auto` 最小链路。目标是 `doctor -> probe -> analyze -> model resolution -> transcribe -> refine` 一条命令跑通。
+- 第三轮：`local-faster-whisper` worker 原型 + `transcribe` CLI。已完成。
+- 第四轮：`auto` 最小链路。目标是 `probe -> analyze -> model/provider resolution -> optional model install -> transcribe -> refine` 一条命令跑通。
 - 第五轮：benchmark/report 与固定样本回归。目标是记录 RTFx、segments、错误片段、环境信息，建立 3060 基线。
 - 第六轮：v0 hardening/release。目标是统一错误码、清理旧 `run` 流程、完善文档、打包前检查和端到端 smoke tests。
 
-因此，从当前状态到可称为 v0 的本地字幕 CLI，建议还需要 4 轮迭代。若暂时不要求 `auto` 和 benchmark，只做“手动命令链路可用”的技术预览版，则还需要 2 轮：`local-faster-whisper worker` 和 `transcribe CLI`。
+因此，从当前状态到可称为 v0 的本地字幕 CLI，建议还需要 3 轮迭代：第四轮 `auto` 最小链路，第五轮 benchmark/样本回归，第六轮 v0 hardening/release。当前已经具备“手动命令链路可用”的技术预览基础。
 
 ### Milestone 0: CLI 骨架
 
