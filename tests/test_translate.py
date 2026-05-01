@@ -1,5 +1,5 @@
-from sub_gen.models import Segment
-from sub_gen.translate import translate_segments
+from fast_sub.models import Segment
+from fast_sub.translate import translate_segments
 
 
 def test_translate_segments_uses_translators_package(monkeypatch) -> None:
@@ -9,7 +9,7 @@ def test_translate_segments_uses_translators_package(monkeypatch) -> None:
         calls.append((text, translator, from_language, to_language))
         return f"{text}-zh"
 
-    monkeypatch.setattr("sub_gen.translate._translate_text", fake_translate_text)
+    monkeypatch.setattr("fast_sub.translate._translate_text", fake_translate_text)
 
     result = translate_segments(
         segments=[Segment(id=1, start=0, end=1, text="hello")],
@@ -27,7 +27,7 @@ def test_translate_segments_records_failed_segment(monkeypatch) -> None:
     def fake_translate_text(*, text, translator, from_language, to_language):
         raise RuntimeError("service down")
 
-    monkeypatch.setattr("sub_gen.translate._translate_text", fake_translate_text)
+    monkeypatch.setattr("fast_sub.translate._translate_text", fake_translate_text)
 
     result = translate_segments(
         segments=[Segment(id=1, start=0, end=1, text="hello")],

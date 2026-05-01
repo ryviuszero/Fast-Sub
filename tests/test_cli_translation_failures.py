@@ -1,5 +1,5 @@
-from sub_gen.cli import _all_translation_batches_failed
-from sub_gen.models import Segment, TranslationError, TranslationResult
+from fast_sub.cli import _all_translation_batches_failed
+from fast_sub.models import Segment, TranslationError, TranslationResult
 
 
 def test_all_translation_batches_failed_when_no_segment_has_translation() -> None:

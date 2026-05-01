@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from sub_gen.models import Segment, TranslationError, TranslationResult
+from fast_sub.models import Segment, TranslationError, TranslationResult
 
 
 def translate_segments(

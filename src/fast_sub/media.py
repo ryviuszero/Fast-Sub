@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from sub_gen.errors import SubGenError
+from fast_sub.errors import SubGenError
 
 AUDIO_EXTENSIONS = {
     ".aac",

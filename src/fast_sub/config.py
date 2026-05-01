@@ -6,15 +6,26 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from sub_gen.models import BilingualOrder, Mode, SubtitleFormat
+from fast_sub.models import (
+    BilingualOrder,
+    Mode,
+    SttProvider,
+    SubtitleFormat,
+    WhisperXComputeType,
+    WhisperXDevice,
+)
 
 
 class SttConfig(BaseModel):
+    provider: SttProvider = SttProvider.OPENAI_COMPATIBLE
     base_url: str | None = Field(default_factory=lambda: os.getenv("OPENAI_BASE_URL"))
     api_key: str | None = Field(default_factory=lambda: os.getenv("OPENAI_API_KEY"))
     model: str | None = None
     temperature: float = 0
     max_audio_mb: float | None = None
+    whisperx_device: WhisperXDevice = WhisperXDevice.AUTO
+    whisperx_compute_type: WhisperXComputeType = WhisperXComputeType.AUTO
+    whisperx_batch_size: int = 16
 
 
 class TranslatorConfig(BaseModel):

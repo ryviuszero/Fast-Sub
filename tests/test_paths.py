@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from sub_gen.models import Mode
-from sub_gen.paths import default_output_path
+from fast_sub.models import Mode
+from fast_sub.paths import default_output_path
 
 
 def test_default_output_path_for_bilingual() -> None:

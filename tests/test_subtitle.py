@@ -1,5 +1,5 @@
-from sub_gen.models import BilingualOrder, Mode, Segment
-from sub_gen.subtitle import render_srt
+from fast_sub.models import BilingualOrder, Mode, Segment
+from fast_sub.subtitle import render_srt
 
 
 def test_render_bilingual_srt_original_first() -> None:

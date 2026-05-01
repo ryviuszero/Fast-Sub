@@ -9,33 +9,43 @@ from typing import Annotated, TypeVar
 import typer
 from rich.console import Console
 
-from sub_gen.config import AppConfig, load_config
-from sub_gen.errors import ProviderResponseError, SubGenError
-from sub_gen.media import (
+from fast_sub.config import AppConfig, load_config
+from fast_sub.errors import ProviderResponseError, SubGenError
+from fast_sub.media import (
     ensure_media_tools,
     is_audio_file,
     is_media_file,
     list_media_files,
     prepare_audio,
 )
-from sub_gen.models import BilingualOrder, Mode, SubtitleFormat, TranslationError, TranslationResult
-from sub_gen.paths import default_output_path, job_dir
-from sub_gen.stt import transcribe_segments, transcribe_srt
-from sub_gen.subtitle import render_srt
-from sub_gen.translate import translate_segments
+from fast_sub.models import (
+    BilingualOrder,
+    Mode,
+    SttProvider,
+    SubtitleFormat,
+    TranslationError,
+    TranslationResult,
+    WhisperXComputeType,
+    WhisperXDevice,
+)
+from fast_sub.paths import default_output_path, job_dir
+from fast_sub.stt import transcribe_segments, transcribe_segments_whisperx, transcribe_srt
+from fast_sub.subtitle import render_srt
+from fast_sub.translate import translate_segments
 
 console = Console()
 T = TypeVar("T")
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 OPENAI_DEFAULT_STT_MODEL = "whisper-1"
 OPENAI_DEFAULT_MAX_AUDIO_MB = 25.0
+WHISPERX_DEFAULT_STT_MODEL = "small"
 OPENAI_TRANSCRIBE_JSON_ONLY_MODELS = {
     "gpt-4o-transcribe",
     "gpt-4o-mini-transcribe",
     "gpt-4o-transcribe-diarize",
 }
 LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,3}(?:-[A-Za-z0-9]+)?$")
-DIRECTORY_PROGRESS_FILE = ".sub-gen-progress.json"
+DIRECTORY_PROGRESS_FILE = ".fast-sub-progress.json"
 
 
 def main() -> None:
@@ -61,10 +71,26 @@ def run(
         str | None, typer.Option(help="OpenAI-compatible STT base URL.")
     ] = None,
     stt_api_key: Annotated[str | None, typer.Option(help="STT API key.")] = None,
+    stt_provider: Annotated[
+        SttProvider | None,
+        typer.Option(help="STT provider backend."),
+    ] = None,
     stt_model: Annotated[str | None, typer.Option(help="STT model name.")] = None,
     stt_temperature: Annotated[
         float | None,
         typer.Option(help="STT sampling temperature. OpenAI accepts 0 to 1."),
+    ] = None,
+    whisperx_device: Annotated[
+        WhisperXDevice | None,
+        typer.Option(help="WhisperX runtime device."),
+    ] = None,
+    whisperx_compute_type: Annotated[
+        WhisperXComputeType | None,
+        typer.Option(help="WhisperX compute type."),
+    ] = None,
+    whisperx_batch_size: Annotated[
+        int | None,
+        typer.Option(help="WhisperX transcription batch size."),
     ] = None,
     max_audio_mb: Annotated[
         float | None,
@@ -101,8 +127,12 @@ def run(
             target_lang=target_lang,
             stt_base_url=stt_base_url,
             stt_api_key=stt_api_key,
+            stt_provider=stt_provider,
             stt_model=stt_model,
             stt_temperature=stt_temperature,
+            whisperx_device=whisperx_device,
+            whisperx_compute_type=whisperx_compute_type,
+            whisperx_batch_size=whisperx_batch_size,
             max_audio_mb=max_audio_mb,
             translator=translator,
             subtitle_format=subtitle_format,
@@ -298,9 +328,22 @@ def _run_pipeline(
 
 
 def _write_original(options: AppConfig, audio_path: Path, out_path: Path) -> None:
-    assert options.stt.base_url and options.stt.api_key and options.stt.model
     assert options.subtitle.source_lang
+    assert options.stt.model
     console.print("[cyan]Transcribing original subtitles...[/cyan]")
+    if options.stt.provider is SttProvider.WHISPERX:
+        segments = transcribe_segments_whisperx(
+            audio=audio_path,
+            model=options.stt.model,
+            source_lang=options.subtitle.source_lang,
+            device=options.stt.whisperx_device,
+            compute_type=options.stt.whisperx_compute_type,
+            batch_size=options.stt.whisperx_batch_size,
+        )
+        out_path.write_text(render_srt(segments, mode=Mode.ORIGINAL), encoding="utf-8")
+        return
+
+    assert options.stt.base_url and options.stt.api_key
     try:
         srt_text = transcribe_srt(
             audio=audio_path,
@@ -330,6 +373,7 @@ def _write_translated_or_bilingual(
     out_path: Path,
     work_dir: Path,
 ) -> None:
+    assert options.stt.provider is SttProvider.OPENAI_COMPATIBLE
     assert options.stt.base_url and options.stt.api_key and options.stt.model
     assert options.subtitle.mode and options.subtitle.source_lang
 
@@ -412,8 +456,12 @@ def _resolve_options(
     target_lang: str | None,
     stt_base_url: str | None,
     stt_api_key: str | None,
+    stt_provider: SttProvider | None,
     stt_model: str | None,
     stt_temperature: float | None,
+    whisperx_device: WhisperXDevice | None,
+    whisperx_compute_type: WhisperXComputeType | None,
+    whisperx_batch_size: int | None,
     max_audio_mb: float | None,
     translator: str | None,
     subtitle_format: SubtitleFormat | None,
@@ -421,10 +469,20 @@ def _resolve_options(
     bilingual_order: BilingualOrder | None,
 ) -> AppConfig:
     options = load_config(config_path)
+    options.stt.provider = _prefer(stt_provider, options.stt.provider)
     options.stt.base_url = _prefer(stt_base_url, options.stt.base_url)
     options.stt.api_key = _prefer(stt_api_key, options.stt.api_key)
     options.stt.model = _prefer(stt_model, options.stt.model)
     options.stt.temperature = _prefer(stt_temperature, options.stt.temperature)
+    options.stt.whisperx_device = _prefer(whisperx_device, options.stt.whisperx_device)
+    options.stt.whisperx_compute_type = _prefer(
+        whisperx_compute_type,
+        options.stt.whisperx_compute_type,
+    )
+    options.stt.whisperx_batch_size = _prefer(
+        whisperx_batch_size,
+        options.stt.whisperx_batch_size,
+    )
     options.stt.max_audio_mb = _prefer(max_audio_mb, options.stt.max_audio_mb)
     options.translator.service = _prefer(translator, options.translator.service)
     options.subtitle.mode = Mode.ORIGINAL if original_only else _prefer(mode, options.subtitle.mode)
@@ -471,12 +529,18 @@ def _validate_common_options(options: AppConfig) -> None:
         _validate_positive(options.stt.max_audio_mb, "--max-audio-mb")
     if options.subtitle.max_line_chars is not None:
         _validate_positive(options.subtitle.max_line_chars, "--max-line-chars")
-    _validate_stt_model_support(options)
+    _validate_positive(options.stt.whisperx_batch_size, "--whisperx-batch-size")
     _require(options.subtitle.mode, "--mode")
     _require(options.subtitle.source_lang, "--source-lang")
+    _require(options.stt.model, "--stt-model")
+    if options.stt.provider is SttProvider.WHISPERX:
+        if options.subtitle.mode is not Mode.ORIGINAL:
+            raise SubGenError("WhisperX backend v0.1 only supports original subtitles.")
+        return
+
+    _validate_stt_model_support(options)
     _require(options.stt.base_url, "--stt-base-url")
     _require(options.stt.api_key, "--stt-api-key")
-    _require(options.stt.model, "--stt-model")
     if options.subtitle.mode in {Mode.TRANSLATED, Mode.BILINGUAL}:
         _validate_language_code(options.subtitle.target_lang, "--target-lang")
         _require(options.translator.service, "--translator")
@@ -530,12 +594,17 @@ def _validate_stt_model_support(options: AppConfig) -> None:
         return
     raise SubGenError(
         f"{model} only supports response_format=json in OpenAI's transcription API. "
-        "sub-gen v0.1 needs srt or verbose_json timestamps; use whisper-1 or a compatible "
+        "fast-sub v0.1 needs srt or verbose_json timestamps; use whisper-1 or a compatible "
         "provider/model that supports timestamped segments."
     )
 
 
 def _apply_openai_defaults(options: AppConfig) -> None:
+    if options.stt.provider is SttProvider.WHISPERX:
+        if options.stt.model is None:
+            options.stt.model = WHISPERX_DEFAULT_STT_MODEL
+        return
+
     if options.stt.base_url is None:
         options.stt.base_url = OPENAI_BASE_URL
 

@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from sub_gen.cli import _resolve_options, _validate_input
-from sub_gen.errors import SubGenError
-from sub_gen.models import Mode, SubtitleFormat
+from fast_sub.cli import _resolve_options, _validate_input
+from fast_sub.errors import SubGenError
+from fast_sub.models import Mode, SttProvider, SubtitleFormat
 
 
 def _resolve_minimal(**overrides):
@@ -16,8 +16,12 @@ def _resolve_minimal(**overrides):
         "target_lang": None,
         "stt_base_url": None,
         "stt_api_key": "dummy",
+        "stt_provider": None,
         "stt_model": None,
         "stt_temperature": None,
+        "whisperx_device": None,
+        "whisperx_compute_type": None,
+        "whisperx_batch_size": None,
         "max_audio_mb": None,
         "translator": None,
         "subtitle_format": SubtitleFormat.SRT,
@@ -62,6 +66,7 @@ def test_defaults_follow_openai_api_shape(monkeypatch: pytest.MonkeyPatch) -> No
     assert options.subtitle.mode is Mode.ORIGINAL
     assert options.subtitle.source_lang == "auto"
     assert options.subtitle.target_lang == "en"
+    assert options.stt.provider is SttProvider.OPENAI_COMPATIBLE
     assert options.stt.base_url == "https://api.openai.com/v1"
     assert options.stt.model == "whisper-1"
     assert options.stt.temperature == 0
@@ -101,4 +106,48 @@ def test_rejects_invalid_temperature() -> None:
     options = _resolve_minimal(stt_temperature=2)
 
     with pytest.raises(SubGenError, match="--stt-temperature"):
+        _validate_input(input_file, options)
+
+
+def test_whisperx_defaults_to_small_model() -> None:
+    options = _resolve_minimal(stt_provider=SttProvider.WHISPERX, stt_api_key=None)
+
+    assert options.stt.provider is SttProvider.WHISPERX
+    assert options.stt.model == "small"
+    assert options.stt.base_url is None
+    assert options.stt.api_key is None
+
+
+def test_whisperx_original_mode_does_not_require_http_credentials() -> None:
+    input_file = Path("tests/fixtures/sample.wav")
+    options = _resolve_minimal(
+        stt_provider=SttProvider.WHISPERX,
+        stt_api_key=None,
+        mode=Mode.ORIGINAL,
+    )
+
+    _validate_input(input_file, options)
+
+
+def test_whisperx_rejects_translated_mode() -> None:
+    input_file = Path("tests/fixtures/sample.wav")
+    options = _resolve_minimal(
+        stt_provider=SttProvider.WHISPERX,
+        stt_api_key=None,
+        mode=Mode.TRANSLATED,
+    )
+
+    with pytest.raises(SubGenError, match="only supports original subtitles"):
+        _validate_input(input_file, options)
+
+
+def test_whisperx_rejects_invalid_batch_size() -> None:
+    input_file = Path("tests/fixtures/sample.wav")
+    options = _resolve_minimal(
+        stt_provider=SttProvider.WHISPERX,
+        stt_api_key=None,
+        whisperx_batch_size=0,
+    )
+
+    with pytest.raises(SubGenError, match="--whisperx-batch-size"):
         _validate_input(input_file, options)

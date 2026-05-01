@@ -2,7 +2,7 @@ import shutil
 import uuid
 from pathlib import Path
 
-from sub_gen.media import _decode_process_output, is_audio_file, is_media_file, list_media_files
+from fast_sub.media import _decode_process_output, is_audio_file, is_media_file, list_media_files
 
 
 def test_is_audio_file_accepts_common_audio_extensions() -> None:

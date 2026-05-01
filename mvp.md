@@ -10,7 +10,7 @@ The first version should focus on a reliable command-line workflow:
 video.mp4/audio.wav or media directory -> audio preparation -> transcription -> optional translation -> subtitle file(s)
 ```
 
-The tool command name is `sub-gen`.
+The tool command name is `fast-sub`.
 
 The tool should work with OpenAI-compatible STT services such as Speaches, and should use `translators` services for translated and bilingual subtitles.
 
@@ -78,7 +78,7 @@ Hello everyone.
 ## Proposed CLI
 
 ```bash
-sub-gen video.mp4 \
+fast-sub video.mp4 \
   --mode bilingual \
   --source-lang en \
   --target-lang zh \
@@ -128,7 +128,7 @@ Used for `translated` and `bilingual` modes:
 - `--keep-temp`: keep temporary audio and intermediate JSON files
 - `--config`: load options from a TOML config file
 
-When the input path is a directory, the CLI processes supported video/audio files in that directory only. It does not recurse into nested directories in v0.1. If `--output` is provided for a directory input, it is treated as an output directory. Directory runs write `.sub-gen-progress.json` to the output directory, or to the input directory when `--output` is omitted, so interrupted runs can resume by skipping completed files.
+When the input path is a directory, the CLI processes supported video/audio files in that directory only. It does not recurse into nested directories in v0.1. If `--output` is provided for a directory input, it is treated as an output directory. Directory runs write `.fast-sub-progress.json` to the output directory, or to the input directory when `--output` is omitted, so interrupted runs can resume by skipping completed files.
 
 ## Config File
 
@@ -174,7 +174,7 @@ Use Python with `uv`.
 ```text
 pyproject.toml
 uv.lock
-src/sub_gen/
+src/fast_sub/
   cli.py
   config.py
   media.py
@@ -233,7 +233,7 @@ If a translation batch still fails after retries, the CLI should write partial o
 Use a predictable job directory:
 
 ```text
-.sub-gen/jobs/<video-hash>/
+.fast-sub/jobs/<video-hash>/
   audio.wav
   transcript.json
   translation.zh.json
@@ -262,7 +262,7 @@ Bilingual SRT defaults to original text first, then translated text.
 The first version is considered successful when these commands work:
 
 ```bash
-sub-gen video.mp4 \
+fast-sub video.mp4 \
   --mode original \
   --source-lang en \
   --stt-base-url http://localhost:8000/v1 \
@@ -273,7 +273,7 @@ sub-gen video.mp4 \
 Audio input is also supported:
 
 ```bash
-sub-gen audio.wav \
+fast-sub audio.wav \
   --mode original \
   --source-lang en \
   --stt-base-url http://localhost:8000/v1 \
@@ -284,7 +284,7 @@ sub-gen audio.wav \
 Directory input is supported for the files directly inside the directory:
 
 ```bash
-sub-gen ./media \
+fast-sub ./media \
   --mode original \
   --source-lang auto \
   --stt-base-url http://localhost:8000/v1 \
@@ -296,7 +296,7 @@ sub-gen ./media \
 Windows PowerShell can use UNC share paths directly. Quoting the path is recommended:
 
 ```powershell
-uv run sub-gen "\\NAS\data\others\资料\others\sample-user\1" `
+uv run fast-sub "\\NAS\data\others\资料\others\sample-user\1" `
   --original-only `
   --source-lang auto `
   --stt-base-url http://localhost:8000/v1 `
@@ -306,7 +306,7 @@ uv run sub-gen "\\NAS\data\others\资料\others\sample-user\1" `
 ```
 
 ```bash
-sub-gen video.mp4 \
+fast-sub video.mp4 \
   --mode bilingual \
   --source-lang en \
   --target-lang zh \
@@ -319,7 +319,7 @@ sub-gen video.mp4 \
 
 ## v0.1 Decisions
 
-1. Command name: `sub-gen`.
+1. Command name: `fast-sub`.
 2. `original` mode uses `response_format=srt` by default.
 3. `translated` mode defaults to English when `--target-lang` is omitted.
 4. Translation uses the `translators` package instead of an OpenAI-compatible chat endpoint.
@@ -327,7 +327,7 @@ sub-gen video.mp4 \
 6. v0.1 only needs `.srt`; `.ass` is delayed to v0.2.
 7. v0.1 assumes audio fits the provider upload limit and reports a clear limit error when it does not.
 8. Default extracted audio format is `wav`.
-9. Temporary job files live in `.sub-gen/`.
+9. Temporary job files live in `.fast-sub/`.
 10. v0.1 includes `--config config.toml`.
 11. Translation is performed per timestamped segment.
 12. Failed translation batches write partial output plus an error report.

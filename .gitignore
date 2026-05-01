@@ -1,6 +1,6 @@
 .venv/
 .uv-cache/
-.sub-gen/
+.fast-sub/
 .pytest-tmp*/
 .tmp/
 .test-work/

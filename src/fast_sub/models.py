@@ -20,6 +20,24 @@ class BilingualOrder(StrEnum):
     TRANSLATED_FIRST = "translated-first"
 
 
+class SttProvider(StrEnum):
+    OPENAI_COMPATIBLE = "openai-compatible"
+    WHISPERX = "whisperx"
+
+
+class WhisperXDevice(StrEnum):
+    AUTO = "auto"
+    CPU = "cpu"
+    CUDA = "cuda"
+
+
+class WhisperXComputeType(StrEnum):
+    AUTO = "auto"
+    FLOAT16 = "float16"
+    INT8 = "int8"
+    FLOAT32 = "float32"
+
+
 class Segment(BaseModel):
     id: int
     start: float = Field(ge=0)

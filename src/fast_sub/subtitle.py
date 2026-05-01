@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pysubs2
 
-from sub_gen.models import BilingualOrder, Mode, Segment
+from fast_sub.models import BilingualOrder, Mode, Segment
 
 
 def _seconds_to_ms(seconds: float) -> int:

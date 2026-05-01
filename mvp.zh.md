@@ -10,7 +10,7 @@
 video.mp4/audio.wav 或媒体目录 -> 准备音频 -> 语音转写 -> 可选翻译 -> 字幕文件
 ```
 
-工具命令名为 `sub-gen`。
+工具命令名为 `fast-sub`。
 
 工具需要支持 Speaches 这类 OpenAI 兼容的 STT 服务，并使用 `translators` 包生成译文和双语字幕。
 
@@ -78,7 +78,7 @@ Hello everyone.
 ## CLI 设计
 
 ```bash
-sub-gen video.mp4 \
+fast-sub video.mp4 \
   --mode bilingual \
   --source-lang en \
   --target-lang zh \
@@ -128,7 +128,7 @@ sub-gen video.mp4 \
 - `--keep-temp`：保留临时音频和中间 JSON 文件
 - `--config`：从 TOML 配置文件加载选项
 
-当输入路径是目录时，CLI 会处理该目录第一层中支持的视频/音频文件。v0.1 不递归处理子目录。如果目录输入时提供 `--output`，它会被解释为输出目录。目录运行会把 `.sub-gen-progress.json` 写到输出目录；如果省略 `--output`，则写到输入目录，因此命令中断后再次运行可以跳过已完成文件继续处理。
+当输入路径是目录时，CLI 会处理该目录第一层中支持的视频/音频文件。v0.1 不递归处理子目录。如果目录输入时提供 `--output`，它会被解释为输出目录。目录运行会把 `.fast-sub-progress.json` 写到输出目录；如果省略 `--output`，则写到输入目录，因此命令中断后再次运行可以跳过已完成文件继续处理。
 
 ## 配置文件
 
@@ -174,7 +174,7 @@ v0.1 不要求支持长媒体切片。第一版假设准备后的音频可以放
 ```text
 pyproject.toml
 uv.lock
-src/sub_gen/
+src/fast_sub/
   cli.py
   config.py
   media.py
@@ -233,7 +233,7 @@ OpenAI 兼容性检查：
 使用可预测的任务目录：
 
 ```text
-.sub-gen/jobs/<video-hash>/
+.fast-sub/jobs/<video-hash>/
   audio.wav
   transcript.json
   translation.zh.json
@@ -262,7 +262,7 @@ v0.1 只要求输出 `.srt`。`.ass` 延后到 v0.2。
 第一版在以下命令可用时视为成功：
 
 ```bash
-sub-gen video.mp4 \
+fast-sub video.mp4 \
   --mode original \
   --source-lang en \
   --stt-base-url http://localhost:8000/v1 \
@@ -273,7 +273,7 @@ sub-gen video.mp4 \
 也支持直接输入音频文件：
 
 ```bash
-sub-gen audio.wav \
+fast-sub audio.wav \
   --mode original \
   --source-lang en \
   --stt-base-url http://localhost:8000/v1 \
@@ -284,7 +284,7 @@ sub-gen audio.wav \
 支持直接输入目录，处理目录第一层中的媒体文件：
 
 ```bash
-sub-gen ./media \
+fast-sub ./media \
   --mode original \
   --source-lang auto \
   --stt-base-url http://localhost:8000/v1 \
@@ -296,7 +296,7 @@ sub-gen ./media \
 Windows PowerShell 中可以直接使用 UNC 共享路径，建议用引号包起来：
 
 ```powershell
-uv run sub-gen "\\NAS\data\others\资料\others\sample-user\1" `
+uv run fast-sub "\\NAS\data\others\资料\others\sample-user\1" `
   --original-only `
   --source-lang auto `
   --stt-base-url http://localhost:8000/v1 `
@@ -306,7 +306,7 @@ uv run sub-gen "\\NAS\data\others\资料\others\sample-user\1" `
 ```
 
 ```bash
-sub-gen video.mp4 \
+fast-sub video.mp4 \
   --mode bilingual \
   --source-lang en \
   --target-lang zh \
@@ -319,7 +319,7 @@ sub-gen video.mp4 \
 
 ## v0.1 决策
 
-1. 命令名：`sub-gen`。
+1. 命令名：`fast-sub`。
 2. `original` 模式默认使用 `response_format=srt`。
 3. `translated` 模式在省略 `--target-lang` 时默认翻译为英文。
 4. 翻译使用 `translators` 包，不再使用 OpenAI 兼容的 Chat endpoint。
@@ -327,7 +327,7 @@ sub-gen video.mp4 \
 6. v0.1 只需要 `.srt`；`.ass` 延后到 v0.2。
 7. v0.1 假设音频满足 provider 上传限制；不满足时给出清晰的限制错误。
 8. 默认提取音频格式为 `wav`。
-9. 临时任务文件存放在 `.sub-gen/`。
+9. 临时任务文件存放在 `.fast-sub/`。
 10. v0.1 包含 `--config config.toml`。
 11. 翻译按带时间戳的 segment 逐条执行。
 12. 翻译批次失败时写入部分输出和错误报告。

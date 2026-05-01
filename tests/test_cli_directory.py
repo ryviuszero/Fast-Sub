@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-import sub_gen.cli as cli
-from sub_gen.errors import SubGenError
+import fast_sub.cli as cli
+from fast_sub.errors import SubGenError
 
 
 def _options():
@@ -18,8 +18,12 @@ def _options():
         target_lang=None,
         stt_base_url=None,
         stt_api_key="dummy",
+        stt_provider=None,
         stt_model=None,
         stt_temperature=None,
+        whisperx_device=None,
+        whisperx_compute_type=None,
+        whisperx_batch_size=None,
         max_audio_mb=None,
         translator=None,
         subtitle_format=None,
@@ -61,7 +65,7 @@ def test_run_directory_processes_supported_media_files(
             (video, output_dir / "a.auto.srt", False),
             (audio, output_dir / "b.auto.srt", False),
         ]
-        progress = json.loads((output_dir / ".sub-gen-progress.json").read_text())
+        progress = json.loads((output_dir / ".fast-sub-progress.json").read_text())
         assert len(progress["completed"]) == 2
     finally:
         shutil.rmtree(work_dir)
@@ -86,7 +90,7 @@ def test_directory_progress_path_supports_windows_unc_path() -> None:
     input_dir = Path(r"\\NAS\data\others\资料\others\sample-user\1")
 
     assert cli._directory_progress_path(input_dir, None) == (
-        input_dir / ".sub-gen-progress.json"
+        input_dir / ".fast-sub-progress.json"
     )
 
 
@@ -108,7 +112,7 @@ def test_run_directory_skips_completed_files(
 
         progress = {"version": 1, "completed": {}}
         cli._mark_directory_item_complete(completed, completed_output, progress)
-        cli._write_directory_progress(output_dir / ".sub-gen-progress.json", progress)
+        cli._write_directory_progress(output_dir / ".fast-sub-progress.json", progress)
 
         calls: list[Path] = []
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from sub_gen.models import Mode
+from fast_sub.models import Mode
 
 
 def input_hash(path: Path) -> str:
@@ -14,7 +14,7 @@ def input_hash(path: Path) -> str:
 
 
 def job_dir(input_file: Path) -> Path:
-    return Path(".sub-gen") / "jobs" / input_hash(input_file)
+    return Path(".fast-sub") / "jobs" / input_hash(input_file)
 
 
 def default_output_path(input_file: Path, mode: Mode, source_lang: str, target_lang: str) -> Path:
