@@ -114,7 +114,7 @@ Fast Sub 固定样本来源优先级：
 - `noise_profile`: `clean_speech`, `music_noise`, `background_noise`, `code_switching`, `overlap_speech` 等稳定枚举。
 - `language_mix`: 单语可为 `null`，混合语言样本记录如 `["zh", "en"]`。
 - `source_url`: 原始来源。
-- `access_date`: 获取或记录来源的日期。
+- `source_accessed_at`: 获取或记录来源的日期，使用 `YYYY-MM-DD`。
 - `license`: 许可证名称。
 - `redistributable`: 是否允许随仓库分发。
 - `local_path`: 本地媒体路径，建议位于 `local_tests/media/`。
@@ -149,6 +149,29 @@ Get-FileHash local_tests/media/zh-interview-10m.mp4 -Algorithm SHA256
 - 可比性：`duration_sec`, `checksum_sha256`, `prepared_audio_checksum_sha256`。
 - 质量指标：`reference_transcript_path`, `reference_subtitle_path`, `target_metrics`。
 - 隐私与许可：`license`, `redistributable`, `source_url`, `notes`。
+
+## Current Machine Baseline Flow
+
+第五轮 `bench` 报告的默认 scope 固定为 `transcribe_media_v1`：
+
+```text
+input media -> probe -> prepare_audio -> local-faster-whisper worker -> source SRT
+```
+
+本轮报告不包含 `auto` 调度、`refine`、翻译或烧录耗时。CPU 和 auto profile 的手动 baseline 建议写到本地忽略目录：
+
+```powershell
+fast-sub bench local_tests/media/<sample>.mp4 `
+  --provider local-faster-whisper `
+  --model whisper-small `
+  --repeat 3 `
+  --sample-manifest local_tests/manifests/<sample>.json `
+  --sample-id <sample-id> `
+  --json `
+  --markdown local_tests/reports/current-machine.md
+```
+
+可提交的 Markdown 报告应只保留文件名、sample id、checksum、样本来源和硬件概要，不应包含用户目录绝对路径、主机名、网络共享路径或大媒体文件。
 
 ## Do Not Commit
 

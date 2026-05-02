@@ -80,6 +80,8 @@ class SttProviderResponse(BaseModel):
     provider: str
     language: str
     elapsed_sec: float | None = Field(default=None, ge=0)
+    actual_device: str | None = None
+    actual_compute_type: str | None = None
     segments: list[SttProviderSegment]
     warnings: list[str] = Field(default_factory=list)
 

@@ -136,6 +136,8 @@ def transcribe(request: SttWorkerRequest) -> SttWorkerResponse:
         provider=PROVIDER_ID,
         language=language,
         elapsed_sec=elapsed_sec,
+        actual_device=device,
+        actual_compute_type=compute_type,
         segments=provider_segments,
         warnings=warnings,
     )

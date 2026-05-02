@@ -12,6 +12,7 @@ from rich.console import Console
 
 from fast_sub.analyze import AnalysisResult, analyze_media
 from fast_sub.auto import AutoOptions, AutoPipelineError, auto_media
+from fast_sub.bench import BenchError, BenchOptions, render_markdown_report, run_bench
 from fast_sub.burn import BurnOptions, burn_subtitles
 from fast_sub.config import AppConfig, load_config
 from fast_sub.errors import ProviderResponseError, SubGenError, WorkerRunnerError
@@ -58,6 +59,7 @@ models_app = typer.Typer(help="Manage local model downloads.", no_args_is_help=T
 COMMAND_NAMES = {
     "analyze",
     "auto",
+    "bench",
     "burn",
     "doctor",
     "extract",
@@ -356,6 +358,85 @@ def burn_command(
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc
     console.print(f"[green]Wrote subtitled video:[/green] {out_path}")
+
+
+@app.command("bench")
+def bench_command(
+    input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
+    provider: Annotated[
+        str,
+        typer.Option("--provider", help="STT provider id."),
+    ] = "local-faster-whisper",
+    model: Annotated[
+        str,
+        typer.Option("--model", help="ASR model id."),
+    ] = "whisper-small",
+    language: Annotated[
+        str,
+        typer.Option("--language", help="Language: auto, zh, en, ja, or ko."),
+    ] = "auto",
+    mode: Annotated[
+        str,
+        typer.Option("--mode", help="Transcription mode: fast, balanced, or quality."),
+    ] = "balanced",
+    repeat: Annotated[
+        int,
+        typer.Option("--repeat", help="Runs per benchmark profile."),
+    ] = 1,
+    gpu_load: Annotated[
+        str,
+        typer.Option("--gpu-load", help="GPU load profile: low, balanced, or max."),
+    ] = "balanced",
+    batch_size: Annotated[
+        int | None,
+        typer.Option("--batch-size", help="Worker batch size. Overrides --gpu-load."),
+    ] = None,
+    markdown: Annotated[
+        Path | None,
+        typer.Option("--markdown", help="Write a Markdown report to this path."),
+    ] = None,
+    sample_manifest: Annotated[
+        Path | None,
+        typer.Option("--sample-manifest", help="Optional benchmark sample manifest JSON."),
+    ] = None,
+    sample_id: Annotated[
+        str | None,
+        typer.Option("--sample-id", help="Optional sample id from the manifest."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable JSON report."),
+    ] = False,
+) -> None:
+    """Benchmark transcribe_media_v1 for local STT profiles."""
+    options = BenchOptions(
+        provider=provider,
+        model=model,
+        language=language,
+        mode=mode,
+        repeat=repeat,
+        gpu_load=gpu_load,
+        batch_size=batch_size,
+        markdown=markdown,
+        sample_manifest=sample_manifest,
+        sample_id=sample_id,
+        command=sys.argv[1:],
+    )
+    try:
+        report = run_bench(input_file, options)
+    except BenchError as exc:
+        if json_output and exc.report is not None:
+            typer.echo(json.dumps(exc.report, ensure_ascii=False, indent=2))
+        elif json_output:
+            typer.echo(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        else:
+            err_console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    if json_output:
+        typer.echo(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+    console.print(render_markdown_report(report))
 
 
 @app.command("transcribe")

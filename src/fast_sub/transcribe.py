@@ -131,6 +131,8 @@ class TranscribeResult:
     warnings: list[str] = field(default_factory=list)
     metadata_path: Path | None = None
     work_dir: Path | None = None
+    actual_device: str | None = None
+    actual_compute_type: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -140,6 +142,8 @@ class TranscribeResult:
             "device": self.device,
             "compute_type": self.compute_type,
             "compute": self.compute_type,
+            "actual_device": self.actual_device,
+            "actual_compute_type": self.actual_compute_type,
             "language_detected": self.language_detected,
             "duration_sec": self.duration_sec,
             "duration": self.duration_sec,
@@ -221,6 +225,8 @@ def transcribe_media(
             model=options.model,
             device=options.device,
             compute_type=options.compute_type,
+            actual_device=response.actual_device,
+            actual_compute_type=response.actual_compute_type,
             language_detected=response.language,
             duration_sec=duration_sec,
             elapsed_sec=round(elapsed_sec, 3),

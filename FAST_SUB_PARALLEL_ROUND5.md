@@ -447,6 +447,10 @@ fast-sub bench local_tests/media/sample.mp4 --repeat 3 --markdown local_tests/re
 - `uv run pytest` 通过。
 - 文档记录当前本机 baseline 的手动运行方式和后续补机器计划。
 
+## Implementation Notes
+
+第五轮实现应保持 benchmark scope 为 `transcribe_media_v1`，默认 profiles 为 `cpu-int8` 和 `auto`，默认测试只使用 mock 硬件和 mock 转写结果。真实本机 baseline 继续放在 `local_tests/reports/`，不要提交大媒体、真实模型缓存或包含个人绝对路径的报告。
+
 ## 启动提示
 
 ```text

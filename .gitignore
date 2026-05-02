@@ -8,6 +8,8 @@
 .pytest_cache/
 .ruff_cache/
 pytest-cache-files-*/
+pytest-local-basetemp/
+pytest-local-tmp/
 __pycache__/
 *.py[cod]
 local_tests/*
