@@ -342,3 +342,43 @@ $env:UV_CACHE_DIR='.uv-cache'; uv sync --extra local-asr
 - 清理旧 `run` 流程。
 - 完善 README/安装文档。
 - 打包前检查和端到端 smoke tests。
+
+## 第四轮完成记录
+
+合并到 `master` 的提交：
+
+```text
+0b9ae32 fix: harden transcribe errors
+372612f feat: add auto subtitle pipeline
+```
+
+已完成：
+
+- `fast-sub auto` 命令已挂接到 CLI。
+- `auto` 支持 `--dry-run` 和 `--json`。
+- 缺模型且无 `--yes` 时给出安装提示，不自动下载。
+- 缺模型且有 `--yes` 时调用本地模型安装流程。
+- `auto` 默认只使用本地 STT provider，不用 `--yes` 授权 API 上传。
+- `auto` 成功路径会调用 `transcribe`，再调用 `refine` 写出最终 SRT。
+- `transcribe` 已提供结构化错误：`stage`、`code`、`message`、`action_hint`。
+- `transcribe` metadata 已包含 provider/model/device/compute/gpu_load/batch_size/duration/elapsed/rtfx。
+- `--keep-temp` 成功和失败路径都有 metadata 测试覆盖。
+
+默认测试：
+
+```bash
+$env:UV_CACHE_DIR='.uv-cache'; $env:TMP='.test-work\tmp'; $env:TEMP='.test-work\tmp'; uv run pytest
+```
+
+结果：
+
+```text
+146 passed
+```
+
+剩余风险：
+
+- 尚未补充真实本地模型的 `fast-sub auto ... --yes` 手动验证记录。
+- 默认测试不下载真实模型，也不依赖 `faster-whisper` 真实推理。
+- `auto` 仍只覆盖原文字幕最小链路，不包含翻译、烧录、benchmark、API fallback 或完整 OOM 降级。
+- 旧 `run` 流程仍存在 OpenAI compatible / WhisperX 路径，后续 v0 hardening 再收敛。

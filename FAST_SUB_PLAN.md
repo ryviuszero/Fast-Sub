@@ -292,10 +292,10 @@ api-custom-http-translate
 - [x] 本地 ASR 依赖提供 `local-asr` optional extra，并在缺依赖时给出安装提示。
 - [x] 模型缓存权限异常、坏目录、不可访问文件会返回结构化状态，避免 CLI traceback。
 - [~] 旧 `run` 流程仍存在 OpenAI compatible / WhisperX 路径，后续需要收敛到 provider/worker contract。
-- [~] `transcribe` 已可用，但还需要为 `auto` 收敛错误码、metadata 和用户提示。
+- [x] `transcribe` 已为 `auto` 收敛结构化错误、metadata 和用户提示。
 - [~] `translate` 命令目前还是占位，需要后续 provider 化。
 - [ ] `bench` benchmark 报告。
-- [ ] `auto` 自动调度。
+- [x] `auto` 最小自动调度，支持 dry-run、缺模型提示、`--yes` 本地模型安装、transcribe/refine 串联。
 - [ ] Electron UI。
 - [ ] Web 版。
 
@@ -316,18 +316,18 @@ api-custom-http-translate
 
 第四轮并行计划见 `FAST_SUB_PARALLEL_ROUND4.md`：
 
-- [ ] `codex/fast-sub-auto-core`：实现 `auto` dry-run、缺模型提示、`--yes` 本地模型安装、调用 transcribe/refine 的真实最小链路。
-- [ ] `codex/fast-sub-transcribe-hardening`：为自动链路收敛转写错误、metadata 和 keep-temp 行为。
+- [x] `codex/fast-sub-transcribe-hardening`：为自动链路收敛转写错误、metadata 和 keep-temp 行为。
+- [x] `codex/fast-sub-auto-core`：实现 `auto` dry-run、缺模型提示、`--yes` 本地模型安装、调用 transcribe/refine 的真实最小链路。
 - [ ] `codex/fast-sub-translate-cli`：等 provider contract 和主流程稳定后再做。
 
 v0 剩余迭代预估：
 
 - 第三轮：`local-faster-whisper` worker 原型 + `transcribe` CLI。已完成。
-- 第四轮：`auto` 最小链路。目标是 `probe -> analyze -> model/provider resolution -> optional model install -> transcribe -> refine` 一条命令跑通。
+- 第四轮：`auto` 最小链路。已完成代码与默认测试，真实模型手动验证记录待补。
 - 第五轮：benchmark/report 与固定样本回归。目标是记录 RTFx、segments、错误片段、环境信息，建立 3060 基线。
 - 第六轮：v0 hardening/release。目标是统一错误码、清理旧 `run` 流程、完善文档、打包前检查和端到端 smoke tests。
 
-因此，从当前状态到可称为 v0 的本地字幕 CLI，建议还需要 3 轮迭代：第四轮 `auto` 最小链路，第五轮 benchmark/样本回归，第六轮 v0 hardening/release。当前已经具备“手动命令链路可用”的技术预览基础。
+因此，从当前状态到可称为 v0 的本地字幕 CLI，建议还需要 2 轮迭代：第五轮 benchmark/样本回归，第六轮 v0 hardening/release。当前已经具备“自动原文字幕链路可用”的技术预览基础。
 
 ### Milestone 0: CLI 骨架
 
