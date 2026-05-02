@@ -140,6 +140,51 @@ PowerShell checksum 示例：
 Get-FileHash local_tests/media/zh-interview-10m.mp4 -Algorithm SHA256
 ```
 
+## Controlled Downloader Plan
+
+第 5.5 轮会增加一个受控的 benchmark asset downloader。它的定位是“manifest 驱动的测试数据准备工具”，不是通用下载器、爬虫或搜索工具。
+
+建议命令：
+
+```bash
+fast-sub bench-assets sources
+fast-sub bench-assets init
+fast-sub bench-assets download <asset-id>
+fast-sub bench-assets prepare <sample-id>
+fast-sub bench-assets verify <sample-id>
+fast-sub bench-assets verify --all
+```
+
+下载器规则：
+
+- 只允许下载 manifest 或内置 source map 中明确列出的 URL。
+- 自动下载前必须有 `source_url`、`download_url`、`license`、`redistributable` 和 `download_policy`。
+- `license=unknown` 不允许自动下载。
+- `download_policy=manual` 只输出准备说明，不执行下载。
+- 下载后必须计算 SHA-256。
+- 原始 asset 下载和 benchmark sample 准备必须分成两个步骤。
+- 从 archive 准备 sample 时，只允许安全提取 manifest 指定成员，拒绝绝对路径、`..`、symlink 和 hard link。
+- 默认测试不访问网络，下载行为用 fake HTTP 或临时文件覆盖。
+- 真实媒体、reference transcript 和本地报告继续放在 `local_tests/`，不提交仓库。
+
+第一批自动下载候选：
+
+| Source | Language | Domain | Policy |
+| --- | --- | --- | --- |
+| LibriSpeech | en | audiobook | official pinned URL only |
+| AISHELL-1 | zh | Mandarin speech | official pinned URL only |
+| TED-LIUM 3 | en | TED talks | official pinned URL only |
+| Common Voice | multi | read speech | explicit locale/file URL only |
+
+暂缓自动下载：
+
+| Source | Reason |
+| --- | --- |
+| GigaSpeech | 体积和数据集工作流较重，先记录来源和手动准备方式 |
+| KsponSpeech | 获取条件需要确认 |
+| ReazonSpeech | 日语很有价值，但下载流程和体积需要单独验证 |
+| YouTube/Bilibili/podcast clips | 版权和 URL 稳定性风险，默认只允许手动准备 |
+
 ## Bench Readiness
 
 后续 `bench` 命令可以直接消费 manifest 中的这些信息：
@@ -180,5 +225,5 @@ fast-sub bench local_tests/media/<sample>.mp4 `
 - 5-10 分钟 benchmark 视频或音频。
 - 授权不清的 reference transcript/subtitle。
 - 本地 benchmark 报告中的绝对个人路径或机器敏感信息。
-- 任何为下载素材而新增的下载器、网络脚本或 CLI 行为。
+- 绕过 manifest/source policy 的下载脚本、爬虫或通用 URL 下载入口。
 
