@@ -58,6 +58,37 @@ local_tests/
 | `ko-talk-10m` | ko | 600s | video | 韩语讲话 | clean_speech | `transcribe`, `bench` |
 | `ja-talk-10m` | ja | 600s | video | 日语讲话 | clean_speech | `transcribe`, `bench` |
 
+## Common ASR Benchmark Sources
+
+语音类 benchmark 通常覆盖不同 domain、语言、说话方式和噪声条件。Fast Sub 的固定样本应尽量参考通用 ASR benchmark，但不要求默认测试下载这些数据集。
+
+常见公开 benchmark / 数据集参考：
+
+| 数据集 | 语言 | 场景 | 适合用途 | 备注 |
+| --- | --- | --- | --- | --- |
+| LibriSpeech | en | audiobook | clean narrated speech | ASR 标准英文基线，CC-BY-4.0 |
+| Common Voice | 多语 | crowd-sourced reading | 多口音、多语种 | CC0，适合语言覆盖 |
+| VoxPopuli | 多语/欧洲语言 | parliament speech | oratory / 非母语口音 | CC0 |
+| TED-LIUM | en | TED talks | long-form oratory | 常见演讲类 benchmark |
+| GigaSpeech | en | audiobook/podcast/YouTube | 多 domain | 适合播客/公开视频语音 |
+| Earnings-22 | en | earnings calls | meeting/spontaneous | 财报会议长音频 |
+| AMI | en | meetings | 多人会议 | 适合会议和重叠说话 |
+| AISHELL-1 | zh | Mandarin speech | 中文普通话 clean baseline | Apache-2.0，安静室内 |
+| KsponSpeech | ko | spontaneous dialog | 韩语自然对话 | AIHub，需要注意获取条件 |
+| ReazonSpeech | ja | Japanese corpus | 日语 ASR | 许可和用途需按官方说明 |
+| ICoS / HiKE | 多语 / 韩英 | code-switching | 中英/多语混杂参考 | 可作为后续候选 |
+
+Fast Sub 固定样本来源优先级：
+
+| Fast Sub 样本 | 推荐来源优先级 | 说明 |
+| --- | --- | --- |
+| `zh-interview-10m` | AISHELL-1；授权清晰中文访谈/公开演讲；自录 | 中文 clean/spontaneous baseline |
+| `en-podcast-10m` | GigaSpeech；TED-LIUM；Earnings-22；AMI；授权播客 | 英文长音频和播客场景 |
+| `zh-en-mixed-10m` | ICoS；自录/授权中英混杂材料 | code-switching 场景，先作为候选 |
+| `noisy-music-5m` | Common Voice noisy/other；授权背景音乐视频；自录 | 噪声和音乐干扰 |
+| `ko-talk-10m` | KsponSpeech；授权韩语讲话/访谈 | 韩语自然对话或讲话 |
+| `ja-talk-10m` | ReazonSpeech；Common Voice Japanese；授权日语讲话 | 日语讲话 baseline |
+
 ## Source And License Rules
 
 - 优先选择 Creative Commons、公共领域、项目自录或明确授权素材。
@@ -73,11 +104,17 @@ local_tests/
 关键字段：
 
 - `id`: 稳定样本 ID。
+- `benchmark_family`: 例如 `esb`, `open_asr_leaderboard`, `fast_sub_local`。
+- `source_dataset`: 原始数据集或素材集合名，例如 `AISHELL-1`, `GigaSpeech`, `ReazonSpeech`。
 - `language`: 原始语言；混合语言可使用数组。
 - `duration_sec`: 目标时长或实际时长。
 - `media_type`: `audio` 或 `video`。
+- `domain`: `audiobook`, `podcast`, `interview`, `meeting`, `lecture`, `conversation`, `video` 等。
+- `speaking_style`: `read`, `narrated`, `oratory`, `spontaneous`, `conversation`, `code_switching` 等。
 - `noise_profile`: `clean_speech`, `music_noise`, `background_noise`, `code_switching`, `overlap_speech` 等稳定枚举。
+- `language_mix`: 单语可为 `null`，混合语言样本记录如 `["zh", "en"]`。
 - `source_url`: 原始来源。
+- `access_date`: 获取或记录来源的日期。
 - `license`: 许可证名称。
 - `redistributable`: 是否允许随仓库分发。
 - `local_path`: 本地媒体路径，建议位于 `local_tests/media/`。
