@@ -45,7 +45,7 @@ from fast_sub.paths import default_output_path, job_dir
 from fast_sub.providers import default_registry
 from fast_sub.stt import transcribe_segments, transcribe_segments_whisperx, transcribe_srt
 from fast_sub.subtitle import RefineOptions, refine_srt_text, render_srt
-from fast_sub.transcribe import TranscribeOptions, transcribe_media
+from fast_sub.transcribe import TranscribeOptions, transcribe_error_payload, transcribe_media
 from fast_sub.translate import translate_segments
 
 console = Console()
@@ -428,7 +428,7 @@ def transcribe_command(
         )
     except (SubGenError, WorkerRunnerError) as exc:
         if json_output:
-            typer.echo(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+            typer.echo(json.dumps(transcribe_error_payload(exc), ensure_ascii=False))
         else:
             err_console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc

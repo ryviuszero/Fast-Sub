@@ -20,6 +20,8 @@ def test_transcribe_command_outputs_json(monkeypatch) -> None:
             srt_path=Path("out.srt"),
             provider="local-faster-whisper",
             model=options.model,
+            device=options.device,
+            compute_type=options.compute_type,
             language_detected="zh",
             duration_sec=10.0,
             elapsed_sec=2.0,
@@ -57,6 +59,11 @@ def test_transcribe_command_outputs_json(monkeypatch) -> None:
     payload = json.loads(result.stdout)
     assert payload["srt_path"] == "out.srt"
     assert payload["provider"] == "local-faster-whisper"
+    assert payload["device"] == "auto"
+    assert payload["compute_type"] == "auto"
+    assert payload["compute"] == "auto"
+    assert payload["duration"] == 10.0
+    assert payload["elapsed"] == 2.0
     assert payload["language_detected"] == "zh"
     assert "Wrote subtitle" not in result.stdout
     input_file, options = calls[0]
@@ -79,4 +86,6 @@ def test_transcribe_command_returns_json_error(monkeypatch) -> None:
     assert result.exit_code == 1
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
-    assert "no usable subtitle segments" in payload["error"]
+    assert payload["error"]["code"] == "EMPTY_SEGMENTS"
+    assert payload["error"]["stage"] == "transcribe"
+    assert "no usable subtitle segments" in payload["error"]["message"]
