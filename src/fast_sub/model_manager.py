@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+import subprocess
+import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlparse
@@ -10,6 +13,9 @@ import httpx
 
 from fast_sub.model_manifest import ModelManifestEntry, ModelManifestFile
 from fast_sub.paths import model_cache_dir
+
+DownloadProgress = Callable[[str, int, int | None], None]
+MODEL_DOWNLOADERS = {"auto", "httpx", "aria2"}
 
 
 class ModelManagerError(RuntimeError):
@@ -109,6 +115,10 @@ def install_model(
     cache_dir: Path | None = None,
     *,
     timeout: float = 60,
+    downloader: str = "auto",
+    aria2_connections: int = 8,
+    aria2_split: int = 8,
+    progress: DownloadProgress | None = None,
 ) -> ModelStatus:
     existing = verify_model(model, cache_dir)
     if existing.installed:
@@ -123,7 +133,16 @@ def install_model(
         path.mkdir(parents=True, exist_ok=True)
         _ensure_disk_space(path, model.size_bytes)
         for manifest_file in model.files:
-            _install_manifest_file(model, manifest_file, path, timeout=timeout)
+            _install_manifest_file(
+                model,
+                manifest_file,
+                path,
+                timeout=timeout,
+                downloader=downloader,
+                aria2_connections=aria2_connections,
+                aria2_split=aria2_split,
+                progress=progress,
+            )
         return verify_model(model, cache_dir)
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -134,6 +153,10 @@ def install_model(
         path,
         model.sha256,
         timeout=timeout,
+        downloader=downloader,
+        aria2_connections=aria2_connections,
+        aria2_split=aria2_split,
+        progress=progress,
     )
     if last_error is None:
         return verify_model(model, cache_dir)
@@ -150,7 +173,14 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _download(url: str, part_path: Path, *, timeout: float) -> None:
+def _download_httpx(
+    url: str,
+    part_path: Path,
+    *,
+    timeout: float,
+    progress: DownloadProgress | None,
+    label: str,
+) -> None:
     headers: dict[str, str] = {}
     resume_from = part_path.stat().st_size if part_path.exists() else 0
     if resume_from:
@@ -158,10 +188,15 @@ def _download(url: str, part_path: Path, *, timeout: float) -> None:
 
     with httpx.stream("GET", url, headers=headers, follow_redirects=True, timeout=timeout) as res:
         res.raise_for_status()
+        total = _response_total(res, resume_from)
+        downloaded = resume_from if res.status_code == 206 else 0
+        _emit_download_progress(progress, label, downloaded, total)
         mode = "ab" if resume_from and res.status_code == 206 else "wb"
         with part_path.open(mode) as file:
             for chunk in res.iter_bytes():
                 file.write(chunk)
+                downloaded += len(chunk)
+                _emit_download_progress(progress, label, downloaded, total)
 
 
 def _verify_directory_model(model: ModelManifestEntry, path: Path) -> ModelStatus:
@@ -269,15 +304,34 @@ def _install_manifest_file(
     model_dir: Path,
     *,
     timeout: float,
+    downloader: str,
+    aria2_connections: int,
+    aria2_split: int,
+    progress: DownloadProgress | None,
 ) -> None:
     path = model_dir / manifest_file.path
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        if not path.is_file():
+            raise ModelManagerError(f"Model path exists but is not a file: {path}")
+        actual_sha = sha256_file(path)
+        if actual_sha == manifest_file.sha256:
+            return
+        raise ModelManagerError(
+            "Refusing to overwrite existing model file with mismatched sha256: "
+            f"{path}"
+        )
     last_error = _download_verified(
         model.id,
         _candidate_urls(model, manifest_file),
         path,
         manifest_file.sha256,
         timeout=timeout,
+        downloader=downloader,
+        aria2_connections=aria2_connections,
+        aria2_split=aria2_split,
+        progress=progress,
+        label=f"{model.id}/{manifest_file.path}",
     )
     if last_error is not None:
         raise ModelManagerError(
@@ -292,15 +346,31 @@ def _download_verified(
     expected_sha256: str | None,
     *,
     timeout: float,
+    downloader: str,
+    aria2_connections: int,
+    aria2_split: int,
+    progress: DownloadProgress | None,
+    label: str | None = None,
 ) -> Exception | None:
     if expected_sha256 is None:
         raise ModelManagerError(f"Manifest entry for {model_id} is missing sha256.")
 
     part_path = path.with_suffix(path.suffix + ".part")
     last_error: Exception | None = None
+    backend = _resolve_downloader(downloader)
+    download_label = label or model_id
     for url in urls:
         try:
-            _download(url, part_path, timeout=timeout)
+            _download(
+                url,
+                part_path,
+                timeout=timeout,
+                downloader=backend,
+                aria2_connections=aria2_connections,
+                aria2_split=aria2_split,
+                progress=progress,
+                label=download_label,
+            )
             actual_sha = sha256_file(part_path)
             if actual_sha != expected_sha256:
                 _unlink_if_exists(part_path)
@@ -313,6 +383,117 @@ def _download_verified(
         except (httpx.HTTPError, OSError, ModelManagerError) as exc:
             last_error = exc
     return last_error
+
+
+def _download(
+    url: str,
+    part_path: Path,
+    *,
+    timeout: float,
+    downloader: str,
+    aria2_connections: int,
+    aria2_split: int,
+    progress: DownloadProgress | None,
+    label: str,
+) -> None:
+    if downloader == "aria2":
+        _download_aria2(
+            url,
+            part_path,
+            timeout=timeout,
+            connections=aria2_connections,
+            split=aria2_split,
+        )
+        if part_path.exists():
+            size = part_path.stat().st_size
+            _emit_download_progress(progress, label, size, size)
+        return
+    _download_httpx(url, part_path, timeout=timeout, progress=progress, label=label)
+
+
+def _resolve_downloader(value: str) -> str:
+    if value not in MODEL_DOWNLOADERS:
+        raise ModelManagerError(
+            f"Unsupported model downloader: {value}. "
+            f"Choose one of: {', '.join(sorted(MODEL_DOWNLOADERS))}."
+        )
+    if value == "auto":
+        return "aria2" if _aria2_executable() else "httpx"
+    if value == "aria2" and not _aria2_executable():
+        raise ModelManagerError("aria2c was requested but was not found on PATH.")
+    return value
+
+
+def _download_aria2(
+    url: str,
+    part_path: Path,
+    *,
+    timeout: float,
+    connections: int,
+    split: int,
+) -> None:
+    if connections <= 0 or split <= 0:
+        raise ModelManagerError("aria2 connection and split counts must be greater than 0.")
+    part_path.parent.mkdir(parents=True, exist_ok=True)
+    command = [
+        str(_aria2_executable() or "aria2c"),
+        "--continue=true",
+        "--allow-overwrite=true",
+        "--auto-file-renaming=false",
+        f"--max-connection-per-server={connections}",
+        f"--split={split}",
+        "--min-split-size=1M",
+        f"--timeout={max(1, int(timeout))}",
+        f"--connect-timeout={max(1, int(timeout))}",
+        "--summary-interval=1",
+        "--console-log-level=notice",
+        "--file-allocation=none",
+        "--check-certificate=true",
+        "--dir",
+        str(part_path.parent),
+        "--out",
+        part_path.name,
+        url,
+    ]
+    completed = subprocess.run(
+        command,
+        check=False,
+        text=True,
+        stdout=sys.stderr,
+        stderr=sys.stderr,
+    )
+    if completed.returncode != 0:
+        raise ModelManagerError(f"aria2c download failed with exit code {completed.returncode}.")
+    if not part_path.exists():
+        raise ModelManagerError("aria2c completed but did not create the expected file.")
+
+
+def _aria2_executable() -> Path | None:
+    path = shutil.which("aria2c")
+    return Path(path) if path else None
+
+
+def _response_total(response: httpx.Response, resume_from: int) -> int | None:
+    value = response.headers.get("content-length")
+    if value is None:
+        return None
+    try:
+        length = int(value)
+    except ValueError:
+        return None
+    if length < 0:
+        return None
+    return length + resume_from if response.status_code == 206 else length
+
+
+def _emit_download_progress(
+    progress: DownloadProgress | None,
+    label: str,
+    downloaded: int,
+    total: int | None,
+) -> None:
+    if progress is not None:
+        progress(label, downloaded, total)
 
 
 def _candidate_urls(

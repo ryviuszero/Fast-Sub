@@ -9,10 +9,28 @@ from typing import Annotated, Any, TypeVar
 
 import typer
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TaskID,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 
 from fast_sub.analyze import AnalysisResult, analyze_media
 from fast_sub.auto import AutoOptions, AutoPipelineError, auto_media
-from fast_sub.bench import BenchError, BenchOptions, render_markdown_report, run_bench
+from fast_sub.bench import (
+    BENCH_PROFILE_CHOICES,
+    BenchError,
+    BenchOptions,
+    load_sample_metadata,
+    render_brief_report,
+    render_sample_manifest_schema,
+    run_bench,
+    sample_manifest_schema_payload,
+)
 from fast_sub.burn import BurnOptions, burn_subtitles
 from fast_sub.config import AppConfig, load_config
 from fast_sub.errors import ProviderResponseError, SubGenError, WorkerRunnerError
@@ -27,6 +45,7 @@ from fast_sub.media import (
     probe_media,
 )
 from fast_sub.model_manager import (
+    MODEL_DOWNLOADERS,
     ModelManagerError,
     install_model,
     model_path,
@@ -47,7 +66,12 @@ from fast_sub.paths import default_output_path, job_dir
 from fast_sub.providers import default_registry
 from fast_sub.stt import transcribe_segments, transcribe_segments_whisperx, transcribe_srt
 from fast_sub.subtitle import RefineOptions, refine_srt_text, render_srt
-from fast_sub.transcribe import TranscribeOptions, transcribe_error_payload, transcribe_media
+from fast_sub.transcribe import (
+    VALID_LANGUAGES,
+    TranscribeOptions,
+    transcribe_error_payload,
+    transcribe_media,
+)
 from fast_sub.translate import translate_segments
 
 console = Console()
@@ -60,6 +84,7 @@ COMMAND_NAMES = {
     "analyze",
     "auto",
     "bench",
+    "bench-manifest",
     "burn",
     "doctor",
     "extract",
@@ -168,11 +193,31 @@ def models_verify_command(
 @models_app.command("install")
 def models_install_command(
     model_id: Annotated[str, typer.Argument(help="Model id from `models list`.")],
+    downloader: Annotated[
+        str,
+        typer.Option("--downloader", help="Download backend: auto, httpx, or aria2."),
+    ] = "auto",
+    aria2_connections: Annotated[
+        int,
+        typer.Option("--aria2-connections", help="aria2 connections per server."),
+    ] = 8,
+    aria2_split: Annotated[
+        int,
+        typer.Option("--aria2-split", help="aria2 split count."),
+    ] = 8,
 ) -> None:
     """Download and verify a model into the local cache."""
     try:
         model = get_model(model_id)
-        status = install_model(model)
+        _validate_model_downloader(downloader)
+        with _model_download_progress() as progress:
+            status = install_model(
+                model,
+                downloader=downloader,
+                aria2_connections=aria2_connections,
+                aria2_split=aria2_split,
+                progress=progress,
+            )
     except (KeyError, ModelManagerError) as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc
@@ -258,6 +303,49 @@ def _print_doctor_status(status: dict[str, Any]) -> None:
         console.print(f"{key}: {label} ({item['path']})")
         if item["error"]:
             console.print(f"  [red]{item['error']}[/red]")
+
+
+def _validate_model_downloader(value: str) -> None:
+    if value not in MODEL_DOWNLOADERS:
+        supported = ", ".join(sorted(MODEL_DOWNLOADERS))
+        raise ModelManagerError(
+            f"Unsupported model downloader: {value}. Choose one of: {supported}."
+        )
+
+
+def _model_download_progress():  # noqa: ANN202
+    progress = Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+    )
+    tasks: dict[str, TaskID] = {}
+
+    def update(label: str, downloaded: int, total: int | None) -> None:
+        if label not in tasks:
+            tasks[label] = progress.add_task(
+                label,
+                total=total,
+                completed=downloaded,
+            )
+            return
+        task_id = tasks[label]
+        if total is not None:
+            progress.update(task_id, total=total)
+        progress.update(task_id, completed=downloaded)
+
+    class ProgressContext:
+        def __enter__(self):  # noqa: ANN204
+            progress.__enter__()
+            return update
+
+        def __exit__(self, exc_type, exc, tb):  # noqa: ANN001, ANN204
+            return progress.__exit__(exc_type, exc, tb)
+
+    return ProgressContext()
 
 
 def _print_probe_info(info: dict[str, Any]) -> None:
@@ -360,8 +448,24 @@ def burn_command(
     console.print(f"[green]Wrote subtitled video:[/green] {out_path}")
 
 
-@app.command("bench")
+@app.command("bench-manifest")
+def bench_manifest_command(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable sample manifest schema."),
+    ] = False,
+) -> None:
+    """Show the sample manifest fields consumed by `fast-sub bench`."""
+    payload = sample_manifest_schema_payload()
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    console.print(render_sample_manifest_schema())
+
+
+@app.command("bench", context_settings={"allow_extra_args": True})
 def bench_command(
+    ctx: typer.Context,
     input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
     provider: Annotated[
         str,
@@ -383,6 +487,10 @@ def bench_command(
         int,
         typer.Option("--repeat", help="Runs per benchmark profile."),
     ] = 1,
+    profile: Annotated[
+        str,
+        typer.Option("--profile", help="Benchmark profile: all, cpu-int8, or auto."),
+    ] = "all",
     gpu_load: Annotated[
         str,
         typer.Option("--gpu-load", help="GPU load profile: low, balanced, or max."),
@@ -392,16 +500,19 @@ def bench_command(
         typer.Option("--batch-size", help="Worker batch size. Overrides --gpu-load."),
     ] = None,
     markdown: Annotated[
+        bool,
+        typer.Option("--markdown", help="Write a Markdown report to the default report path."),
+    ] = False,
+    markdown_path: Annotated[
         Path | None,
-        typer.Option("--markdown", help="Write a Markdown report to this path."),
+        typer.Option("--markdown-path", help="Write a Markdown report to this explicit path."),
     ] = None,
     sample_manifest: Annotated[
         Path | None,
-        typer.Option("--sample-manifest", help="Optional benchmark sample manifest JSON."),
-    ] = None,
-    sample_id: Annotated[
-        str | None,
-        typer.Option("--sample-id", help="Optional sample id from the manifest."),
+        typer.Option(
+            "--sample-manifest",
+            help="Optional benchmark sample manifest JSON. See `fast-sub bench-manifest`.",
+        ),
     ] = None,
     json_output: Annotated[
         bool,
@@ -409,20 +520,38 @@ def bench_command(
     ] = False,
 ) -> None:
     """Benchmark transcribe_media_v1 for local STT profiles."""
+    resolved_sample_manifest = sample_manifest or _infer_bench_sample_manifest(input_file)
+    resolved_language = language
+    if language == "auto" and resolved_sample_manifest is not None:
+        resolved_language = _infer_bench_language(
+            resolved_sample_manifest,
+            input_file=input_file,
+        )
+    resolved_markdown = _resolve_bench_markdown(
+        ctx,
+        markdown=markdown,
+        markdown_path=markdown_path,
+        input_file=input_file,
+    )
+    if markdown and resolved_markdown is None:
+        resolved_markdown = _infer_bench_markdown_path(input_file)
     options = BenchOptions(
         provider=provider,
         model=model,
-        language=language,
+        language=resolved_language,
         mode=mode,
         repeat=repeat,
+        profile=profile,
         gpu_load=gpu_load,
         batch_size=batch_size,
-        markdown=markdown,
-        sample_manifest=sample_manifest,
-        sample_id=sample_id,
+        markdown=resolved_markdown,
+        sample_manifest=resolved_sample_manifest,
+        sample_id=None,
         command=sys.argv[1:],
+        progress=_bench_progress_logger(json_output=json_output),
     )
     try:
+        _validate_bench_profile(profile)
         report = run_bench(input_file, options)
     except BenchError as exc:
         if json_output and exc.report is not None:
@@ -436,7 +565,130 @@ def bench_command(
     if json_output:
         typer.echo(json.dumps(report, ensure_ascii=False, indent=2))
         return
-    console.print(render_markdown_report(report))
+    console.print(render_brief_report(report))
+
+
+def _validate_bench_profile(value: str) -> None:
+    if value not in BENCH_PROFILE_CHOICES:
+        supported = ", ".join(sorted(BENCH_PROFILE_CHOICES))
+        raise BenchError(f"--profile must be one of: {supported}.")
+
+
+def _resolve_bench_markdown(
+    ctx: typer.Context,
+    *,
+    markdown: bool,
+    markdown_path: Path | None,
+    input_file: Path,
+) -> Path | None:
+    extras = list(ctx.args)
+    if markdown_path is not None:
+        if extras:
+            raise typer.BadParameter(f"Unexpected extra argument: {extras[0]}")
+        return markdown_path
+    if markdown and len(extras) == 1:
+        return Path(extras[0])
+    if extras:
+        raise typer.BadParameter(f"Unexpected extra argument: {extras[0]}")
+    if markdown:
+        return _infer_bench_markdown_path(input_file)
+    return None
+
+
+def _infer_bench_sample_manifest(input_file: Path) -> Path | None:
+    normalized = input_file.as_posix()
+    if "/local_tests/media/light/" in normalized or normalized.startswith(
+        "local_tests/media/light/"
+    ):
+        return Path("local_tests/manifests/benchmark-assets-light.json")
+    if "/local_tests/media/" in normalized or normalized.startswith("local_tests/media/"):
+        return Path("local_tests/manifests/benchmark-assets.json")
+    return None
+
+
+def _infer_bench_markdown_path(input_file: Path) -> Path:
+    sample_id = input_file.stem
+    normalized = input_file.as_posix()
+    if "/local_tests/media/light/" in normalized or normalized.startswith(
+        "local_tests/media/light/"
+    ):
+        return Path("local_tests/reports/light") / f"{sample_id}.md"
+    if "/local_tests/media/" in normalized or normalized.startswith("local_tests/media/"):
+        return Path("local_tests/reports") / f"{sample_id}.md"
+    return Path("local_tests/reports") / f"{sample_id}.md"
+
+
+def _infer_bench_language(
+    manifest_path: Path,
+    *,
+    input_file: Path,
+) -> str:
+    try:
+        sample = load_sample_metadata(
+            manifest_path,
+            sample_id=None,
+            input_file=input_file,
+        )
+    except BenchError:
+        return "auto"
+    language = sample.get("language")
+    return language if isinstance(language, str) and language in VALID_LANGUAGES else "auto"
+
+
+def _bench_progress_logger(*, json_output: bool):  # noqa: ANN202
+    console_target = err_console if json_output else console
+
+    def log(event: str, **payload: Any) -> None:
+        profile = payload.get("profile")
+        name = getattr(profile, "name", "unknown")
+        if event == "profile_start":
+            console_target.print(
+                f"[cyan]Benchmark profile[/cyan] {name} "
+                f"({payload.get('repeat')} run(s))"
+            )
+            return
+        if event == "run_start":
+            console_target.print(
+                f"  [cyan]Run[/cyan] {payload.get('index')}/{payload.get('repeat')} "
+                f"started"
+            )
+            return
+        if event == "run_done":
+            run = payload.get("run", {})
+            if run.get("status") == "ok":
+                parts = [
+                    f"elapsed={_format_progress_number(run.get('elapsed_sec'))}s",
+                    f"rtfx={_format_progress_number(run.get('rtfx_e2e'))}",
+                ]
+                quality = run.get("quality") or {}
+                cer = _format_progress_number(quality.get("cer"))
+                wer = _format_progress_number(quality.get("wer"))
+                if cer:
+                    parts.append(f"cer={cer}")
+                if wer:
+                    parts.append(f"wer={wer}")
+                console_target.print("  [green]Done[/green] " + " ".join(parts))
+            else:
+                console_target.print(
+                    f"  [red]Failed[/red] {run.get('reason') or 'unknown error'}"
+                )
+            return
+        if event == "profile_done":
+            summary = payload.get("summary", {})
+            console_target.print(
+                f"[green]Profile complete[/green] {name}: "
+                f"ok={summary.get('ok_runs', 0)}/{summary.get('runs', 0)} "
+                f"avg_rtfx={_format_progress_number(summary.get('rtfx_e2e_avg'))}"
+            )
+
+    return log
+
+
+def _format_progress_number(value: Any) -> str:
+    try:
+        return "" if value is None else f"{float(value):.3f}"
+    except (TypeError, ValueError):
+        return ""
 
 
 @app.command("transcribe")

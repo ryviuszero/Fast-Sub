@@ -96,10 +96,58 @@ Fast Sub 固定样本来源优先级：
 - 如果素材来自 YouTube、播客平台或课程平台，默认视为不可再分发，除非页面明确授权。
 - 不能确认授权时，不提交媒体和 reference 文本，只记录本地准备步骤。
 - API provider 测试不得默认上传本地 benchmark 媒体；任何上传行为都必须由后续命令显式选择。
+- 生成后的 `local_tests/media/` 样本也必须保留来源说明。`scripts/bench_assets.py prepare`
+  会在媒体文件旁生成 `*.provenance.json`，记录 `source_dataset`、`source_url`、
+  `download_url`、`license`、`redistributable`、原始 asset、prepare 方法、selector
+  和 SHA-256。移动或复制本地样本时，应同时保留该 provenance 文件。
 
 ## Manifest Fields
 
 `tests/fixtures/manifest.example.json` 展示了建议字段。字段设计同时服务于素材准备、性能 benchmark 和质量评估。
+
+当前 `fast-sub bench` 使用 sample-only manifest。顶层最小结构：
+
+```json
+{
+  "schema_version": 1,
+  "samples": [
+    {
+      "id": "zh-interview-1m",
+      "kind": "sample",
+      "prepared_media_path": "local_tests/media/light/zh-interview-1m.wav",
+      "prepared_media_checksum_sha256": "...",
+      "reference_transcript_path": "local_tests/references/light/zh-interview-1m.txt",
+      "reference_transcript_checksum_sha256": "...",
+      "language": "zh"
+    }
+  ]
+}
+```
+
+`bench` 不再要求 `assets[]`，也不需要 CLI 传 `--sample-id`。它会用输入媒体文件名匹配
+`samples[].prepared_media_path` 的文件名，匹配成功后读取该 sample 的 reference、语言、来源
+和目标指标信息。
+
+`bench` 必需字段：
+
+- `samples`: sample 数组。
+- `samples[].id`: 稳定样本 ID，用于报告展示。
+- `samples[].prepared_media_path`: 已生成的 benchmark 媒体路径；用于和 CLI 输入文件匹配。
+
+强烈建议字段：
+
+- `samples[].prepared_media_checksum_sha256`: 已生成媒体 SHA-256；用于记录和复现。
+- `samples[].reference_transcript_path`: reference 文本路径；存在时 `bench` 可计算 WER/CER。
+- `samples[].reference_transcript_checksum_sha256`: reference 文本 SHA-256。
+- `samples[].language`: `auto`, `zh`, `en`, `ja`, `ko` 之一；其他值只作为元数据，CLI 会回落到 `auto`。
+
+常用可选字段：
+
+- `benchmark_family`: 例如 `fast_sub_fixed_v1`, `fast_sub_light_v1`。
+- `source_dataset`, `source_url`, `source_accessed_at`, `license`, `redistributable`: 来源和许可证说明。
+- `domain`, `speaking_style`, `noise_profile`, `language_mix`: 样本场景描述。
+- `duration_target_sec`: 目标时长。
+- `target_metrics`: 期望关注的指标，例如 `rtfx`, `wer`, `cer`, `segments_count`, `invalid_segments_count`。
 
 关键字段：
 
@@ -142,17 +190,17 @@ Get-FileHash local_tests/media/zh-interview-10m.mp4 -Algorithm SHA256
 
 ## Controlled Downloader Plan
 
-第 5.5 轮会增加一个受控的 benchmark asset downloader。它的定位是“manifest 驱动的测试数据准备工具”，不是通用下载器、爬虫或搜索工具。
+第 5.5 轮已增加一个受控的 benchmark asset downloader。它的定位是“manifest 驱动的测试数据准备工具”，不是通用下载器、爬虫或搜索工具。
 
 建议命令：
 
 ```bash
-fast-sub bench-assets sources
-fast-sub bench-assets init
-fast-sub bench-assets download <asset-id>
-fast-sub bench-assets prepare <sample-id>
-fast-sub bench-assets verify <sample-id>
-fast-sub bench-assets verify --all
+uv run python scripts/bench_assets.py sources
+uv run python scripts/bench_assets.py init
+uv run python scripts/bench_assets.py download <asset-id>
+uv run python scripts/bench_assets.py prepare <sample-id>
+uv run python scripts/bench_assets.py verify <sample-id>
+uv run python scripts/bench_assets.py verify --all
 ```
 
 下载器规则：
@@ -166,6 +214,27 @@ fast-sub bench-assets verify --all
 - 从 archive 准备 sample 时，只允许安全提取 manifest 指定成员，拒绝绝对路径、`..`、symlink 和 hard link。
 - 默认测试不访问网络，下载行为用 fake HTTP 或临时文件覆盖。
 - 真实媒体、reference transcript 和本地报告继续放在 `local_tests/`，不提交仓库。
+
+当前 v1 实现细节：
+
+- 开发脚本为 `scripts/bench_assets.py`，包含 `sources`、`init`、`download`、`prepare` 和 `verify`。
+- `fast-sub` 正式 CLI 不暴露 benchmark asset 下载命令；主 CLI 只消费准备好的本地 media/manifest。
+- 内置 source/source map 只提供明确候选；`download <asset-id>` 不接受任意 URL。
+- `download` 无 `--yes` 时只输出计划，不访问网络；有 `--yes` 时才下载。
+- `download` 支持 `--downloader auto|httpx|aria2`；默认 `auto` 会优先使用 PATH 或 `local_tests/tools/aria2/` 中的 `aria2c`，否则回退到内置 httpx。
+- `install-aria2` 可从 aria2 官方 GitHub release 下载 Windows 64-bit `aria2c.exe` 到 `local_tests/tools/aria2/`；这是显式开发准备动作，不会在 benchmark asset 下载时自动安装。
+- 自动下载要求 `source_url`、`download_url`、`license`、`redistributable`、`download_policy` 和 `allowed_hosts` 完整且合法。
+- `prepare` 支持 `copy_file`、`copy_archive_member` 和 `extract_archive_member_with_transcript`。
+- archive 成员读取拒绝绝对路径、`..`、symlink、hard link 和非普通文件。
+- `verify --all` 可报告 `raw_ready`、`prepared_ready`、`bench_ready`、`missing`、`checksum_mismatch`、`inaccessible`、`invalid_manifest`、`manual_required`、`unsupported` 和 `unsafe_archive` 等状态。
+- 默认测试使用 fake download 和临时 archive，不访问外网，不提交真实媒体。
+
+aria2 加速示例：
+
+```powershell
+uv run python scripts/bench_assets.py install-aria2 --yes
+uv run python scripts/bench_assets.py download mini-librispeech-dev-clean-2 --yes --downloader aria2 --aria2-connections 8 --aria2-split 8
+```
 
 第一批自动下载候选：
 
@@ -211,9 +280,8 @@ fast-sub bench local_tests/media/<sample>.mp4 `
   --model whisper-small `
   --repeat 3 `
   --sample-manifest local_tests/manifests/<sample>.json `
-  --sample-id <sample-id> `
   --json `
-  --markdown local_tests/reports/current-machine.md
+  --markdown-path local_tests/reports/current-machine.md
 ```
 
 可提交的 Markdown 报告应只保留文件名、sample id、checksum、样本来源和硬件概要，不应包含用户目录绝对路径、主机名、网络共享路径或大媒体文件。

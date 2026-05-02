@@ -13,3 +13,8 @@ pytest-local-tmp/
 __pycache__/
 *.py[cod]
 local_tests/*
+scripts/*
+tests/test_bench_assets.py
+*.wav
+*.mp3
+*.ogg

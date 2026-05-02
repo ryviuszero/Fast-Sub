@@ -4,6 +4,8 @@
 
 Round 5 has added `fast-sub bench`, but reliable benchmark results still depend on stable, legal, repeatable test data. Round 5.5 fills that gap with a manifest-controlled benchmark asset downloader.
 
+Implementation status: complete on `codex/fast-sub-bench-assets`. The helper is implemented as `scripts/bench_assets.py` with offline unit tests in `tests/test_bench_assets.py`. It is intentionally not wired into the `fast-sub` product CLI.
+
 This round is intentionally small and should use one branch:
 
 ```text
@@ -61,22 +63,23 @@ Reason:
 
 ## Proposed CLI
 
-Add a new command group:
+Add a developer helper script, not a product CLI command group:
 
 ```bash
-fast-sub bench-assets sources
-fast-sub bench-assets init
-fast-sub bench-assets download <asset-id>
-fast-sub bench-assets prepare <sample-id>
-fast-sub bench-assets verify <sample-id>
-fast-sub bench-assets verify --all
+uv run python scripts/bench_assets.py sources
+uv run python scripts/bench_assets.py init
+uv run python scripts/bench_assets.py install-aria2
+uv run python scripts/bench_assets.py download <asset-id>
+uv run python scripts/bench_assets.py prepare <sample-id>
+uv run python scripts/bench_assets.py verify <sample-id>
+uv run python scripts/bench_assets.py verify --all
 ```
 
 Optional later additions:
 
 ```bash
-fast-sub bench-assets show <sample-id>
-fast-sub bench-assets clean <sample-id>
+uv run python scripts/bench_assets.py show <sample-id>
+uv run python scripts/bench_assets.py clean <sample-id>
 ```
 
 ### `sources`
@@ -145,6 +148,9 @@ Useful options:
 --output-dir local_tests/downloads
 --yes
 --overwrite
+--downloader auto|httpx|aria2
+--aria2-connections 8
+--aria2-split 8
 --json
 ```
 
@@ -345,7 +351,7 @@ Round 5.5 should prefer sources that are common in ASR benchmarking and have off
 Suggested files:
 
 ```text
-src/fast_sub/bench_assets.py
+scripts/bench_assets.py
 src/fast_sub/cli.py
 tests/test_bench_assets.py
 FAST_SUB_TEST_ASSETS.md
@@ -369,7 +375,10 @@ Downloader backend:
 
 - Use the current project dependency set if possible.
 - If a new HTTP dependency is needed, prefer one already used in the project.
-- Keep the backend replaceable so `aria2c` can be added later without changing CLI semantics.
+- Keep the backend replaceable so transfer backends do not change manifest/security semantics.
+- `install-aria2` can explicitly download aria2 Windows 64-bit from the official GitHub release into `local_tests/tools/aria2/`.
+- `--downloader auto` prefers `aria2c` when it is available on PATH or in `local_tests/tools/aria2/`, otherwise falls back to the built-in httpx downloader.
+- `--downloader aria2` is optional and fails with a structured error if `aria2c` is not installed.
 
 JSON output shape:
 
@@ -411,25 +420,32 @@ Unit tests:
 Manual tests:
 
 ```powershell
-uv run fast-sub bench-assets sources
-uv run fast-sub bench-assets init
-uv run fast-sub bench-assets verify --all --json
+uv run python scripts/bench_assets.py sources
+uv run python scripts/bench_assets.py init
+uv run python scripts/bench_assets.py verify --all --json
 ```
 
 After official URLs are pinned:
 
 ```powershell
-uv run fast-sub bench-assets download <asset-id> --yes
-uv run fast-sub bench-assets prepare <sample-id>
-uv run fast-sub bench-assets verify <sample-id>
+uv run python scripts/bench_assets.py download <asset-id> --yes
+uv run python scripts/bench_assets.py prepare <sample-id>
+uv run python scripts/bench_assets.py verify <sample-id>
 uv run fast-sub bench local_tests/media/<sample> --sample-id <sample-id>
+```
+
+For large assets, aria2 can be selected explicitly:
+
+```powershell
+uv run python scripts/bench_assets.py install-aria2 --yes
+uv run python scripts/bench_assets.py download <asset-id> --yes --downloader aria2 --aria2-connections 8 --aria2-split 8
 ```
 
 ## Acceptance Criteria
 
-- `fast-sub bench-assets sources` works without network access.
-- `fast-sub bench-assets init` creates the expected ignored local directory structure.
-- `fast-sub bench-assets verify --all` produces structured human and JSON output.
+- `uv run python scripts/bench_assets.py sources` works without network access.
+- `uv run python scripts/bench_assets.py init` creates the expected ignored local directory structure.
+- `uv run python scripts/bench_assets.py verify --all` produces structured human and JSON output.
 - Automatic downloads are only allowed for manifest-approved URLs.
 - Automatic downloads are only allowed for approved hosts in the selected source family.
 - Downloaded assets get checksums recorded or displayed.
@@ -443,15 +459,15 @@ uv run fast-sub bench local_tests/media/<sample> --sample-id <sample-id>
 
 ## Checklist
 
-- [ ] Add `bench-assets` command group.
-- [ ] Add source list output.
-- [ ] Add local directory initializer.
-- [ ] Add manifest validation.
-- [ ] Add controlled download flow.
-- [ ] Add deterministic prepare flow.
-- [ ] Add safe archive member extraction.
-- [ ] Add checksum verification.
-- [ ] Add raw/prepared/bench readiness statuses.
-- [ ] Add offline unit tests with mocked download.
-- [ ] Update benchmark asset docs.
-- [ ] Confirm no media files are staged.
+- [x] Add `scripts/bench_assets.py` developer helper.
+- [x] Add source list output.
+- [x] Add local directory initializer.
+- [x] Add manifest validation.
+- [x] Add controlled download flow.
+- [x] Add deterministic prepare flow.
+- [x] Add safe archive member extraction.
+- [x] Add checksum verification.
+- [x] Add raw/prepared/bench readiness statuses.
+- [x] Add offline unit tests with mocked download.
+- [x] Update benchmark asset docs.
+- [x] Confirm no media files are staged.

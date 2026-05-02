@@ -17,8 +17,7 @@ from fast_sub.model_manager import (
     model_path,
     verify_model,
 )
-from fast_sub.model_manifest import ModelManifestEntry, list_models
-from fast_sub.model_manifest import ModelManifestFile
+from fast_sub.model_manifest import ModelManifestEntry, ModelManifestFile, list_models
 
 runner = CliRunner()
 
@@ -231,14 +230,29 @@ def test_install_model_writes_part_file_then_verifies(
         payload = b"model bytes"
         model = _model(payload)
 
-        def fake_download(url: str, part_path: Path, *, timeout: float) -> None:
+        def fake_download(
+            url: str,
+            part_path: Path,
+            *,
+            timeout: float,
+            downloader: str,
+            aria2_connections: int,
+            aria2_split: int,
+            progress,
+            label: str,
+        ) -> None:
             assert url == str(model.url)
             assert timeout == 60
+            assert downloader == "httpx"
+            assert aria2_connections == 8
+            assert aria2_split == 8
+            assert label == model.id
+            assert progress is None
             part_path.write_bytes(payload)
 
         monkeypatch.setattr("fast_sub.model_manager._download", fake_download)
 
-        status = install_model(model, work_dir)
+        status = install_model(model, work_dir, downloader="httpx")
 
         assert status.installed
         assert status.status == "installed"
@@ -268,7 +282,17 @@ def test_install_model_deletes_bad_part_and_succeeds_with_mirror(
             filename="tiny.bin",
         )
 
-        def fake_download(url: str, part_path: Path, *, timeout: float) -> None:
+        def fake_download(
+            url: str,
+            part_path: Path,
+            *,
+            timeout: float,
+            downloader: str,
+            aria2_connections: int,
+            aria2_split: int,
+            progress,
+            label: str,
+        ) -> None:
             if url == "https://example.com/bad.bin":
                 part_path.write_bytes(b"bad model bytes")
                 return
@@ -299,6 +323,123 @@ def test_install_model_refuses_to_overwrite_hash_mismatch() -> None:
             install_model(model, work_dir)
 
         assert path.read_bytes() == b"keep me"
+    finally:
+        shutil.rmtree(work_dir)
+
+
+def test_install_model_reports_download_progress(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_dir = _make_work_dir()
+    try:
+        payload = b"model bytes"
+        model = _model(payload)
+        events = []
+
+        def fake_download(
+            url: str,
+            part_path: Path,
+            *,
+            timeout: float,
+            downloader: str,
+            aria2_connections: int,
+            aria2_split: int,
+            progress,
+            label: str,
+        ) -> None:
+            progress(label, len(payload), len(payload))
+            part_path.write_bytes(payload)
+
+        monkeypatch.setattr("fast_sub.model_manager._download", fake_download)
+
+        status = install_model(
+            model,
+            work_dir,
+            downloader="httpx",
+            progress=lambda label, downloaded, total: events.append(
+                (label, downloaded, total)
+            ),
+        )
+
+        assert status.installed
+        assert events == [(model.id, len(payload), len(payload))]
+    finally:
+        shutil.rmtree(work_dir)
+
+
+def test_install_directory_model_skips_verified_existing_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_dir = _make_work_dir()
+    try:
+        files = {"config.json": b"config", "model.bin": b"model"}
+        model = _directory_model(files)
+        path = model_path(model, work_dir)
+        path.mkdir(parents=True)
+        (path / "config.json").write_bytes(b"config")
+        downloads = []
+
+        def fake_download(
+            url: str,
+            part_path: Path,
+            *,
+            timeout: float,
+            downloader: str,
+            aria2_connections: int,
+            aria2_split: int,
+            progress,
+            label: str,
+        ) -> None:
+            downloads.append(label)
+            part_path.write_bytes(b"model")
+
+        monkeypatch.setattr("fast_sub.model_manager._download", fake_download)
+
+        status = install_model(model, work_dir, downloader="httpx")
+
+        assert status.installed
+        assert downloads == ["tiny-dir/model.bin"]
+    finally:
+        shutil.rmtree(work_dir)
+
+
+def test_install_model_uses_aria2_backend_when_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_dir = _make_work_dir()
+    try:
+        payload = b"model bytes"
+        model = _model(payload)
+        calls = []
+
+        monkeypatch.setattr(
+            "fast_sub.model_manager._aria2_executable",
+            lambda: Path("aria2c"),
+        )
+
+        def fake_aria2(
+            url: str,
+            part_path: Path,
+            *,
+            timeout: float,
+            connections: int,
+            split: int,
+        ) -> None:
+            calls.append((url, connections, split))
+            part_path.write_bytes(payload)
+
+        monkeypatch.setattr("fast_sub.model_manager._download_aria2", fake_aria2)
+
+        status = install_model(
+            model,
+            work_dir,
+            downloader="aria2",
+            aria2_connections=4,
+            aria2_split=6,
+        )
+
+        assert status.installed
+        assert calls == [(str(model.url), 4, 6)]
     finally:
         shutil.rmtree(work_dir)
 
@@ -368,6 +509,61 @@ def test_models_verify_missing_exits_nonzero(
         assert result.exit_code == 1
         body = json.loads(result.stdout)
         assert body["status"] == "missing"
+    finally:
+        shutil.rmtree(work_dir)
+
+
+def test_models_install_passes_downloader_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_dir = _make_work_dir()
+    try:
+        model = _model(b"expected")
+        calls = []
+        monkeypatch.setattr(cli, "get_model", lambda model_id: model)
+
+        class NullProgress:
+            def __enter__(self):  # noqa: ANN204
+                return lambda label, downloaded, total: None
+
+            def __exit__(self, exc_type, exc, tb):  # noqa: ANN001, ANN204
+                return False
+
+        monkeypatch.setattr(cli, "_model_download_progress", lambda: NullProgress())
+
+        def fake_install_model(model, **kwargs):  # noqa: ANN001
+            calls.append(kwargs)
+            return ModelStatus(
+                id=model.id,
+                path=work_dir / model.id,
+                installed=True,
+                status="installed",
+                message="ok",
+                checked_files=1,
+            )
+
+        monkeypatch.setattr(cli, "install_model", fake_install_model)
+
+        result = runner.invoke(
+            cli.app,
+            [
+                "models",
+                "install",
+                "tiny",
+                "--downloader",
+                "aria2",
+                "--aria2-connections",
+                "4",
+                "--aria2-split",
+                "6",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert calls[0]["downloader"] == "aria2"
+        assert calls[0]["aria2_connections"] == 4
+        assert calls[0]["aria2_split"] == 6
+        assert calls[0]["progress"] is not None
     finally:
         shutil.rmtree(work_dir)
 

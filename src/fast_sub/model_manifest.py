@@ -120,7 +120,7 @@ MODELS: tuple[ModelManifestEntry, ...] = (
         name="Whisper Large v3 Turbo",
         type="asr",
         backend="faster-whisper",
-        size_bytes=1_620_597_529,
+        size_bytes=1_621_665_983,
         license="MIT",
         url=_hf_revision_url(
             "h2oai/faster-whisper-large-v3-turbo",
@@ -140,9 +140,19 @@ MODELS: tuple[ModelManifestEntry, ...] = (
                 "e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da",
             ),
             _hf_file(
+                "preprocessor_config.json",
+                340,
+                "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711",
+            ),
+            _hf_file(
                 "tokenizer.json",
                 2_710_337,
                 "297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd",
+            ),
+            _hf_file(
+                "vocabulary.json",
+                1_068_114,
+                "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1",
             ),
         ],
     ),

@@ -295,7 +295,7 @@ api-custom-http-translate
 - [x] `transcribe` 已为 `auto` 收敛结构化错误、metadata 和用户提示。
 - [~] `translate` 命令目前还是占位，需要后续 provider 化。
 - [x] `bench` benchmark 报告，含当前本机 CPU/auto baseline 流程、硬件信息、JSON/Markdown 输出。
-- [ ] `bench-assets` 真实 benchmark 数据准备与受控下载器，详见 `FAST_SUB_PARALLEL_ROUND5_5.md`。
+- [x] `scripts/bench_assets.py` 真实 benchmark 数据准备与受控下载器，详见 `FAST_SUB_PARALLEL_ROUND5_5.md`。
 - [x] `auto` 最小自动调度，支持 dry-run、缺模型提示、`--yes` 本地模型安装、transcribe/refine 串联。
 - [ ] Electron UI。
 - [ ] Web 版。
@@ -326,7 +326,7 @@ v0 剩余迭代预估：
 - 第三轮：`local-faster-whisper` worker 原型 + `transcribe` CLI。已完成。
 - 第四轮：`auto` 最小链路。已完成代码与默认测试，真实模型手动验证记录待补。
 - 第五轮：benchmark/report 与固定样本回归。已实现 `transcribe_media_v1` scope、CPU/auto profiles、repeat 聚合、JSON/Markdown report 和硬件探测；当前本机真实 baseline 可按 `FAST_SUB_TEST_ASSETS.md` 的本地流程补跑，3060 和更多机器上线前补测。
-- 第 5.5 轮：真实 benchmark 数据准备与受控下载器。目标是用 manifest 记录官方来源、许可证、download policy 和 checksum，让 `bench` 有稳定、合法、可复现的本地输入数据。
+- 第 5.5 轮：真实 benchmark 数据准备与受控下载器。已实现开发脚本 `uv run python scripts/bench_assets.py sources/init/download/prepare/verify`，用 manifest 记录官方来源、许可证、download policy、allowed hosts 和 checksum，让 `bench` 有稳定、合法、可复现的本地输入数据；该下载器不作为正式用户 CLI 功能暴露。
 - 第六轮：v0 hardening/release。目标是统一错误码、清理旧 `run` 流程、完善文档、打包前检查和端到端 smoke tests。
 
 因此，从当前状态到可称为 v0 的本地字幕 CLI，建议还需要 2 轮主要迭代加 1 个夹层任务：第 5.5 轮 benchmark 数据准备，第六轮 v0 hardening/release。当前已经具备“自动原文字幕链路可用”的技术预览基础。
@@ -948,7 +948,7 @@ compute_type
 8. `transcribe` with `local-faster-whisper`。
 9. `refine`。
 10. `bench`。
-11. `bench-assets`。
+11. benchmark asset helper script。
 12. `auto`。
 13. `burn`。
 14. `translate`。
