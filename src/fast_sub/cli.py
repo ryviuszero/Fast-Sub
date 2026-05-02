@@ -11,6 +11,7 @@ import typer
 from rich.console import Console
 
 from fast_sub.analyze import AnalysisResult, analyze_media
+from fast_sub.auto import AutoOptions, AutoPipelineError, auto_media
 from fast_sub.burn import BurnOptions, burn_subtitles
 from fast_sub.config import AppConfig, load_config
 from fast_sub.errors import ProviderResponseError, SubGenError, WorkerRunnerError
@@ -56,6 +57,7 @@ providers_app = typer.Typer(help="Inspect provider contracts.", no_args_is_help=
 models_app = typer.Typer(help="Manage local model downloads.", no_args_is_help=True)
 COMMAND_NAMES = {
     "analyze",
+    "auto",
     "burn",
     "doctor",
     "extract",
@@ -439,6 +441,121 @@ def transcribe_command(
     err_console.print(f"[green]Wrote subtitle:[/green] {result.srt_path}")
     if result.warnings:
         err_console.print(f"[yellow]warnings:[/yellow] {len(result.warnings)}")
+
+
+@app.command("auto")
+def auto_command(
+    input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
+    provider: Annotated[
+        str,
+        typer.Option("--provider", help="STT provider id."),
+    ] = "local-faster-whisper",
+    model: Annotated[
+        str,
+        typer.Option("--model", help="ASR model id."),
+    ] = "whisper-small",
+    language: Annotated[
+        str,
+        typer.Option("--language", help="Language: auto, zh, en, ja, or ko."),
+    ] = "auto",
+    device: Annotated[
+        str,
+        typer.Option("--device", help="Worker device: auto, cuda, or cpu."),
+    ] = "auto",
+    compute: Annotated[
+        str,
+        typer.Option("--compute", help="Worker compute type."),
+    ] = "auto",
+    batch_size: Annotated[
+        int | None,
+        typer.Option("--batch-size", help="Worker batch size. Overrides --gpu-load."),
+    ] = None,
+    gpu_load: Annotated[
+        str,
+        typer.Option("--gpu-load", help="GPU load profile: low, balanced, or max."),
+    ] = "balanced",
+    vad: Annotated[
+        str,
+        typer.Option("--vad", help="VAD mode: auto, off, normal, or aggressive."),
+    ] = "auto",
+    mode: Annotated[
+        str,
+        typer.Option("--mode", help="Transcription mode: fast, balanced, or quality."),
+    ] = "balanced",
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Final output .srt path."),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Print the auto plan without downloading or transcribing."),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Allow automatic local model installation."),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable result metadata."),
+    ] = False,
+    keep_temp: Annotated[
+        bool,
+        typer.Option("--keep-temp", help="Keep prepared audio and worker JSON files."),
+    ] = False,
+) -> None:
+    """Plan and run the local subtitle pipeline."""
+    try:
+        result = auto_media(
+            input_file,
+            AutoOptions(
+                provider=provider,
+                model=model,
+                language=language,
+                device=device,
+                compute_type=compute,
+                batch_size=batch_size,
+                gpu_load=gpu_load,
+                vad=vad,
+                mode=mode,
+                output=output,
+                dry_run=dry_run,
+                yes=yes,
+                keep_temp=keep_temp,
+            ),
+        )
+    except AutoPipelineError as exc:
+        if json_output:
+            typer.echo(json.dumps(exc.result.as_dict(), ensure_ascii=False, indent=2))
+        else:
+            _print_auto_result(exc.result)
+            err_console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    if json_output:
+        typer.echo(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
+        return
+    _print_auto_result(result)
+
+
+def _print_auto_result(result: Any) -> None:
+    console.print("[bold]Fast Sub auto[/bold]")
+    for step in result.steps:
+        color = _auto_step_color(step.status)
+        console.print(f"[{color}]{step.name}:[/{color}] {step.status} - {step.message}")
+        if step.action_hint:
+            console.print(f"  hint: {step.action_hint}")
+    if result.ok and not result.dry_run:
+        console.print(f"[green]Wrote subtitle:[/green] {result.output}")
+    elif result.ok:
+        console.print(f"[cyan]Dry run only:[/cyan] planned output {result.output}")
+
+
+def _auto_step_color(status: str) -> str:
+    if status in {"ok", "installed", "planned"}:
+        return "green"
+    if status in {"missing_model", "blocked", "installing"}:
+        return "yellow"
+    return "red"
 
 
 @app.command("translate")
