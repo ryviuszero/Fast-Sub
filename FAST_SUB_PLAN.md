@@ -307,6 +307,7 @@ api-custom-http-translate
 - [x] `auto` 最小自动调度，支持 dry-run、缺模型提示、`--yes` 本地模型安装、transcribe/refine 串联。
 - [x] 翻译 provider loop 和默认 NLLB/CTranslate2 翻译模型 manifest。
 - [x] 翻译 benchmark，详见 `FAST_SUB_PARALLEL_ROUND7_5.md`：新增独立 `fast-sub bench-translate`，不塞进现有 `fast-sub bench`；复用 `translate_srt_v1`，使用 reference SRT/TXT 计算 BLEU、chrF、exact match、耗时和失败率；默认无 sacreBLEU 时记录 `fast_sub_lightweight_v1` 口径。
+- [ ] Python maintainability cleanup，详见 `FAST_SUB_PARALLEL_ROUND7_75.md`：在启动 Go migration foundation 前，用一轮小重构收敛 `cli.py` 和命令 handler 边界，不改变 CLI 行为、JSON schema、退出码或 provider/model/worker contract。
 - [ ] 更完整 provider 统一、Electron UI 和 Web 版均放到后续轮次。
 
 第二轮并行组合已完成：
@@ -334,6 +335,10 @@ api-custom-http-translate
 
 - [x] `codex/fast-sub-translate-bench`：新增独立 `fast-sub bench-translate` 翻译 benchmark，复用 `translate_srt_v1`，通过 reference SRT/TXT 输出 BLEU、chrF、exact match、吞吐、失败率和 JSON/Markdown report；不做 LLM judge，不提交真实媒体、真实 reference 或本地报告。
 
+第 7.75 轮计划：
+
+- [ ] `codex/fast-sub-python-cleanup`：Python Maintainability Cleanup Before Go。只做安全网、`cli.py` 命令 handler 拆分和轻量边界整理；不改用户命令、参数、JSON schema、退出码、模型安装、转写、翻译或 benchmark 行为；不开始 Go 代码。详见 `FAST_SUB_PARALLEL_ROUND7_75.md`。
+
 第五轮和 5.5 轮已完成：
 
 - [x] `codex/fast-sub-bench`：实现 `fast-sub bench`，支持 `transcribe_media_v1` scope、CPU/auto profiles、repeat 聚合、硬件信息、JSON/Markdown report。
@@ -354,7 +359,8 @@ v0 剩余迭代预估：
 后续建议路线：
 
 - 第 7 轮：Translation Provider Loop + 翻译模型安装。已完成 Python CLI 内的 `fast-sub translate`、web/API/local translation providers、默认翻译模型 manifest、`models install nllb-200-distilled-600m-ct2-int8` 和 checkpoint/resume。
-- 第 7.5 轮：Translation Benchmark。计划新增独立 `fast-sub bench-translate`，使用 reference SRT/TXT 计算 lightweight BLEU、chrF、exact match、耗时和失败率，让用户对当前翻译方案质量有可复现的粗略判断；现有 `fast-sub bench` 继续专注媒体转写 benchmark。
+- 第 7.5 轮：Translation Benchmark。已新增独立 `fast-sub bench-translate`，使用 reference SRT/TXT 计算 BLEU、chrF、exact match、耗时和失败率，让用户对当前翻译方案质量有可复现的粗略判断；现有 `fast-sub bench` 继续专注媒体转写 benchmark。
+- 第 7.75 轮：Python Maintainability Cleanup Before Go。计划先做一轮小重构，主要拆分 `cli.py` 命令 handler、补足 characterization tests、保持所有 CLI/JSON/退出码/provider/model/worker contract 不变，让第 8 轮 Go foundation 不被 Python 可读性问题拖住。
 - 第 8 轮：Go migration foundation，新增并行 Go CLI 骨架，先实现 `doctor/probe/extract`。
 - 第 9 轮：Go 接管 `transcribe/auto` 主链路，继续调用 Python faster-whisper worker。
 - 第 10 轮：Go provider runtime 与 native backend 准备，优先验证 `whisper.cpp` 一类 native worker。

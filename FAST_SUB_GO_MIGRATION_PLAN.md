@@ -15,6 +15,7 @@ Recommended sequence:
 ```text
 Round 7: translation provider loop
 Round 7.5: translation benchmark report design
+Round 7.75: Go 迁移前的 Python 可维护性整理
 Round 8: Go migration foundation
 Round 9: Go transcribe/auto main path
 Round 10: Go provider runtime and native backend preparation
@@ -22,7 +23,7 @@ Round 11: desktop UI
 Round 12: Web version
 ```
 
-Round 7 translation has landed in the Python CLI before Go owns the main subtitle path, closing a user-visible product gap. Round 7.5 adds a Python-side standalone `bench-translate` report so translation quality can be compared before Go migration; the existing `bench` command remains scoped to media transcription benchmark. Round 8 Go foundation should still stay limited to `doctor`, `probe`, `extract`, shared contracts, and compatibility tests. Round 8 must not replace the Python v0 CLI or change the user-facing default path.
+Round 7 translation has landed in the Python CLI before Go owns the main subtitle path, closing a user-visible product gap. Round 7.5 adds a Python-side standalone `bench-translate` report so translation quality can be compared before Go migration; the existing `bench` command remains scoped to media transcription benchmark. Round 7.75 先做一轮小型 Python 可维护性整理，重点是拆分 CLI command handler、补 characterization tests，避免 Round 8 直接压在过大的 `cli.py` 上启动。Round 8 Go foundation should still stay limited to `doctor`, `probe`, `extract`, shared contracts, and compatibility tests. Round 8 must not replace the Python v0 CLI or change the user-facing default path.
 
 Compatibility boundary:
 
@@ -253,6 +254,8 @@ Test plan:
 ## Round 8: Go Migration Foundation
 
 Goal: add a parallel Go CLI foundation without replacing Python v0.
+
+Round 8 应该在 Round 7.75 Python cleanup 合并后开始；如果 Round 7.75 中途停在某个安全点，也必须明确记录停止原因。Round 8 不应该吸收 Python 重构工作；Round 8 中的 Python 改动应限制在 fixtures、golden compatibility outputs 或 Go 测试需要的 contract 文档。
 
 Recommended branch:
 
