@@ -10,7 +10,6 @@ dependencies = [
     "pydantic>=2.10.0",
     "pysubs2>=1.8.0",
     "rich>=13.9.0",
-    "translators>=6.0.0",
     "typer>=0.15.0",
 ]
 
@@ -21,6 +20,13 @@ fast-sub-worker-faster-whisper = "fast_sub_workers.faster_whisper:main"
 [project.optional-dependencies]
 local-asr = [
     "faster-whisper>=1.0.0",
+]
+web-translate = [
+    "translators>=6.0.0",
+]
+local-translate = [
+    "ctranslate2>=4.4.0",
+    "sentencepiece>=0.2.0",
 ]
 
 [build-system]

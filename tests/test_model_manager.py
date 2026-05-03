@@ -471,7 +471,12 @@ def test_models_list_json_includes_initial_models(
         assert result.exit_code == 0
         rows = json.loads(result.stdout)
         ids = {row["id"] for row in rows}
-        assert {"whisper-base", "whisper-small", "whisper-large-v3-turbo"} <= ids
+        assert {
+            "whisper-base",
+            "whisper-small",
+            "whisper-large-v3-turbo",
+            "nllb-200-distilled-600m-ct2-int8",
+        } <= ids
         assert all("installed" in row for row in rows)
         assert all(row["manifest_type"] == "directory" for row in rows)
         assert all(row["required_files"] >= 1 for row in rows)
@@ -483,6 +488,23 @@ def test_builtin_model_urls_are_pinned_to_huggingface_revisions() -> None:
     for model in list_models():
         assert model.url is not None
         assert "/resolve/main/" not in str(model.url)
+
+
+def test_nllb_translate_model_manifest_is_directory_with_hashes() -> None:
+    models = {model.id: model for model in list_models()}
+    model = models["nllb-200-distilled-600m-ct2-int8"]
+
+    assert model.type == "translate"
+    assert model.backend == "nllb-ct2"
+    assert model.manifest_type == "directory"
+    assert "/resolve/4685875/" in str(model.url)
+    assert {file.path for file in model.files} == {
+        "config.json",
+        "model.bin",
+        "sentencepiece.bpe.model",
+        "shared_vocabulary.json",
+    }
+    assert all(file.size_bytes > 0 and len(file.sha256) == 64 for file in model.files)
 
 
 def test_models_verify_missing_exits_nonzero(

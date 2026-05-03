@@ -13,6 +13,7 @@ class ProviderType(StrEnum):
 
 class ProviderLocation(StrEnum):
     LOCAL = "local"
+    REMOTE_WEB = "remote-web"
     API = "api"
 
 

@@ -118,13 +118,14 @@ def test_transcribe_missing_local_asr_json_is_parseable_and_exits_3(monkeypatch)
     assert "uv sync --extra local-asr" in payload["error"]["action_hint"]
 
 
-def test_translate_placeholder_json_is_parseable() -> None:
+def test_translate_missing_provider_json_is_parseable() -> None:
     result = runner.invoke(cli.app, ["translate", "input.srt", "--json"])
 
-    assert result.exit_code == 1
+    assert result.exit_code == 2
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
-    assert payload["error"]["code"] == "not_implemented"
+    assert payload["error"]["code"] == "invalid_options"
+    assert "provider" in payload["error"]["message"]
 
 
 def test_json_error_redacts_api_keys(monkeypatch) -> None:

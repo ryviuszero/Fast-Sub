@@ -19,7 +19,7 @@ from fast_sub.provider_models import (
 class ProviderDefinition:
     metadata: ProviderMetadata
     api_key_env: str | None = None
-    dependency_module: str | None = None
+    dependency_module: str | tuple[str, ...] | None = None
     model_path: Path | None = None
     install_hint: str | None = None
 
@@ -72,7 +72,46 @@ DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
             license="Model-dependent",
             privacy_note="Runs locally; subtitle text is not uploaded by this provider.",
         ),
-        dependency_module="ctranslate2",
+        dependency_module=("ctranslate2", "sentencepiece"),
+        install_hint="Install local translation dependencies with the local translate extra.",
+    ),
+    ProviderDefinition(
+        metadata=ProviderMetadata(
+            id="web-bing",
+            type=ProviderType.TRANSLATE,
+            location=ProviderLocation.REMOTE_WEB,
+            supported_languages=["auto", "zh", "en", "ja", "ko"],
+            supports_word_timestamps=False,
+            supports_batch=False,
+            requires_gpu=False,
+            offline=False,
+            license="GPL-3.0 dependency: translators",
+            privacy_note=(
+                "Uploads subtitle text to a third-party web translation service; "
+                "rate limits and terms are controlled by that service."
+            ),
+        ),
+        dependency_module="translators",
+        install_hint="Install web translation support with `uv sync --extra web-translate`.",
+    ),
+    ProviderDefinition(
+        metadata=ProviderMetadata(
+            id="web-google",
+            type=ProviderType.TRANSLATE,
+            location=ProviderLocation.REMOTE_WEB,
+            supported_languages=["auto", "zh", "en", "ja", "ko"],
+            supports_word_timestamps=False,
+            supports_batch=False,
+            requires_gpu=False,
+            offline=False,
+            license="GPL-3.0 dependency: translators",
+            privacy_note=(
+                "Uploads subtitle text to Google web translation through translators; "
+                "mainland China access may fail, try web-bing if needed."
+            ),
+        ),
+        dependency_module="translators",
+        install_hint="Install web translation support with `uv sync --extra web-translate`.",
     ),
     ProviderDefinition(
         metadata=ProviderMetadata(
@@ -125,15 +164,12 @@ def _provider_status(definition: ProviderDefinition) -> ProviderStatus:
             status=ProviderStatusCode.MISSING_API_KEY,
             message=f"Missing {definition.api_key_env}.",
         )
-    dependency_missing = (
-        definition.dependency_module
-        and importlib.util.find_spec(definition.dependency_module) is None
-    )
-    if dependency_missing:
+    missing_dependency = _missing_dependency_module(definition)
+    if missing_dependency:
         return ProviderStatus(
             id=metadata.id,
             status=ProviderStatusCode.MISSING_DEPENDENCY,
-            message=_missing_dependency_message(definition),
+            message=_missing_dependency_message(definition, missing_dependency),
         )
     if definition.model_path and not definition.model_path.exists():
         return ProviderStatus(
@@ -148,8 +184,20 @@ def _provider_status(definition: ProviderDefinition) -> ProviderStatus:
     )
 
 
-def _missing_dependency_message(definition: ProviderDefinition) -> str:
-    message = f"Python module '{definition.dependency_module}' is not installed."
+def _missing_dependency_module(definition: ProviderDefinition) -> str | None:
+    modules = definition.dependency_module
+    if modules is None:
+        return None
+    if isinstance(modules, str):
+        modules = (modules,)
+    for module in modules:
+        if importlib.util.find_spec(module) is None:
+            return module
+    return None
+
+
+def _missing_dependency_message(definition: ProviderDefinition, module: str) -> str:
+    message = f"Python module '{module}' is not installed."
     if definition.install_hint:
         return f"{message} {definition.install_hint}"
     return message

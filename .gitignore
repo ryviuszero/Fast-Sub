@@ -18,3 +18,4 @@ tests/test_bench_assets.py
 *.wav
 *.mp3
 *.ogg
+.env

@@ -21,7 +21,7 @@ Round 11: desktop UI
 Round 12: Web version
 ```
 
-Round 7 translation is preferred before Go owns the main subtitle path because it closes a user-visible product gap. However, Round 8 Go foundation may start in parallel if it stays limited to `doctor`, `probe`, `extract`, shared contracts, and compatibility tests. Round 8 must not replace the Python v0 CLI or change the user-facing default path.
+Round 7 translation has landed in the Python CLI before Go owns the main subtitle path, closing a user-visible product gap. Round 8 Go foundation should still stay limited to `doctor`, `probe`, `extract`, shared contracts, and compatibility tests. Round 8 must not replace the Python v0 CLI or change the user-facing default path.
 
 ## Target Architecture
 
@@ -150,7 +150,7 @@ Summary:
   - free web translation through `translators`
   - OpenAI-compatible chat translation
   - local NLLB/CTranslate2 translation
-- Land free web translation first with `web-bing` and `web-google`, because the project already depends on `translators`.
+- Land free web translation first with `web-bing` and `web-google`; `translators` is GPL-3.0 and is handled as the `web-translate` optional extra for packaging review.
 - Require explicit provider selection or configuration before any subtitle text is sent to a third party.
 
 CLI interface:
@@ -189,6 +189,7 @@ Provider behavior:
 - `api-openai-chat` must not have a hard-coded default model.
 - `local-nllb-ct2` defaults to model id `nllb-200-distilled-600m-ct2-int8` unless `--model` or `--model-path` is provided.
 - Round 7 supports explicit `fast-sub models install nllb-200-distilled-600m-ct2-int8`; it does not make `auto --yes` install translation models by default.
+- `local-nllb-ct2 --from auto` is rejected by default; Go should preserve the FLORES-200 mapping (`eng_Latn`, `zho_Hans`, `jpn_Jpan`, `kor_Hang`) when it later owns translation orchestration.
 
 Provider architecture:
 
@@ -485,7 +486,7 @@ timeout_success
 - Python v0 CLI remains available until Go reaches command parity.
 - Go migration starts as a parallel CLI, not an immediate replacement.
 - Python remains the long-term model worker layer.
-- Round 7 translation should happen before Go owns the main subtitle path because it closes a user-visible product gap; Round 8 foundation can start in parallel if it stays limited to low-risk commands and shared contracts.
+- Round 7 translation has happened before Go owns the main subtitle path; Round 8 foundation can start if it stays limited to low-risk commands and shared contracts.
 - Go migration mainly improves distribution, stability, task control, cancellation, logging, downloading, and UI/daemon integration.
 - Desktop UI should wait until Go CLI/daemon is stable enough to avoid UI work being blocked by Python environment issues.
 - `fast-sub-go` should not replace `fast-sub` until the Go parity gate is satisfied and documented.

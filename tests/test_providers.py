@@ -59,6 +59,8 @@ def test_default_registry_lists_required_providers(monkeypatch) -> None:
         "api-openai-transcription",
         "local-nllb-ct2",
         "api-openai-chat",
+        "web-bing",
+        "web-google",
     }
     assert providers["api-openai-transcription"].status.status == "missing_api_key"
     assert providers["api-openai-chat"].status.status == "missing_api_key"
@@ -88,6 +90,15 @@ def test_pyproject_declares_local_asr_extra() -> None:
     local_asr = pyproject["project"]["optional-dependencies"]["local-asr"]
 
     assert any(dependency.startswith("faster-whisper>=") for dependency in local_asr)
+
+
+def test_pyproject_declares_translation_extras() -> None:
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    extras = pyproject["project"]["optional-dependencies"]
+
+    assert any(dependency.startswith("translators>=") for dependency in extras["web-translate"])
+    assert any(dependency.startswith("ctranslate2>=") for dependency in extras["local-translate"])
 
 
 def test_api_provider_status_does_not_expose_key(monkeypatch) -> None:

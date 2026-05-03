@@ -1,10 +1,24 @@
+import shutil
+import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 from fast_sub.cli import _resolve_options, _should_use_command_app, _validate_input
+from fast_sub.config import load_dotenv
 from fast_sub.errors import SubGenError
 from fast_sub.models import Mode, SttProvider, SubtitleFormat
+
+
+@pytest.fixture
+def work_dir() -> Iterator[Path]:
+    path = (Path(".test-work") / uuid.uuid4().hex).resolve()
+    path.mkdir(parents=True)
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path)
 
 
 def _resolve_minimal(**overrides):
@@ -162,3 +176,28 @@ def test_whisperx_rejects_invalid_batch_size() -> None:
 
     with pytest.raises(SubGenError, match="--whisperx-batch-size"):
         _validate_input(input_file, options)
+
+
+def test_load_dotenv_sets_missing_values_without_overriding(
+    monkeypatch: pytest.MonkeyPatch,
+    work_dir: Path,
+) -> None:
+    dotenv = work_dir / ".env"
+    dotenv.write_text(
+        "OPENAI_API_KEY=sk-from-dotenv\n"
+        'OPENAI_BASE_URL="https://example.test/v1"\n'
+        "EXISTING=from-file\n"
+        "COMMENTED=value # ignored comment\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.setenv("EXISTING", "from-env")
+
+    loaded = load_dotenv(dotenv)
+
+    assert loaded["OPENAI_API_KEY"] == "sk-from-dotenv"
+    assert loaded["OPENAI_BASE_URL"] == "https://example.test/v1"
+    assert "EXISTING" not in loaded
+    assert loaded["COMMENTED"] == "value"
+    assert __import__("os").environ["EXISTING"] == "from-env"

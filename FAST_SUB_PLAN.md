@@ -246,11 +246,18 @@ mode: replace|bilingual
 
 v0 先定义接口，翻译不阻塞主链路。
 
-后续实现：
+v0/Round 7 实现：
 
 ```text
 local-nllb-ct2
 api-openai-chat
+web-bing
+web-google
+```
+
+后续实现：
+
+```text
 api-deepl
 api-custom-http-translate
 ```
@@ -294,11 +301,12 @@ api-custom-http-translate
 - [x] 模型缓存权限异常、坏目录、不可访问文件会返回结构化状态，避免 CLI traceback。
 - [x] v0 命令入口已收敛：`auto`、裸命令和 `run` 都走本地 `auto` 链路，旧 OpenAI-compatible / WhisperX 行为不再从默认 CLI 路径静默触发。
 - [x] `transcribe` 已为 `auto` 收敛结构化错误、metadata 和用户提示。
-- [~] `translate` 命令目前还是占位；第 7 轮将实现翻译 provider 闭环和本地 NLLB 模型安装，详见 `FAST_SUB_PARALLEL_ROUND7.md`。
+- [x] `translate` 命令已实现 Round 7 provider loop：`web-bing`、`web-google`、`api-openai-chat`、`local-nllb-ct2`，支持 replace/bilingual、partial failure、`.errors.json` 和 checkpoint/resume。
 - [x] `bench` benchmark 报告，含当前本机 CPU/auto baseline 流程、硬件信息、JSON/Markdown 输出。
 - [x] `scripts/bench_assets.py` 真实 benchmark 数据准备与受控下载器，详见 `FAST_SUB_PARALLEL_ROUND5_5.md`。
 - [x] `auto` 最小自动调度，支持 dry-run、缺模型提示、`--yes` 本地模型安装、transcribe/refine 串联。
-- [ ] 翻译 provider 实现、provider 统一、Electron UI 和 Web 版均放到 v0 后。
+- [x] 翻译 provider loop 和默认 NLLB/CTranslate2 翻译模型 manifest。
+- [ ] 更完整 provider 统一、Electron UI 和 Web 版均放到后续轮次。
 
 第二轮并行组合已完成：
 
@@ -319,7 +327,7 @@ api-custom-http-translate
 
 - [x] `codex/fast-sub-transcribe-hardening`：为自动链路收敛转写错误、metadata 和 keep-temp 行为。
 - [x] `codex/fast-sub-auto-core`：实现 `auto` dry-run、缺模型提示、`--yes` 本地模型安装、调用 transcribe/refine 的真实最小链路。
-- [ ] `codex/fast-sub-translate-cli`：第 7 轮实现 `fast-sub translate`、web/API/local translation providers，并支持 `models install nllb-200-distilled-600m-ct2-int8`。
+- [x] `codex/fast-sub-translate-cli`：第 7 轮实现 `fast-sub translate`、web/API/local translation providers，并支持 `models install nllb-200-distilled-600m-ct2-int8`。
 
 第五轮和 5.5 轮已完成：
 
@@ -338,9 +346,9 @@ v0 剩余迭代预估：
 
 因此，当前 v0 的发布边界是“本地原文字幕 CLI”：默认 `auto` 链路、可脚本化 JSON 输出、离线 smoke tests、清晰错误码和手动真实模型 release checklist。翻译、provider 统一、Electron UI 和 Web 版继续作为 v0 后功能，不混入本轮。
 
-v0 后建议路线：
+后续建议路线：
 
-- 第 7 轮：Translation Provider Loop + 翻译模型安装，详见 `FAST_SUB_PARALLEL_ROUND7.md`。目标是补齐 `fast-sub translate`、web/API/local translation providers，并让 `local-nllb-ct2` 通过 `models install` 安装默认翻译模型 `nllb-200-distilled-600m-ct2-int8`。
+- 第 7 轮：Translation Provider Loop + 翻译模型安装。已完成 Python CLI 内的 `fast-sub translate`、web/API/local translation providers、默认翻译模型 manifest 和 checkpoint/resume。
 - 第 8 轮：Go migration foundation，新增并行 Go CLI 骨架，先实现 `doctor/probe/extract`。
 - 第 9 轮：Go 接管 `transcribe/auto` 主链路，继续调用 Python faster-whisper worker。
 - 第 10 轮：Go provider runtime 与 native backend 准备，优先验证 `whisper.cpp` 一类 native worker。
@@ -543,6 +551,7 @@ recommended_for
 whisper-base
 whisper-small
 whisper-large-v3-turbo
+nllb-200-distilled-600m-ct2-int8
 ```
 
 下载要求：
@@ -688,33 +697,45 @@ fast-sub refine input.srt
 命令：
 
 ```bash
-fast-sub translate input.srt --to zh
-fast-sub translate input.srt --provider local-nllb-ct2 --to zh
-fast-sub translate input.srt --provider api-openai-chat --to zh
+fast-sub translate input.srt --provider web-bing --to zh
+fast-sub translate input.srt --provider web-google --to zh
+fast-sub translate input.srt --provider local-nllb-ct2 --from en --to zh
+fast-sub translate input.srt --provider api-openai-chat --model <model> --to zh
 ```
 
 参数：
 
 ```bash
---provider local-nllb-ct2|api-openai-chat|api-deepl|api-custom-http-translate
+--provider web-bing|web-google|api-openai-chat|local-nllb-ct2
 --from auto|en|zh|ja|ko
 --to zh|en|ja|ko
 --mode replace|bilingual
+--bilingual-order original-first|translated-first
 --model nllb-200-distilled-600m-ct2-int8
+--model-path <path>
+--batch-size
+--timeout
+--sleep-seconds
+--resume/--no-resume
 ```
 
 行为：
 
 - 保留原时间轴。
-- 批量翻译字幕文本。
+- web provider 默认逐 cue 翻译，避免不可靠 batch 破坏 cue 对齐。
 - 输出行数与输入字幕条数一致。
 - 翻译失败的行保留原文并记录 warning。
+- partial failure 写最终 SRT 和 `.errors.json`；all failure 非零退出且不写误导性的最终 SRT。
+- checkpoint 文件为 `<output>.translate-progress.json`，参数和 input hash 不匹配时不复用。
+- `local-nllb-ct2 --from auto` 默认拒绝；NLLB 内部使用 FLORES-200 code：`eng_Latn`、`zho_Hans`、`jpn_Jpan`、`kor_Hang`。
+- `translators` 作为 `web-translate` optional extra 处理，以隔离 GPL-3.0 分发风险。
 
 验收：
 
 - 输入 100 条字幕，输出仍为 100 条时间轴。
 - API provider 未显式配置时不可用。
 - 本地翻译可在 ASR 后释放 ASR 模型再加载 NLLB。
+- 远程 provider 必须显式 opt-in；`auto --yes` 不会静默安装翻译模型或启用上传。
 
 ### Milestone 10: 字幕烧录
 

@@ -14,17 +14,17 @@
 - `fast-sub translate` 仍是占位命令。
 - provider contract 已经包含 `ProviderType.TRANSLATE`、`TranslationProviderRequest` 和 `TranslationProviderResponse`。
 - 模型管理器已经支持 CTranslate2 风格的目录/多文件 manifest。
-- 项目已有 `translators` 依赖，但当前翻译逻辑还没有接入真实 provider 化 CLI 流程。
+- `translators` 已调整为 `web-translate` optional extra，翻译逻辑已接入 provider 化 CLI 流程。
 
-第 7 轮开始时的缺口：
+第 7 轮完成后的状态：
 
-- 没有真实 translated/bilingual SRT 输出链路。
-- provider registry 里还没有 web translation provider。
-- `api-openai-chat` 已有定义，但还不是可用翻译 provider。
-- `local-nllb-ct2` 已有定义，但不能从 `models install` 解析模型。
-- model manifest 里还没有 NLLB 翻译模型。
-- `translators` 是 GPL-3.0 许可证依赖，发布打包策略需要在本轮明确。
-- NLLB 使用 FLORES-200 语言码，不能只依赖 `zh` / `en` / `ja` / `ko` 这种 CLI 简码。
+- 已有真实 replace/bilingual SRT 输出链路。
+- provider registry 包含 `web-bing`、`web-google`、`api-openai-chat`、`local-nllb-ct2`。
+- `api-openai-chat` 要求显式 API key 和显式 model，并有 JSON parser/fallback。
+- `local-nllb-ct2` 通过 model manager 解析默认模型或 `--model-path`。
+- model manifest 包含 NLLB 翻译模型。
+- `translators` GPL-3.0 风险通过 optional extra 隔离。
+- NLLB 使用 FLORES-200 语言码映射，且 `--from auto` 默认拒绝。
 
 ## Implementation Scope
 
@@ -306,21 +306,21 @@ mvp.zh.md
 
 ## Checklist
 
-- [ ] 实现真实 `fast-sub translate` CLI 行为。
-- [ ] 增加 `web-bing` 和 `web-google` providers。
-- [ ] 明确 `translators` GPL-3.0 处理策略，必要时改为 optional extra。
-- [ ] 增加 `api-openai-chat` translation provider 行为。
-- [ ] 增加 chat provider batch 缩小重试和单 cue fallback。
-- [ ] 增加 `local-nllb-ct2` 通过模型管理器解析模型。
-- [ ] 增加 NLLB ISO/FLORES 语言码映射。
-- [ ] 增加 `nllb-200-distilled-600m-ct2-int8` model manifest 条目。
-- [ ] 增加翻译模型 install/verify fake download 测试。
-- [ ] 增加 SRT replace/bilingual 行为测试。
-- [ ] 增加 partial/all failure 测试。
-- [ ] 增加 checkpoint/resume 测试。
-- [ ] 增加 JSON purity 测试。
-- [ ] 增加 secret redaction 测试。
-- [ ] 更新文档。
+- [x] 实现真实 `fast-sub translate` CLI 行为。
+- [x] 增加 `web-bing` 和 `web-google` providers。
+- [x] 明确 `translators` GPL-3.0 处理策略，改为 optional extra。
+- [x] 增加 `api-openai-chat` translation provider 行为。
+- [x] 增加 chat provider batch 缩小重试和单 cue fallback。
+- [x] 增加 `local-nllb-ct2` 通过模型管理器解析模型。
+- [x] 增加 NLLB ISO/FLORES 语言码映射。
+- [x] 增加 `nllb-200-distilled-600m-ct2-int8` model manifest 条目。
+- [x] 增加翻译模型 install/verify fake download 测试。
+- [x] 增加 SRT replace/bilingual 行为测试。
+- [x] 增加 partial/all failure 测试。
+- [x] 增加 checkpoint/resume 测试。
+- [x] 增加 JSON purity 测试。
+- [x] 增加 secret redaction 测试。
+- [x] 更新文档。
 
 ## Merge Criteria
 

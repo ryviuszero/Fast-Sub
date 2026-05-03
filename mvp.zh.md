@@ -54,6 +54,19 @@ pip install "fast-sub[local-asr]"
 uv sync --extra local-asr
 ```
 
+网页翻译依赖 GPL-3.0 的 `translators` 包，因此作为 optional extra 处理，方便发布打包前审查：
+
+```bash
+uv sync --extra web-translate
+```
+
+本地 NLLB 翻译依赖：
+
+```bash
+uv sync --extra local-translate
+fast-sub models install nllb-200-distilled-600m-ct2-int8
+```
+
 v0 打包阶段仍要求 `ffmpeg` 和 `ffprobe` 可在 PATH 中找到。
 
 ## 首次运行
@@ -79,10 +92,45 @@ fast-sub auto input.mp4 --yes
 ```
 
 `--yes` 只授权本地模型下载/安装，不会授权 API 上传。
+它也不会静默安装翻译模型。
+
+## 翻译
+
+第 7 轮新增真实 SRT 翻译：
+
+```bash
+fast-sub translate input.srt --provider web-bing --from en --to zh
+fast-sub translate input.srt --provider web-google --from en --to zh
+fast-sub translate input.srt --provider api-openai-chat --api-key $OPENAI_API_KEY --model <model> --to zh
+fast-sub translate input.srt --provider local-nllb-ct2 --from en --to zh
+```
+
+除非显式配置 provider，否则必须传 `--provider`；必须传 `--to`。远程 provider 不会被静默选择。
+`replace` 输出译文；`bilingual` 输出原文和译文，并保持 cue 顺序、时间轴和数量稳定。
+partial failure 会保留失败 cue 原文并写 `.errors.json`；all failure 非零退出，不写误导性的最终 SRT。
+
+默认启用轻量 checkpoint/resume：
+
+```text
+<output>.translate-progress.json
+```
+
+传 `--no-resume` 可强制重新翻译。
 
 ## JSON 和错误
 
 支持 `--json` 的命令会保持 stdout 可被 `json.loads(stdout)` 解析。进度、warning 和人类诊断输出到 stderr。
+
+Fast Sub 启动 CLI 时也会读取当前工作目录的 `.env` 文件。真实 shell 环境变量优先；
+`.env` 只填充尚未设置的变量，不覆盖已有环境变量。API 翻译配置可以这样写：
+
+```env
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+`.env` 加载是静默的，不会打印 secret。
 
 v0 常用 exit code：
 
@@ -124,19 +172,22 @@ v0 稳定命令：
 - `fast-sub analyze input.mp4`
 - `fast-sub refine input.srt`
 - `fast-sub burn input.mp4 input.srt`
+- `fast-sub translate input.srt --provider <id> --to <lang>`
 - `fast-sub models list/install/verify`
 - `fast-sub providers list/test`
 - `fast-sub bench input.mp4`
-
-占位命令：
-
-- `fast-sub translate input.srt` 会非零退出，并说明 v0 尚未实现翻译。
 
 ## 隐私边界
 
 v0 默认 provider 是 `local-faster-whisper`，音频留在本机。
 
-API provider 仍可作为后续 provider 工作的一部分被枚举，但不属于默认 v0 字幕链路。任何未来 API 上传行为都必须显式 opt-in。
+翻译 provider 有明确隐私分类：
+
+- `local-nllb-ct2`：本地运行，不上传字幕文本。
+- `web-bing` / `web-google`：远程网页翻译，会把字幕文本发送到第三方网页翻译服务；稳定性、限流、条款和地区可用性由第三方决定。Google 在中国大陆网络环境可能失败，可尝试 `web-bing`。
+- `api-openai-chat`：远程 API，会把字幕文本发送到配置的 OpenAI-compatible API；必须显式 API key 和显式 model。
+
+任何 API 上传行为都必须显式 opt-in。
 
 ## Benchmark
 
@@ -150,8 +201,8 @@ benchmark 媒体和报告放在已忽略的 `local_tests/` 下。`scripts/bench_
 
 ## 已知限制
 
-- v0 只生成原文字幕。
-- 翻译 provider 放到 v0 后。
+- `auto` 默认仍只生成原文字幕；翻译是独立显式命令。
+- `local-nllb-ct2 --from auto` 默认拒绝，除非后续有可靠上游语言检测结果。请使用 `--from en|zh|ja|ko`。NLLB 内部使用 FLORES-200 code：`eng_Latn`、`zho_Hans`、`jpn_Jpan`、`kor_Hang`。
 - provider 统一和旧 API/WhisperX 清理放到 v0 后。
 - Electron UI 和 Web UI 放到 v0 后。
 - whisper.cpp、SenseVoice、Paraformer、Parakeet、ONNX、TensorRT 等新 STT 后端放到 v0 后。

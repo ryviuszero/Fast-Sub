@@ -156,6 +156,44 @@ MODELS: tuple[ModelManifestEntry, ...] = (
             ),
         ],
     ),
+    ModelManifestEntry(
+        id="nllb-200-distilled-600m-ct2-int8",
+        name="NLLB-200 Distilled 600M CTranslate2 INT8",
+        type="translate",
+        backend="nllb-ct2",
+        size_bytes=630_477_782,
+        license="CC-BY-NC-4.0",
+        url=_hf_revision_url(
+            "osa911/nllb-200-distilled-600M-ct2-int8",
+            "4685875",
+        ),
+        mirrors=[],
+        recommended_for=(
+            "Local subtitle translation with CTranslate2; requires explicit --from language."
+        ),
+        files=[
+            _hf_file(
+                "config.json",
+                223,
+                "8f6496adfc930cbfecbe8281112197705c488fab47d34b4829b06d7f478909af",
+            ),
+            _hf_file(
+                "model.bin",
+                619_704_329,
+                "ca3362e6e81906c0cf9c33bd6917674222c71d69617d0afb18507ce0b6c2e2e8",
+            ),
+            _hf_file(
+                "sentencepiece.bpe.model",
+                4_852_054,
+                "14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a",
+            ),
+            _hf_file(
+                "shared_vocabulary.json",
+                5_921_176,
+                "af53bfd0e6f726209e7325e45b87ab3b14e5856f7d42d7b9be91de3287c45267",
+            ),
+        ],
+    ),
 )
 
 

@@ -16,6 +16,51 @@ from fast_sub.models import (
 )
 
 
+def load_dotenv(path: Path | None = None) -> dict[str, str]:
+    dotenv_path = path or Path.cwd() / ".env"
+    try:
+        lines = dotenv_path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return {}
+
+    loaded: dict[str, str] = {}
+    for line in lines:
+        parsed = _parse_dotenv_line(line)
+        if parsed is None:
+            continue
+        key, value = parsed
+        if key in os.environ:
+            continue
+        os.environ[key] = value
+        loaded[key] = value
+    return loaded
+
+
+def _parse_dotenv_line(line: str) -> tuple[str, str] | None:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return None
+    if stripped.startswith("export "):
+        stripped = stripped[len("export ") :].lstrip()
+    if "=" not in stripped:
+        return None
+
+    key, value = stripped.split("=", 1)
+    key = key.strip()
+    if not key or not key.replace("_", "").isalnum() or key[0].isdigit():
+        return None
+    value = _strip_dotenv_value(value.strip())
+    return key, value
+
+
+def _strip_dotenv_value(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    if "#" in value:
+        value = value.split("#", 1)[0].rstrip()
+    return value
+
+
 class SttConfig(BaseModel):
     provider: SttProvider = SttProvider.OPENAI_COMPATIBLE
     base_url: str | None = Field(default_factory=lambda: os.getenv("OPENAI_BASE_URL"))
@@ -29,7 +74,15 @@ class SttConfig(BaseModel):
 
 
 class TranslatorConfig(BaseModel):
+    provider: str | None = None
     service: str = "bing"
+    model: str | None = None
+    base_url: str | None = Field(default_factory=lambda: os.getenv("OPENAI_BASE_URL"))
+    api_key_env: str = "OPENAI_API_KEY"
+    model_path: str | None = None
+    batch_size: int = 8
+    timeout: float = 60
+    sleep_seconds: float = 0
 
 
 class SubtitleConfig(BaseModel):

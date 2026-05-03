@@ -54,6 +54,20 @@ For source checkouts:
 uv sync --extra local-asr
 ```
 
+Web translation support uses the GPL-3.0 `translators` package and is kept as an
+optional extra for packaging review:
+
+```bash
+uv sync --extra web-translate
+```
+
+Local NLLB translation support:
+
+```bash
+uv sync --extra local-translate
+fast-sub models install nllb-200-distilled-600m-ct2-int8
+```
+
 `ffmpeg` and `ffprobe` must be available on PATH in v0 packaging.
 
 ## First Run
@@ -79,10 +93,48 @@ fast-sub auto input.mp4 --yes
 ```
 
 `--yes` only authorizes local model download/install. It does not enable API upload.
+It also does not silently install translation models.
+
+## Translate
+
+Round 7 adds real SRT translation:
+
+```bash
+fast-sub translate input.srt --provider web-bing --from en --to zh
+fast-sub translate input.srt --provider web-google --from en --to zh
+fast-sub translate input.srt --provider api-openai-chat --api-key $OPENAI_API_KEY --model <model> --to zh
+fast-sub translate input.srt --provider local-nllb-ct2 --from en --to zh
+```
+
+`--provider` and `--to` are required unless a provider is explicitly configured.
+Remote providers are never selected silently. `replace` mode writes translated text;
+`bilingual` writes original and translated text while preserving cue order, timing,
+and count. Partial failures keep the original cue text and write `.errors.json`.
+All-cue failure exits non-zero and does not write a misleading final SRT.
+
+Checkpoint/resume is enabled by default with:
+
+```text
+<output>.translate-progress.json
+```
+
+Pass `--no-resume` to force retranslation.
 
 ## JSON And Errors
 
 Commands with `--json` keep stdout parseable with `json.loads(stdout)`. Progress, warnings, and human diagnostics go to stderr.
+
+Fast Sub also reads a `.env` file from the current working directory at CLI startup.
+Values from the real shell environment win; `.env` only fills variables that are not
+already set. This is useful for API translation settings:
+
+```env
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+`.env` loading is silent and does not print secrets.
 
 Common v0 exit codes:
 
@@ -124,19 +176,22 @@ Stable v0:
 - `fast-sub analyze input.mp4`
 - `fast-sub refine input.srt`
 - `fast-sub burn input.mp4 input.srt`
+- `fast-sub translate input.srt --provider <id> --to <lang>`
 - `fast-sub models list/install/verify`
 - `fast-sub providers list/test`
 - `fast-sub bench input.mp4`
-
-Placeholder:
-
-- `fast-sub translate input.srt` exits non-zero and reports that translation is not implemented in v0.
 
 ## Privacy Boundary
 
 The v0 default provider is `local-faster-whisper`. Audio remains local.
 
-API providers remain listed for future provider work, but they are not part of the default v0 subtitle workflow. Any future API upload behavior must be explicit opt-in.
+Translation providers have explicit privacy classes:
+
+- `local-nllb-ct2`: local; subtitle text is not uploaded.
+- `web-bing` / `web-google`: remote web; subtitle text is sent to third-party web translation services, which may rate-limit, change behavior, or fail by region. Google may fail in mainland China; try `web-bing`.
+- `api-openai-chat`: remote API; subtitle text is sent to the configured OpenAI-compatible API and requires an explicit API key plus explicit model.
+
+API upload behavior must be explicit opt-in.
 
 ## Benchmark
 
@@ -150,8 +205,8 @@ Benchmark media and reports belong under ignored `local_tests/` paths. The helpe
 
 ## Known Limits
 
-- v0 generates source-language subtitles only.
-- Translation providers are post-v0.
+- `auto` still generates source-language subtitles by default; translation is a separate explicit command.
+- `local-nllb-ct2 --from auto` is rejected unless a reliable upstream language result is added later. Use `--from en|zh|ja|ko`. Internally NLLB uses FLORES-200 codes: `eng_Latn`, `zho_Hans`, `jpn_Jpan`, `kor_Hang`.
 - Provider unification and legacy API/WhisperX cleanup are post-v0.
 - Electron UI and Web UI are post-v0.
 - New STT backends such as whisper.cpp, SenseVoice, Paraformer, Parakeet, ONNX, and TensorRT are post-v0.
