@@ -306,6 +306,7 @@ api-custom-http-translate
 - [x] `scripts/bench_assets.py` 真实 benchmark 数据准备与受控下载器，详见 `FAST_SUB_PARALLEL_ROUND5_5.md`。
 - [x] `auto` 最小自动调度，支持 dry-run、缺模型提示、`--yes` 本地模型安装、transcribe/refine 串联。
 - [x] 翻译 provider loop 和默认 NLLB/CTranslate2 翻译模型 manifest。
+- [ ] 翻译 benchmark 计划中，详见 `FAST_SUB_PARALLEL_ROUND7_5.md`：新增独立 `fast-sub bench-translate`，不塞进现有 `fast-sub bench`；使用 reference SRT/TXT 计算 lightweight BLEU、chrF、exact match、耗时和失败率。
 - [ ] 更完整 provider 统一、Electron UI 和 Web 版均放到后续轮次。
 
 第二轮并行组合已完成：
@@ -329,6 +330,10 @@ api-custom-http-translate
 - [x] `codex/fast-sub-auto-core`：实现 `auto` dry-run、缺模型提示、`--yes` 本地模型安装、调用 transcribe/refine 的真实最小链路。
 - [x] `codex/fast-sub-translate-cli`：第 7 轮实现 `fast-sub translate`、web/API/local translation providers，并支持 `models install nllb-200-distilled-600m-ct2-int8`。
 
+第 7.5 轮计划：
+
+- [ ] `codex/fast-sub-translate-bench`：新增独立 `fast-sub bench-translate` 翻译 benchmark，复用 `translate_srt_v1`，通过 reference SRT/TXT 输出 lightweight BLEU、chrF、exact match、吞吐、失败率和 JSON/Markdown report；不做 LLM judge，不提交真实媒体、真实 reference 或本地报告。
+
 第五轮和 5.5 轮已完成：
 
 - [x] `codex/fast-sub-bench`：实现 `fast-sub bench`，支持 `transcribe_media_v1` scope、CPU/auto profiles、repeat 聚合、硬件信息、JSON/Markdown report。
@@ -349,6 +354,7 @@ v0 剩余迭代预估：
 后续建议路线：
 
 - 第 7 轮：Translation Provider Loop + 翻译模型安装。已完成 Python CLI 内的 `fast-sub translate`、web/API/local translation providers、默认翻译模型 manifest、`models install nllb-200-distilled-600m-ct2-int8` 和 checkpoint/resume。
+- 第 7.5 轮：Translation Benchmark。计划新增独立 `fast-sub bench-translate`，使用 reference SRT/TXT 计算 lightweight BLEU、chrF、exact match、耗时和失败率，让用户对当前翻译方案质量有可复现的粗略判断；现有 `fast-sub bench` 继续专注媒体转写 benchmark。
 - 第 8 轮：Go migration foundation，新增并行 Go CLI 骨架，先实现 `doctor/probe/extract`。
 - 第 9 轮：Go 接管 `transcribe/auto` 主链路，继续调用 Python faster-whisper worker。
 - 第 10 轮：Go provider runtime 与 native backend 准备，优先验证 `whisper.cpp` 一类 native worker。
@@ -779,6 +785,7 @@ fast-sub burn input.mp4 input.srt
 
 ```bash
 fast-sub bench input.mp4
+fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider local-nllb-ct2
 ```
 
 参数：
@@ -795,6 +802,7 @@ fast-sub bench input.mp4
 
 - JSON 报告。
 - Markdown 报告。
+- 翻译 benchmark 报告使用 reference SRT/TXT，输出 lightweight BLEU、chrF、exact match、耗时和失败率；这是独立的 `bench-translate` 命令，不复用媒体转写 `bench` 入口。
 
 指标：
 
@@ -817,6 +825,7 @@ warnings
 - 同一输入、同一配置可重复比较。
 - 报告可直接附到 issue/PR。
 - 本地 provider 和 API provider 的耗时分开记录。
+- `bench-translate` 是可复现的粗略质量参考，不是人工质量保证；真实模型、真实媒体、真实 reference 和本地报告不提交仓库。
 
 ### Milestone 12: 自动调度
 

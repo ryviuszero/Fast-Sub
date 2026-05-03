@@ -180,6 +180,7 @@ Stable v0:
 - `fast-sub models list/install/verify`
 - `fast-sub providers list/test`
 - `fast-sub bench input.mp4`
+- Planned Round 7.5 standalone command: `fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider <id>`
 
 ## Privacy Boundary
 
@@ -201,7 +202,15 @@ API upload behavior must be explicit opt-in.
 input media -> probe -> prepare_audio -> local-faster-whisper worker -> source SRT
 ```
 
-Benchmark media and reports belong under ignored `local_tests/` paths. The helper `scripts/bench_assets.py` is a developer/manual asset preparation tool, not a public product CLI.
+Round 7.5 plans the standalone `fast-sub bench-translate` command for translation quality checks:
+
+```bash
+fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider local-nllb-ct2
+```
+
+The planned translation benchmark uses reference SRT/TXT files to report Fast Sub lightweight BLEU, chrF, exact match, elapsed time, throughput, and failed cue counts. It is a reproducible rough signal, not a human-quality guarantee. The existing `fast-sub bench` command remains focused on media transcription benchmarks.
+
+Benchmark media, reference files, generated model caches, and reports belong under ignored `local_tests/` paths. The helper `scripts/bench_assets.py` is a developer/manual asset preparation tool, not a public product CLI. Do not commit real models, real media, real reference corpora, or local benchmark reports.
 
 ## Known Limits
 
@@ -210,7 +219,7 @@ Benchmark media and reports belong under ignored `local_tests/` paths. The helpe
 - Provider unification and legacy API/WhisperX cleanup are post-v0.
 - Electron UI and Web UI are post-v0.
 - New STT backends such as whisper.cpp, SenseVoice, Paraformer, Parakeet, ONNX, and TensorRT are post-v0.
-- v0 does not bundle real models or benchmark media.
+- v0 does not bundle real models, benchmark media, benchmark reference corpora, or local reports.
 - Real-model smoke tests are manual because they can require network, large downloads, and local hardware.
 
 ## Release Smoke

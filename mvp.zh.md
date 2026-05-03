@@ -176,6 +176,7 @@ v0 稳定命令：
 - `fast-sub models list/install/verify`
 - `fast-sub providers list/test`
 - `fast-sub bench input.mp4`
+- 第 7.5 轮计划新增独立命令：`fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider <id>`
 
 ## 隐私边界
 
@@ -197,7 +198,15 @@ v0 默认 provider 是 `local-faster-whisper`，音频留在本机。
 input media -> probe -> prepare_audio -> local-faster-whisper worker -> source SRT
 ```
 
-benchmark 媒体和报告放在已忽略的 `local_tests/` 下。`scripts/bench_assets.py` 是开发/手动素材准备工具，不是正式产品 CLI。
+第 7.5 轮计划新增独立的 `fast-sub bench-translate` 命令，用于粗略评估翻译质量：
+
+```bash
+fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider local-nllb-ct2
+```
+
+翻译 benchmark 使用目标语言 reference SRT/TXT，报告 Fast Sub lightweight BLEU、chrF、exact match、耗时、吞吐和失败 cue 数。它是可复现的粗略质量信号，不是人工质量保证。现有 `fast-sub bench` 继续专注媒体转写 benchmark。
+
+benchmark 媒体、reference、生成的模型缓存和报告都放在已忽略的 `local_tests/` 下。`scripts/bench_assets.py` 是开发/手动素材准备工具，不是正式产品 CLI。不要提交真实模型、真实媒体、真实 reference corpus 或本地 benchmark 报告。
 
 ## 已知限制
 
@@ -206,7 +215,7 @@ benchmark 媒体和报告放在已忽略的 `local_tests/` 下。`scripts/bench_
 - provider 统一和旧 API/WhisperX 清理放到 v0 后。
 - Electron UI 和 Web UI 放到 v0 后。
 - whisper.cpp、SenseVoice、Paraformer、Parakeet、ONNX、TensorRT 等新 STT 后端放到 v0 后。
-- v0 不随仓库提交真实模型或 benchmark 媒体。
+- v0 不随仓库提交真实模型、benchmark 媒体、benchmark reference corpus 或本地报告。
 - 真实模型 smoke test 需要手动跑，因为它可能涉及网络、大模型下载和本机硬件差异。
 
 ## Release Smoke

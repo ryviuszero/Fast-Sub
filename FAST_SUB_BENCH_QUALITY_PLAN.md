@@ -2,9 +2,15 @@
 
 本文档记录 `fast-sub bench` 的最小可用增强方案。它只描述计划，不执行实现；范围限定在“当前已生成的本地音频 + reference transcript 可以直接验证”的指标。
 
+与第 7.5 轮翻译 benchmark 的关系：
+
+- 本文档只覆盖 ASR/transcribe benchmark，也就是 `media -> STT -> SRT`。
+- 第 7.5 轮的 `FAST_SUB_PARALLEL_ROUND7_5.md` 覆盖独立的 `fast-sub bench-translate`，也就是 `source SRT -> translate -> target SRT`。
+- 两者不共用同一个 CLI 命令；现有 `fast-sub bench` 不新增翻译模式，避免媒体 benchmark 参数和翻译 provider/reference 对齐规则混在一起。
+
 ## 目标
 
-本轮增强现有 `fast-sub bench`，不新增命令。目标是让本地 benchmark 样本可以回答这些问题：
+本轮增强现有 `fast-sub bench`，不新增 ASR benchmark 命令。目标是让本地 benchmark 样本可以回答这些问题：
 
 - 当前机器跑某个模型是否足够快。
 - 某个模型在当前固定样本上的转写是否足够准。
