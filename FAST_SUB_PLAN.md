@@ -321,15 +321,22 @@ api-custom-http-translate
 - [x] `codex/fast-sub-auto-core`：实现 `auto` dry-run、缺模型提示、`--yes` 本地模型安装、调用 transcribe/refine 的真实最小链路。
 - [ ] `codex/fast-sub-translate-cli`：等 provider contract 和主流程稳定后再做。
 
+第五轮和 5.5 轮已完成：
+
+- [x] `codex/fast-sub-bench`：实现 `fast-sub bench`，支持 `transcribe_media_v1` scope、CPU/auto profiles、repeat 聚合、硬件信息、JSON/Markdown report。
+- [x] `codex/fast-sub-bench-assets`：实现 `scripts/bench_assets.py` benchmark asset workflow，支持 sources/init/download/prepare/verify、asset/sample 分离、allowed host 校验、安全 archive member 提取和 offline tests。
+- [ ] 当前本机真实 baseline 报告：等真实测试样本准备后补跑，输出到 `local_tests/reports/`，不提交个人路径或大媒体。
+- [ ] 3060 和更多机器 baseline：上线前补测。
+
 v0 剩余迭代预估：
 
 - 第三轮：`local-faster-whisper` worker 原型 + `transcribe` CLI。已完成。
 - 第四轮：`auto` 最小链路。已完成代码与默认测试，真实模型手动验证记录待补。
 - 第五轮：benchmark/report 与固定样本回归。已实现 `transcribe_media_v1` scope、CPU/auto profiles、repeat 聚合、JSON/Markdown report 和硬件探测；当前本机真实 baseline 可按 `FAST_SUB_TEST_ASSETS.md` 的本地流程补跑，3060 和更多机器上线前补测。
 - 第 5.5 轮：真实 benchmark 数据准备与受控下载器。已实现开发脚本 `uv run python scripts/bench_assets.py sources/init/download/prepare/verify`，用 manifest 记录官方来源、许可证、download policy、allowed hosts 和 checksum，让 `bench` 有稳定、合法、可复现的本地输入数据；该下载器不作为正式用户 CLI 功能暴露。
-- 第六轮：v0 hardening/release。目标是统一错误码、清理旧 `run` 流程、完善文档、打包前检查和端到端 smoke tests。
+- 第六轮计划：v0 hardening/release，详见 `FAST_SUB_PARALLEL_ROUND6.md`。当前先完成文档计划；后续实现目标是统一错误码、收敛旧 `run` 流程、完善文档、打包前检查和端到端 smoke tests。
 
-因此，从当前状态到可称为 v0 的本地字幕 CLI，建议还需要 2 轮主要迭代加 1 个夹层任务：第 5.5 轮 benchmark 数据准备，第六轮 v0 hardening/release。当前已经具备“自动原文字幕链路可用”的技术预览基础。
+因此，从当前状态到可称为 v0 的本地字幕 CLI，主要还剩第六轮 v0 hardening/release。当前已经具备“自动原文字幕链路可用”和“benchmark 数据准备/报告”的技术预览基础。翻译、Electron UI 和 Web 版继续作为 v0 后功能，不混入第六轮。
 
 ### Milestone 0: CLI 骨架
 
