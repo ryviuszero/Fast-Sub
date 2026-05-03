@@ -26,6 +26,7 @@ ffmpeg/ffprobe
 - C++/native binaries：`ffmpeg`、`ffprobe`、`whisper.cpp`、CTranslate2/ONNX/TensorRT 后端可作为独立 worker 接入。
 - UI：后续 Electron + TypeScript，直接调用 CLI 或本地服务。
 - Web 版：最后阶段再做，复用同一套 provider/worker contract，避免早期为 Web 改变本地优先架构。
+- Go 迁移路线：详见 `FAST_SUB_GO_MIGRATION_PLAN.md`。Go 迁移应从并行 CLI 开始，目标是提升分发、进程控制、下载、路径处理、UI/daemon 接入和长期稳定性，而不是承诺大幅提升模型推理速度。
 - 主包策略：
   - `ffmpeg/ffprobe` 最终内置。
   - 模型不随主包打包，首次使用时下载。
@@ -293,7 +294,7 @@ api-custom-http-translate
 - [x] 模型缓存权限异常、坏目录、不可访问文件会返回结构化状态，避免 CLI traceback。
 - [x] v0 命令入口已收敛：`auto`、裸命令和 `run` 都走本地 `auto` 链路，旧 OpenAI-compatible / WhisperX 行为不再从默认 CLI 路径静默触发。
 - [x] `transcribe` 已为 `auto` 收敛结构化错误、metadata 和用户提示。
-- [~] `translate` 命令目前还是占位，需要后续 provider 化。
+- [~] `translate` 命令目前还是占位；第 7 轮将实现翻译 provider 闭环和本地 NLLB 模型安装，详见 `FAST_SUB_PARALLEL_ROUND7.md`。
 - [x] `bench` benchmark 报告，含当前本机 CPU/auto baseline 流程、硬件信息、JSON/Markdown 输出。
 - [x] `scripts/bench_assets.py` 真实 benchmark 数据准备与受控下载器，详见 `FAST_SUB_PARALLEL_ROUND5_5.md`。
 - [x] `auto` 最小自动调度，支持 dry-run、缺模型提示、`--yes` 本地模型安装、transcribe/refine 串联。
@@ -318,7 +319,7 @@ api-custom-http-translate
 
 - [x] `codex/fast-sub-transcribe-hardening`：为自动链路收敛转写错误、metadata 和 keep-temp 行为。
 - [x] `codex/fast-sub-auto-core`：实现 `auto` dry-run、缺模型提示、`--yes` 本地模型安装、调用 transcribe/refine 的真实最小链路。
-- [ ] `codex/fast-sub-translate-cli`：等 provider contract 和主流程稳定后再做。
+- [ ] `codex/fast-sub-translate-cli`：第 7 轮实现 `fast-sub translate`、web/API/local translation providers，并支持 `models install nllb-200-distilled-600m-ct2-int8`。
 
 第五轮和 5.5 轮已完成：
 
@@ -336,6 +337,15 @@ v0 剩余迭代预估：
 - 第六轮：v0 hardening/release，详见 `FAST_SUB_PARALLEL_ROUND6.md`。已收敛 v0 CLI 入口、补充结构化错误/JSON 纯净性 smoke tests、更新 v0 文档和本地优先包装描述；真实模型 smoke 和更多机器 benchmark 仍按手动 release checklist 执行。
 
 因此，当前 v0 的发布边界是“本地原文字幕 CLI”：默认 `auto` 链路、可脚本化 JSON 输出、离线 smoke tests、清晰错误码和手动真实模型 release checklist。翻译、provider 统一、Electron UI 和 Web 版继续作为 v0 后功能，不混入本轮。
+
+v0 后建议路线：
+
+- 第 7 轮：Translation Provider Loop + 翻译模型安装，详见 `FAST_SUB_PARALLEL_ROUND7.md`。目标是补齐 `fast-sub translate`、web/API/local translation providers，并让 `local-nllb-ct2` 通过 `models install` 安装默认翻译模型 `nllb-200-distilled-600m-ct2-int8`。
+- 第 8 轮：Go migration foundation，新增并行 Go CLI 骨架，先实现 `doctor/probe/extract`。
+- 第 9 轮：Go 接管 `transcribe/auto` 主链路，继续调用 Python faster-whisper worker。
+- 第 10 轮：Go provider runtime 与 native backend 准备，优先验证 `whisper.cpp` 一类 native worker。
+- 第 11 轮：桌面 UI，调用 Go CLI 或 Go daemon。
+- 第 12 轮：Web 版，复用 job/provider/model contract。
 
 ### Milestone 0: CLI 骨架
 
@@ -958,10 +968,11 @@ compute_type
 12. `auto`。
 13. `burn`。
 14. `translate`。
-15. API STT provider。
-16. API translation provider。
-17. Electron UI。
-18. Web 版。
+15. Go migration foundation。
+16. Go transcribe/auto main path。
+17. Go provider runtime + API/native provider。
+18. Electron UI。
+19. Web 版。
 
 ## Assumptions
 
@@ -969,6 +980,9 @@ compute_type
 - v0 优先 Windows，但 Go CLI 尽量保持跨平台。
 - v0 只实现一个 STT provider：`local-faster-whisper`。
 - v0 翻译接口先设计好，具体实现可晚于字幕主链路。
+- v0 后先做翻译闭环，再启动 Go 主体迁移。
+- Go 迁移从并行 CLI 开始，不直接替换 Python v0 CLI。
+- Python 长期保留为模型 worker / AI 生态适配层。
 - 默认不上传任何文件或文本。
 - `ffmpeg/ffprobe` v0 可先作为外部依赖，打包阶段再内置。
 - 模型下载先用普通 HTTP 断点续传，是否内置 aria2 延后决定。
