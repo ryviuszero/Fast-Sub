@@ -301,7 +301,7 @@ api-custom-http-translate
 - [x] 模型缓存权限异常、坏目录、不可访问文件会返回结构化状态，避免 CLI traceback。
 - [x] v0 命令入口已收敛：`auto`、裸命令和 `run` 都走本地 `auto` 链路，旧 OpenAI-compatible / WhisperX 行为不再从默认 CLI 路径静默触发。
 - [x] `transcribe` 已为 `auto` 收敛结构化错误、metadata 和用户提示。
-- [x] `translate` 命令已实现 Round 7 provider loop：`web-bing`、`web-google`、`api-openai-chat`、`local-nllb-ct2`，支持 replace/bilingual、partial failure、`.errors.json` 和 checkpoint/resume。
+- [x] `translate` 命令已实现 Round 7 provider loop：`web-bing`、`web-google`、`api-openai-chat`、`local-nllb-ct2`，支持 replace/bilingual、partial failure、`.errors.json`、checkpoint/resume 和本地 NLLB 模型安装入口。
 - [x] `bench` benchmark 报告，含当前本机 CPU/auto baseline 流程、硬件信息、JSON/Markdown 输出。
 - [x] `scripts/bench_assets.py` 真实 benchmark 数据准备与受控下载器，详见 `FAST_SUB_PARALLEL_ROUND5_5.md`。
 - [x] `auto` 最小自动调度，支持 dry-run、缺模型提示、`--yes` 本地模型安装、transcribe/refine 串联。
@@ -348,7 +348,7 @@ v0 剩余迭代预估：
 
 后续建议路线：
 
-- 第 7 轮：Translation Provider Loop + 翻译模型安装。已完成 Python CLI 内的 `fast-sub translate`、web/API/local translation providers、默认翻译模型 manifest 和 checkpoint/resume。
+- 第 7 轮：Translation Provider Loop + 翻译模型安装。已完成 Python CLI 内的 `fast-sub translate`、web/API/local translation providers、默认翻译模型 manifest、`models install nllb-200-distilled-600m-ct2-int8` 和 checkpoint/resume。
 - 第 8 轮：Go migration foundation，新增并行 Go CLI 骨架，先实现 `doctor/probe/extract`。
 - 第 9 轮：Go 接管 `transcribe/auto` 主链路，继续调用 Python faster-whisper worker。
 - 第 10 轮：Go provider runtime 与 native backend 准备，优先验证 `whisper.cpp` 一类 native worker。
@@ -727,7 +727,7 @@ fast-sub translate input.srt --provider api-openai-chat --model <model> --to zh
 - 翻译失败的行保留原文并记录 warning。
 - partial failure 写最终 SRT 和 `.errors.json`；all failure 非零退出且不写误导性的最终 SRT。
 - checkpoint 文件为 `<output>.translate-progress.json`，参数和 input hash 不匹配时不复用。
-- `local-nllb-ct2 --from auto` 默认拒绝；NLLB 内部使用 FLORES-200 code：`eng_Latn`、`zho_Hans`、`jpn_Jpan`、`kor_Hang`。
+- `local-nllb-ct2 --from auto` 会先做轻量字幕语言检测；无法可靠判断 `en|zh|ja|ko` 时要求显式 `--from`。NLLB 内部使用 FLORES-200 code：`eng_Latn`、`zho_Hans`、`jpn_Jpan`、`kor_Hang`。
 - `translators` 作为 `web-translate` optional extra 处理，以隔离 GPL-3.0 分发风险。
 
 验收：

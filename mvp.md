@@ -206,7 +206,7 @@ Benchmark media and reports belong under ignored `local_tests/` paths. The helpe
 ## Known Limits
 
 - `auto` still generates source-language subtitles by default; translation is a separate explicit command.
-- `local-nllb-ct2 --from auto` is rejected unless a reliable upstream language result is added later. Use `--from en|zh|ja|ko`. Internally NLLB uses FLORES-200 codes: `eng_Latn`, `zho_Hans`, `jpn_Jpan`, `kor_Hang`.
+- `local-nllb-ct2 --from auto` first uses lightweight subtitle language detection. If Fast Sub cannot reliably infer `en|zh|ja|ko`, pass `--from en|zh|ja|ko`. Internally NLLB uses FLORES-200 codes: `eng_Latn`, `zho_Hans`, `jpn_Jpan`, `kor_Hang`.
 - Provider unification and legacy API/WhisperX cleanup are post-v0.
 - Electron UI and Web UI are post-v0.
 - New STT backends such as whisper.cpp, SenseVoice, Paraformer, Parakeet, ONNX, and TensorRT are post-v0.

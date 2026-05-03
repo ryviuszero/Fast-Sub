@@ -6,12 +6,24 @@
 
 本轮仍在 Python CLI 内完成。不启动 Go 迁移，不做 UI/Web，也不静默启用任何远程上传。
 
+实现提交：
+
+```text
+d4a1507 feat: add translation provider loop
+```
+
+合并状态：
+
+- [x] 已合并到 `master`。
+- [x] `uv run pytest` 通过：239 passed。
+- [x] `uv run ruff check` 通过。
+
 ## Current State
 
 第 7 轮开始前已经完成：
 
 - v0 本地原文字幕 CLI 已完成 hardening 和文档同步。
-- `fast-sub translate` 仍是占位命令。
+- `fast-sub translate` 当时仍是占位命令。
 - provider contract 已经包含 `ProviderType.TRANSLATE`、`TranslationProviderRequest` 和 `TranslationProviderResponse`。
 - 模型管理器已经支持 CTranslate2 风格的目录/多文件 manifest。
 - `translators` 已调整为 `web-translate` optional extra，翻译逻辑已接入 provider 化 CLI 流程。
@@ -24,7 +36,7 @@
 - `local-nllb-ct2` 通过 model manager 解析默认模型或 `--model-path`。
 - model manifest 包含 NLLB 翻译模型。
 - `translators` GPL-3.0 风险通过 optional extra 隔离。
-- NLLB 使用 FLORES-200 语言码映射，且 `--from auto` 默认拒绝。
+- NLLB 使用 FLORES-200 语言码映射；`--from auto` 会先做轻量字幕语言检测，无法可靠判断时要求用户显式传 `--from en|zh|ja|ko`。
 
 ## Implementation Scope
 
@@ -178,7 +190,7 @@ NLLB 语言码要求：
   - `zh-Hant -> zho_Hant`，可作为后续扩展，第一版至少不要误映射繁体。
   - `ja -> jpn_Jpan`
   - `ko -> kor_Hang`
-- `--from auto` 对 `local-nllb-ct2` 默认不成立；除非上游已有可靠语言检测结果，否则要求用户显式传 `--from en|zh|ja|ko`。
+- `--from auto` 对 `local-nllb-ct2` 只允许在轻量字幕语言检测能可靠判断 `en|zh|ja|ko` 时继续；无法判断时要求用户显式传 `--from en|zh|ja|ko`。
 - 单条字幕超过 NLLB 推荐长度时，需要切分或返回 warning；不能把超长文本直接静默送入模型。
 
 本地 provider 解析顺序：
@@ -264,7 +276,7 @@ Provider 测试：
 - 验证 `translators` 缺依赖时的 optional-extra 提示，前提是本轮决定采用 optional extra。
 - mock local NLLB provider，确认已安装模型路径会传入 provider。
 - 覆盖缺依赖、缺模型、非法 `--model-path`、未知模型 ID。
-- 覆盖 NLLB ISO/FLORES 语言码映射，以及 `local-nllb-ct2 --from auto` 的拒绝/提示。
+- 覆盖 NLLB ISO/FLORES 语言码映射，以及 `local-nllb-ct2 --from auto` 的轻量检测与失败提示。
 - 覆盖 chat parser：plain JSON、fenced JSON、`<think>`、前缀文本、malformed JSON、id/count mismatch。
 - 覆盖 chat provider 在 parser/count mismatch 时缩小 batch 并降级到单 cue。
 
@@ -300,7 +312,7 @@ mvp.zh.md
 - `translators` GPL-3.0 打包风险。
 - 如果采用 optional extra，说明 `uv sync --extra web-translate`。
 - NLLB 模型安装命令。
-- NLLB FLORES-200 语言码限制和 `--from auto` 限制。
+- NLLB FLORES-200 语言码限制和 `--from auto` 轻量检测限制。
 - 免费网页翻译稳定性、限流、地区访问风险。
 - 第 7 轮中 `auto --yes` 不会静默安装翻译模型。
 
@@ -333,6 +345,6 @@ mvp.zh.md
 - 覆盖到的成功和失败路径中，`--json` 输出可解析。
 - API key 和敏感请求内容不泄露。
 - `translators` GPL-3.0 分发策略已经明确。
-- NLLB 语言码映射和 `--from auto` 限制已经测试覆盖。
+- NLLB 语言码映射和 `--from auto` 轻量检测限制已经测试覆盖。
 - checkpoint/resume 行为有测试覆盖。
 - 文档清楚区分第 7 轮翻译和第 8 轮 Go migration。

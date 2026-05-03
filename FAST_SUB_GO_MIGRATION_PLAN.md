@@ -189,7 +189,7 @@ Provider behavior:
 - `api-openai-chat` must not have a hard-coded default model.
 - `local-nllb-ct2` defaults to model id `nllb-200-distilled-600m-ct2-int8` unless `--model` or `--model-path` is provided.
 - Round 7 supports explicit `fast-sub models install nllb-200-distilled-600m-ct2-int8`; it does not make `auto --yes` install translation models by default.
-- `local-nllb-ct2 --from auto` is rejected by default; Go should preserve the FLORES-200 mapping (`eng_Latn`, `zho_Hans`, `jpn_Jpan`, `kor_Hang`) when it later owns translation orchestration.
+- `local-nllb-ct2 --from auto` first uses lightweight subtitle language detection; if it cannot reliably infer `en|zh|ja|ko`, the CLI asks the user to pass `--from` explicitly. Go should preserve the FLORES-200 mapping (`eng_Latn`, `zho_Hans`, `jpn_Jpan`, `kor_Hang`) when it later owns translation orchestration.
 
 Provider architecture:
 

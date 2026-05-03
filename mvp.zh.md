@@ -202,7 +202,7 @@ benchmark 媒体和报告放在已忽略的 `local_tests/` 下。`scripts/bench_
 ## 已知限制
 
 - `auto` 默认仍只生成原文字幕；翻译是独立显式命令。
-- `local-nllb-ct2 --from auto` 默认拒绝，除非后续有可靠上游语言检测结果。请使用 `--from en|zh|ja|ko`。NLLB 内部使用 FLORES-200 code：`eng_Latn`、`zho_Hans`、`jpn_Jpan`、`kor_Hang`。
+- `local-nllb-ct2 --from auto` 会先做轻量字幕语言检测；如果无法可靠判断 `en|zh|ja|ko`，请使用 `--from en|zh|ja|ko`。NLLB 内部使用 FLORES-200 code：`eng_Latn`、`zho_Hans`、`jpn_Jpan`、`kor_Hang`。
 - provider 统一和旧 API/WhisperX 清理放到 v0 后。
 - Electron UI 和 Web UI 放到 v0 后。
 - whisper.cpp、SenseVoice、Paraformer、Parakeet、ONNX、TensorRT 等新 STT 后端放到 v0 后。
