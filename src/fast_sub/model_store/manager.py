@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import shutil
-import subprocess
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlparse
 
-import httpx
-
+from fast_sub.clients.downloads import (
+    DownloadClientError,
+    aria2_executable,
+    download_aria2,
+    download_httpx,
+)
 from fast_sub.model_store.manifest import ModelManifestEntry, ModelManifestFile
 from fast_sub.output.paths import model_cache_dir
 
@@ -181,22 +183,7 @@ def _download_httpx(
     progress: DownloadProgress | None,
     label: str,
 ) -> None:
-    headers: dict[str, str] = {}
-    resume_from = part_path.stat().st_size if part_path.exists() else 0
-    if resume_from:
-        headers["Range"] = f"bytes={resume_from}-"
-
-    with httpx.stream("GET", url, headers=headers, follow_redirects=True, timeout=timeout) as res:
-        res.raise_for_status()
-        total = _response_total(res, resume_from)
-        downloaded = resume_from if res.status_code == 206 else 0
-        _emit_download_progress(progress, label, downloaded, total)
-        mode = "ab" if resume_from and res.status_code == 206 else "wb"
-        with part_path.open(mode) as file:
-            for chunk in res.iter_bytes():
-                file.write(chunk)
-                downloaded += len(chunk)
-                _emit_download_progress(progress, label, downloaded, total)
+    download_httpx(url, part_path, timeout=timeout, progress=progress, label=label)
 
 
 def _verify_directory_model(model: ModelManifestEntry, path: Path) -> ModelStatus:
@@ -379,7 +366,7 @@ def _download_verified(
                 )
             part_path.replace(path)
             return None
-        except (httpx.HTTPError, OSError, ModelManagerError) as exc:
+        except (DownloadClientError, OSError, ModelManagerError) as exc:
             last_error = exc
     return last_error
 
@@ -396,13 +383,16 @@ def _download(
     label: str,
 ) -> None:
     if downloader == "aria2":
-        _download_aria2(
-            url,
-            part_path,
-            timeout=timeout,
-            connections=aria2_connections,
-            split=aria2_split,
-        )
+        try:
+            _download_aria2(
+                url,
+                part_path,
+                timeout=timeout,
+                connections=aria2_connections,
+                split=aria2_split,
+            )
+        except DownloadClientError as exc:
+            raise ModelManagerError(str(exc)) from exc
         if part_path.exists():
             size = part_path.stat().st_size
             _emit_download_progress(progress, label, size, size)
@@ -431,58 +421,17 @@ def _download_aria2(
     connections: int,
     split: int,
 ) -> None:
-    if connections <= 0 or split <= 0:
-        raise ModelManagerError("aria2 connection and split counts must be greater than 0.")
-    part_path.parent.mkdir(parents=True, exist_ok=True)
-    command = [
-        str(_aria2_executable() or "aria2c"),
-        "--continue=true",
-        "--allow-overwrite=true",
-        "--auto-file-renaming=false",
-        f"--max-connection-per-server={connections}",
-        f"--split={split}",
-        "--min-split-size=1M",
-        f"--timeout={max(1, int(timeout))}",
-        f"--connect-timeout={max(1, int(timeout))}",
-        "--summary-interval=1",
-        "--console-log-level=notice",
-        "--file-allocation=none",
-        "--check-certificate=true",
-        "--dir",
-        str(part_path.parent),
-        "--out",
-        part_path.name,
+    download_aria2(
         url,
-    ]
-    completed = subprocess.run(
-        command,
-        check=False,
-        text=True,
-        stdout=sys.stderr,
-        stderr=sys.stderr,
+        part_path,
+        timeout=timeout,
+        connections=connections,
+        split=split,
     )
-    if completed.returncode != 0:
-        raise ModelManagerError(f"aria2c download failed with exit code {completed.returncode}.")
-    if not part_path.exists():
-        raise ModelManagerError("aria2c completed but did not create the expected file.")
 
 
 def _aria2_executable() -> Path | None:
-    path = shutil.which("aria2c")
-    return Path(path) if path else None
-
-
-def _response_total(response: httpx.Response, resume_from: int) -> int | None:
-    value = response.headers.get("content-length")
-    if value is None:
-        return None
-    try:
-        length = int(value)
-    except ValueError:
-        return None
-    if length < 0:
-        return None
-    return length + resume_from if response.status_code == 206 else length
+    return aria2_executable()
 
 
 def _emit_download_progress(

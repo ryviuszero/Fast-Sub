@@ -5,8 +5,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import httpx
-
+from fast_sub.clients.openai_transcription import (
+    OpenAITranscriptionClient,
+    TranscriptionRequestError,
+)
 from fast_sub.contracts.errors import ProviderLimitError, ProviderResponseError
 from fast_sub.models import Segment, WhisperXComputeType, WhisperXDevice
 
@@ -147,7 +149,7 @@ def _post_transcription(
     temperature: float,
     response_format: str,
     timeout_seconds: float,
-) -> httpx.Response:
+) -> Any:
     url = f"{base_url.rstrip('/')}/audio/transcriptions"
     data: dict[str, Any] = {
         "model": model,
@@ -156,20 +158,22 @@ def _post_transcription(
     }
     if source_lang != "auto":
         data["language"] = source_lang
-    headers = {"Authorization": f"Bearer {api_key}"}
     _log_transcription_request(url=url, audio=audio, data=data, has_api_key=bool(api_key))
-    with audio.open("rb") as file:
-        files = {"file": (audio.name, file, "audio/wav")}
-        try:
-            response = httpx.post(
-                url,
-                data=data,
-                files=files,
-                headers=headers,
-                timeout=timeout_seconds,
-            )
-        except httpx.HTTPError as exc:
-            raise ProviderResponseError(f"STT request failed: {exc}") from exc
+    client = OpenAITranscriptionClient(
+        base_url=base_url,
+        api_key=api_key,
+        timeout_seconds=timeout_seconds,
+    )
+    try:
+        response = client.transcribe(
+            audio=audio,
+            model=model,
+            source_lang=source_lang,
+            temperature=temperature,
+            response_format=response_format,
+        )
+    except TranscriptionRequestError as exc:
+        raise ProviderResponseError(f"STT request failed: {exc}") from exc
 
     if response.status_code in LIMIT_STATUS_CODES:
         raise ProviderLimitError(
@@ -179,7 +183,7 @@ def _post_transcription(
         )
     try:
         response.raise_for_status()
-    except httpx.HTTPStatusError as exc:
+    except Exception as exc:
         raise ProviderResponseError(
             f"STT provider returned HTTP {response.status_code}: {response.text}"
         ) from exc

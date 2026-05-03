@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from fast_sub.clients import openai_transcription
 from fast_sub.contracts.errors import ProviderResponseError
 from fast_sub.models import WhisperXComputeType, WhisperXDevice
 from fast_sub.stt import legacy as stt
@@ -21,7 +22,7 @@ def test_transcription_request_omits_language_for_auto(
         request = httpx.Request("POST", "http://localhost:8000/v1/audio/transcriptions")
         return httpx.Response(200, text="ok", request=request)
 
-    monkeypatch.setattr(stt.httpx, "post", fake_post)
+    monkeypatch.setattr(openai_transcription.httpx, "post", fake_post)
 
     stt.transcribe_srt(
         audio=audio,
@@ -53,7 +54,7 @@ def test_transcription_request_sends_explicit_language(
         request = httpx.Request("POST", "http://localhost:8000/v1/audio/transcriptions")
         return httpx.Response(200, text="ok", request=request)
 
-    monkeypatch.setattr(stt.httpx, "post", fake_post)
+    monkeypatch.setattr(openai_transcription.httpx, "post", fake_post)
 
     stt.transcribe_srt(
         audio=audio,
