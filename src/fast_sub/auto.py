@@ -97,7 +97,15 @@ class AutoResult:
             "steps": [step.as_dict() for step in self.steps],
         }
         if self.error:
-            data["error"] = self.error
+            error_step = next((step for step in reversed(self.steps) if step.status != "ok"), None)
+            error_info = _auto_error_info(self.error, error_step)
+            data["error"] = {
+                "code": error_info["code"],
+                "stage": error_info["stage"],
+                "message": self.error,
+                "action_hint": error_info["action_hint"],
+                "details": error_step.details if error_step else {},
+            }
         if self.transcribe_result is not None:
             data["transcribe"] = self.transcribe_result.as_dict()
         return data
@@ -107,6 +115,77 @@ class AutoPipelineError(SubGenError):
     def __init__(self, result: AutoResult) -> None:
         self.result = result
         super().__init__(result.error or "fast-sub auto failed.")
+
+
+def _auto_error_code(status: str) -> str:
+    if status in {"missing_model", "missing_dependency"}:
+        return status
+    if status in {"unknown_model", "unsupported_api_provider"}:
+        return status
+    if status == "error":
+        return "command_failed"
+    return status or "command_failed"
+
+
+def _auto_error_info(message: str, step: AutoStep | None) -> dict[str, str | None]:
+    if step is None:
+        return {"code": "command_failed", "stage": "auto", "action_hint": None}
+    if step.status != "error":
+        return {
+            "code": _auto_error_code(step.status),
+            "stage": step.name,
+            "action_hint": step.action_hint,
+        }
+
+    code = _classify_auto_error_message(message)
+    return {
+        "code": code,
+        "stage": _auto_error_stage(code, step.name),
+        "action_hint": step.action_hint or _auto_action_hint(message, code),
+    }
+
+
+def _classify_auto_error_message(message: str) -> str:
+    lower = message.lower()
+    if "input file does not exist" in lower or "unsupported input file type" in lower:
+        return "invalid_input"
+    if "input path is not a file" in lower or "no audio stream" in lower:
+        return "invalid_input"
+    if "missing_model" in lower or "model is not installed" in lower:
+        return "missing_model"
+    if "models install" in lower or "model directory is missing" in lower:
+        return "missing_model"
+    if "ffmpeg" in lower or "ffprobe" in lower:
+        return "missing_dependency"
+    if "local-asr" in lower or "faster_whisper" in lower or "not installed" in lower:
+        return "missing_dependency"
+    if "checksum" in lower:
+        return "checksum_failed"
+    if "download" in lower:
+        return "download_failed"
+    return "command_failed"
+
+
+def _auto_error_stage(code: str, fallback: str) -> str:
+    if code == "invalid_input":
+        return "input"
+    if code == "missing_dependency":
+        return "doctor"
+    if code == "missing_model":
+        return "model"
+    return fallback or "auto"
+
+
+def _auto_action_hint(message: str, code: str) -> str | None:
+    lower = message.lower()
+    if code == "missing_dependency" and ("local-asr" in lower or "faster_whisper" in lower):
+        return (
+            "Install local ASR dependencies with `uv sync --extra local-asr` "
+            "or `pip install fast-sub[local-asr]`."
+        )
+    if code == "missing_model":
+        return "Run `fast-sub models install whisper-small` or `fast-sub auto --yes`."
+    return None
 
 
 def auto_media(input_file: Path, options: AutoOptions | None = None) -> AutoResult:
@@ -206,7 +285,10 @@ def auto_media(input_file: Path, options: AutoOptions | None = None) -> AutoResu
                         "model",
                         "missing_model",
                         f"Model is not installed: {options.model}.",
-                        action_hint=f"Run `fast-sub models install {options.model}` or pass --yes.",
+                        action_hint=(
+                            f"Run `fast-sub models install {options.model}` "
+                            "or `fast-sub auto --yes`."
+                        ),
                     )
                 )
                 steps.append(
@@ -224,7 +306,10 @@ def auto_media(input_file: Path, options: AutoOptions | None = None) -> AutoResu
                         "model",
                         "missing_model",
                         f"Model is not installed: {options.model}.",
-                        action_hint=f"Run `fast-sub models install {options.model}` or pass --yes.",
+                        action_hint=(
+                            f"Run `fast-sub models install {options.model}` "
+                            "or `fast-sub auto --yes`."
+                        ),
                     )
                 )
             _install_local_model(options.model, steps)

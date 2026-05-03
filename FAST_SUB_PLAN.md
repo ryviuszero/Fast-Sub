@@ -291,14 +291,13 @@ api-custom-http-translate
 - [x] `transcribe` CLI 已接通本地 faster-whisper worker，支持 JSON metadata、`--keep-temp` 和 `--gpu-load`。
 - [x] 本地 ASR 依赖提供 `local-asr` optional extra，并在缺依赖时给出安装提示。
 - [x] 模型缓存权限异常、坏目录、不可访问文件会返回结构化状态，避免 CLI traceback。
-- [~] 旧 `run` 流程仍存在 OpenAI compatible / WhisperX 路径，后续需要收敛到 provider/worker contract。
+- [x] v0 命令入口已收敛：`auto`、裸命令和 `run` 都走本地 `auto` 链路，旧 OpenAI-compatible / WhisperX 行为不再从默认 CLI 路径静默触发。
 - [x] `transcribe` 已为 `auto` 收敛结构化错误、metadata 和用户提示。
 - [~] `translate` 命令目前还是占位，需要后续 provider 化。
 - [x] `bench` benchmark 报告，含当前本机 CPU/auto baseline 流程、硬件信息、JSON/Markdown 输出。
 - [x] `scripts/bench_assets.py` 真实 benchmark 数据准备与受控下载器，详见 `FAST_SUB_PARALLEL_ROUND5_5.md`。
 - [x] `auto` 最小自动调度，支持 dry-run、缺模型提示、`--yes` 本地模型安装、transcribe/refine 串联。
-- [ ] Electron UI。
-- [ ] Web 版。
+- [ ] 翻译 provider 实现、provider 统一、Electron UI 和 Web 版均放到 v0 后。
 
 第二轮并行组合已完成：
 
@@ -334,9 +333,9 @@ v0 剩余迭代预估：
 - 第四轮：`auto` 最小链路。已完成代码与默认测试，真实模型手动验证记录待补。
 - 第五轮：benchmark/report 与固定样本回归。已实现 `transcribe_media_v1` scope、CPU/auto profiles、repeat 聚合、JSON/Markdown report 和硬件探测；当前本机真实 baseline 可按 `FAST_SUB_TEST_ASSETS.md` 的本地流程补跑，3060 和更多机器上线前补测。
 - 第 5.5 轮：真实 benchmark 数据准备与受控下载器。已实现开发脚本 `uv run python scripts/bench_assets.py sources/init/download/prepare/verify`，用 manifest 记录官方来源、许可证、download policy、allowed hosts 和 checksum，让 `bench` 有稳定、合法、可复现的本地输入数据；该下载器不作为正式用户 CLI 功能暴露。
-- 第六轮计划：v0 hardening/release，详见 `FAST_SUB_PARALLEL_ROUND6.md`。当前先完成文档计划；后续实现目标是统一错误码、收敛旧 `run` 流程、完善文档、打包前检查和端到端 smoke tests。
+- 第六轮：v0 hardening/release，详见 `FAST_SUB_PARALLEL_ROUND6.md`。已收敛 v0 CLI 入口、补充结构化错误/JSON 纯净性 smoke tests、更新 v0 文档和本地优先包装描述；真实模型 smoke 和更多机器 benchmark 仍按手动 release checklist 执行。
 
-因此，从当前状态到可称为 v0 的本地字幕 CLI，主要还剩第六轮 v0 hardening/release。当前已经具备“自动原文字幕链路可用”和“benchmark 数据准备/报告”的技术预览基础。翻译、Electron UI 和 Web 版继续作为 v0 后功能，不混入第六轮。
+因此，当前 v0 的发布边界是“本地原文字幕 CLI”：默认 `auto` 链路、可脚本化 JSON 输出、离线 smoke tests、清晰错误码和手动真实模型 release checklist。翻译、provider 统一、Electron UI 和 Web 版继续作为 v0 后功能，不混入本轮。
 
 ### Milestone 0: CLI 骨架
 

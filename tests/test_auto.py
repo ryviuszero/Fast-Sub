@@ -50,7 +50,7 @@ def test_auto_missing_model_without_yes_fails_with_install_hint(
     result = exc_info.value.result
     assert result.ok is False
     assert "Model is not installed" in (result.error or "")
-    assert any("pass --yes" in (step.action_hint or "") for step in result.steps)
+    assert any("fast-sub auto --yes" in (step.action_hint or "") for step in result.steps)
 
 
 def test_auto_yes_installs_model_then_transcribes_and_refines(

@@ -27,7 +27,7 @@ Completed before Round 6:
 - `scripts/bench_assets.py` can prepare real benchmark inputs through a controlled asset/sample workflow.
 - `models` and provider resolution have structured local model/dependency states.
 
-Known unfinished areas:
+Known unfinished areas at the start of Round 6:
 
 - `translate` is still a placeholder.
 - The old `run` path still contains legacy OpenAI-compatible / WhisperX behavior.
@@ -35,23 +35,29 @@ Known unfinished areas:
 - Real local model smoke testing is not yet recorded as a release checklist.
 - Packaging/release docs need one final pass.
 
-## Documentation-Only Scope
+Round 6 implementation update:
 
-This document is the Round 6 plan. Creating the implementation branch and changing code are separate follow-up actions, not part of this documentation update.
+- `translate` remains a placeholder and now reports a structured v0 `not_implemented` error when `--json` is used.
+- `run` and bare command routing now use the same local `auto` path as `fast-sub auto input.mp4`.
+- High-risk exit codes and JSON error payloads are covered by release smoke tests.
+- Manual real-model smoke steps are recorded in `mvp.md`, `mvp.zh.md`, and this file.
+- Packaging metadata now describes Fast Sub as local-first rather than OpenAI-compatible/API-first.
 
-Recommended future implementation branch:
+## Implementation Scope
+
+Round 6 implementation is carried on:
 
 ```text
 codex/fast-sub-v0-hardening
 ```
 
-Reason to keep future implementation in one branch:
+Reason to keep implementation in one branch:
 
 - The changes are cross-cutting across CLI behavior, docs, smoke tests, and error handling.
 - Splitting too aggressively would create conflicts in `src/fast_sub/cli.py`, docs, and tests.
 - This is a release-hardening pass, so review should see the whole v0 behavior together.
 
-Optional follow-up branch only if needed:
+Optional follow-up branch only if docs/release notes later need a separate review:
 
 ```text
 codex/fast-sub-v0-docs-release
@@ -337,22 +343,24 @@ Reason:
 - [x] Document v0 exit code contract and structured error payload.
 - [x] Document JSON purity matrix.
 - [x] Document manual smoke checklist with expected results.
-- [ ] Future implementation: implement v0 behavior for bare command / `run` / `auto`.
-- [ ] Future implementation: audit and align exit codes.
-- [ ] Future implementation: audit JSON output purity.
-- [ ] Future implementation: harden common failure paths.
-- [ ] Future implementation: add CLI smoke tests.
-- [ ] Future implementation: add or update manual real-model smoke checklist.
-- [ ] Future implementation: update install and first-run docs.
-- [ ] Future implementation: update benchmark docs with current Round 5.5 state.
-- [ ] Future implementation: verify `.gitignore` and no large artifacts.
-- [ ] Future implementation: run focused and full tests where practical.
-- [ ] Future implementation: mark v0 remaining known limitations.
+- [x] Implement v0 behavior for bare command / `run` / `auto`.
+- [x] Audit and align high-risk exit codes.
+- [x] Audit JSON output purity for covered high-risk commands.
+- [x] Harden common missing input, missing dependency, missing model, and translate-placeholder paths.
+- [x] Add CLI smoke tests for route aliases, JSON purity, redaction, and common failures.
+- [x] Add or update manual real-model smoke checklist.
+- [x] Update install and first-run docs.
+- [x] Update benchmark docs with current Round 5.5 state.
+- [x] Verify `.gitignore` covers local benchmark media/reports.
+- [x] Run focused tests.
+- [x] Mark v0 remaining known limitations.
+- [x] Run full `uv run pytest` on the release branch.
 
 ## Merge Criteria
 
-- For this documentation update, only planning docs should change.
-- The implementation branch should not be created by this documentation-only step.
-- No code, test, packaging, media, or model files should be changed.
-- `demo.py` or other unrelated local files should remain untouched.
-- Future implementation merge criteria remain: default tests pass, v0 CLI behavior is documented/tested, expected user errors do not traceback, and docs clearly separate v0 features from post-v0 work.
+- Default tests pass, or any skipped/manual tests are explicitly documented.
+- v0 CLI behavior is documented/tested for `auto`, bare command, and `run`.
+- Expected user errors do not traceback.
+- `--json` stdout is parseable for covered success and failure paths.
+- Docs clearly separate v0 features from post-v0 translation, provider unification, Electron UI, and Web work.
+- No model files, media files, local benchmark reports, or unrelated generated artifacts are staged.

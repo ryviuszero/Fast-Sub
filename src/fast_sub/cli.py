@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Annotated, Any, TypeVar
 
@@ -110,6 +112,36 @@ DIRECTORY_PROGRESS_FILE = ".fast-sub-progress.json"
 app.add_typer(providers_app, name="providers")
 
 
+def _package_version() -> str:
+    try:
+        return version("fast-sub")
+    except PackageNotFoundError:
+        return "0.0.0+local"
+
+
+def _version_callback(value: bool) -> None:
+    if not value:
+        return
+    typer.echo(_package_version())
+    raise typer.Exit()
+
+
+@app.callback()
+def root_callback(
+    version_flag: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="Print the fast-sub version.",
+        ),
+    ] = False,
+) -> None:
+    """Fast local subtitles for video."""
+    del version_flag
+
+
 def main() -> None:
     if _should_use_command_app(sys.argv[1:]):
         app()
@@ -125,6 +157,106 @@ def _should_use_command_app(args: list[str]) -> bool:
 
 
 app.add_typer(models_app, name="models")
+
+
+def _error_payload(
+    *,
+    code: str,
+    stage: str,
+    message: str,
+    action_hint: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    error: dict[str, Any] = {
+        "code": code,
+        "stage": stage,
+        "message": _redact_secrets(message),
+    }
+    if action_hint:
+        error["action_hint"] = _redact_secrets(action_hint)
+    if details:
+        error["details"] = _redact_value(details)
+    return {"ok": False, "error": error}
+
+
+def _json_error_for_exception(exc: BaseException, *, stage: str, code: str) -> dict[str, Any]:
+    return _error_payload(
+        code=_classify_error_code(str(exc), fallback=code),
+        stage=stage,
+        message=str(exc),
+        action_hint=_action_hint_for_message(str(exc)),
+    )
+
+
+def _exit_code_for_payload(payload: dict[str, Any]) -> int:
+    error = payload.get("error", {})
+    code = str(error.get("code", "")).lower()
+    stage = str(error.get("stage", "")).lower()
+    if code in {"invalid_input", "invalid_options", "invalid_usage"} or stage == "input":
+        return 2
+    if code in {"missing_dependency", "ffmpeg_failed", "ffprobe_failed"}:
+        return 3
+    if code in {"missing_model", "model_not_found"}:
+        return 4
+    if code in {"download_failed", "checksum_failed", "cache_failed"}:
+        return 5
+    return 1
+
+
+def _classify_error_code(message: str, *, fallback: str) -> str:
+    lower = message.lower()
+    if "input file does not exist" in lower or "unsupported input file type" in lower:
+        return "invalid_input"
+    if "input path is not a file" in lower or "no audio stream" in lower:
+        return "invalid_input"
+    if "missing_model" in lower or "model is not installed" in lower:
+        return "missing_model"
+    if "models install" in lower or "model directory is missing" in lower:
+        return "missing_model"
+    if "ffmpeg" in lower or "ffprobe" in lower:
+        return "missing_dependency"
+    if "local-asr" in lower or "faster_whisper" in lower or "not installed" in lower:
+        return "missing_dependency"
+    if "checksum" in lower:
+        return "checksum_failed"
+    if "download" in lower:
+        return "download_failed"
+    return fallback.lower()
+
+
+def _action_hint_for_message(message: str) -> str | None:
+    lower = message.lower()
+    if "local-asr" in lower or "faster_whisper" in lower:
+        return (
+            "Install local ASR dependencies with `uv sync --extra local-asr` "
+            "or `pip install fast-sub[local-asr]`."
+        )
+    if "missing_model" in lower or "model is not installed" in lower or "models install" in lower:
+        match = re.search(r"whisper-[A-Za-z0-9_.-]+", message)
+        model_id = match.group(0) if match else "whisper-small"
+        return f"Run `fast-sub models install {model_id}` or `fast-sub auto --yes`."
+    return None
+
+
+def _redact_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _redact_secrets(value)
+    if isinstance(value, dict):
+        return {key: _redact_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_value(item) for item in value]
+    return value
+
+
+def _redact_secrets(message: str) -> str:
+    redacted = message
+    for name in ("OPENAI_API_KEY", "FAST_SUB_STT_API_KEY"):
+        secret = os.getenv(name)
+        if secret:
+            redacted = redacted.replace(secret, "[redacted]")
+    redacted = re.sub(r"sk-[A-Za-z0-9_-]{8,}", "sk-[redacted]", redacted)
+    redacted = re.sub(r"(?i)(api[_-]?key|token)=([^&\s]+)", r"\1=[redacted]", redacted)
+    return redacted
 
 
 @models_app.command("list")
@@ -178,8 +310,17 @@ def models_verify_command(
     try:
         status = verify_model(get_model(model_id))
     except KeyError as exc:
-        console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1) from exc
+        payload = _error_payload(
+            code="invalid_input",
+            stage="model",
+            message=str(exc),
+            action_hint="Run `fast-sub models list` to see available models.",
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, ensure_ascii=False))
+        else:
+            err_console.print(f"[red]Error:[/red] {_redact_secrets(str(exc))}")
+        raise typer.Exit(2) from exc
 
     if json_output:
         typer.echo(json.dumps(status.as_dict(), ensure_ascii=False, indent=2))
@@ -187,7 +328,7 @@ def models_verify_command(
         color = "green" if status.installed else "yellow"
         console.print(f"[{color}]{status.status}:[/{color}] {status.message} {status.path}")
     if not status.installed:
-        raise typer.Exit(1)
+        raise typer.Exit(4)
 
 
 @models_app.command("install")
@@ -219,8 +360,9 @@ def models_install_command(
                 progress=progress,
             )
     except (KeyError, ModelManagerError) as exc:
-        console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1) from exc
+        err_console.print(f"[red]Error:[/red] {_redact_secrets(str(exc))}")
+        code = 2 if isinstance(exc, KeyError) else 5
+        raise typer.Exit(code) from exc
     console.print(
         f"[green]Installed:[/green] {model.id} -> {status.path} "
         f"({status.checked_files} file(s) verified)"
@@ -256,7 +398,15 @@ def probe_command(
     try:
         info = probe_media(input_file)
     except SubGenError as exc:
-        console.print(f"[red]Error:[/red] {exc}")
+        if json_output:
+            typer.echo(
+                json.dumps(
+                    _json_error_for_exception(exc, stage="input", code="invalid_input"),
+                    ensure_ascii=False,
+                )
+            )
+        else:
+            err_console.print(f"[red]Error:[/red] {_redact_secrets(str(exc))}")
         raise typer.Exit(2) from exc
     if json_output:
         typer.echo(json.dumps(info, ensure_ascii=False, indent=2))
@@ -282,8 +432,9 @@ def extract_command(
         out_path = output or (job_dir(input_file) / "audio.16k.mono.wav")
         prepare_audio(input_file, out_path, audio_stream=audio_stream)
     except SubGenError as exc:
-        console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1) from exc
+        payload = _json_error_for_exception(exc, stage="extract", code="command_failed")
+        err_console.print(f"[red]Error:[/red] {_redact_secrets(str(exc))}")
+        raise typer.Exit(_exit_code_for_payload(payload)) from exc
     console.print(f"[green]Wrote audio:[/green] {out_path}")
 
 
@@ -384,11 +535,12 @@ def analyze_command(
     try:
         result = analyze_media(input_file)
     except SubGenError as exc:
+        payload = _json_error_for_exception(exc, stage="analyze", code="command_failed")
         if json_output:
-            typer.echo(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+            typer.echo(json.dumps(payload, ensure_ascii=False))
         else:
-            console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1) from exc
+            err_console.print(f"[red]Error:[/red] {_redact_secrets(str(exc))}")
+        raise typer.Exit(_exit_code_for_payload(payload)) from exc
 
     if json_output:
         typer.echo(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
@@ -762,11 +914,12 @@ def transcribe_command(
             ),
         )
     except (SubGenError, WorkerRunnerError) as exc:
+        payload = transcribe_error_payload(exc)
         if json_output:
-            typer.echo(json.dumps(transcribe_error_payload(exc), ensure_ascii=False))
+            typer.echo(json.dumps(_redact_value(payload), ensure_ascii=False))
         else:
-            err_console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1) from exc
+            err_console.print(f"[red]Error:[/red] {_redact_secrets(str(exc))}")
+        raise typer.Exit(_exit_code_for_payload(payload)) from exc
 
     if json_output:
         typer.echo(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
@@ -837,6 +990,43 @@ def auto_command(
     ] = False,
 ) -> None:
     """Plan and run the local subtitle pipeline."""
+    _run_auto_entry(
+        input_file=input_file,
+        provider=provider,
+        model=model,
+        language=language,
+        device=device,
+        compute=compute,
+        batch_size=batch_size,
+        gpu_load=gpu_load,
+        vad=vad,
+        mode=mode,
+        output=output,
+        dry_run=dry_run,
+        yes=yes,
+        json_output=json_output,
+        keep_temp=keep_temp,
+    )
+
+
+def _run_auto_entry(
+    *,
+    input_file: Path,
+    provider: str,
+    model: str,
+    language: str,
+    device: str,
+    compute: str,
+    batch_size: int | None,
+    gpu_load: str,
+    vad: str,
+    mode: str,
+    output: Path | None,
+    dry_run: bool,
+    yes: bool,
+    json_output: bool,
+    keep_temp: bool,
+) -> None:
     try:
         result = auto_media(
             input_file,
@@ -861,13 +1051,29 @@ def auto_command(
             typer.echo(json.dumps(exc.result.as_dict(), ensure_ascii=False, indent=2))
         else:
             _print_auto_result(exc.result)
-            err_console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1) from exc
+            err_console.print(f"[red]Error:[/red] {_redact_secrets(str(exc))}")
+        raise typer.Exit(_auto_exit_code(exc.result)) from exc
 
     if json_output:
         typer.echo(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
         return
     _print_auto_result(result)
+
+
+def _auto_exit_code(result: Any) -> int:
+    statuses = {getattr(step, "status", "") for step in result.steps}
+    names = {getattr(step, "name", "") for step in result.steps}
+    if "missing_model" in statuses:
+        return 4
+    if "missing_dependency" in statuses:
+        return 3
+    if "input" in names:
+        input_step = next((step for step in result.steps if step.name == "input"), None)
+        if input_step is not None and input_step.status != "ok":
+            return 2
+    error = result.error or ""
+    payload = _json_error_for_exception(SubGenError(error), stage="auto", code="command_failed")
+    return _exit_code_for_payload(payload)
 
 
 def _print_auto_result(result: Any) -> None:
@@ -894,9 +1100,23 @@ def _auto_step_color(status: str) -> str:
 @app.command("translate")
 def translate_command(
     input_file: Annotated[Path, typer.Argument(help="Input subtitle file.")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable result metadata."),
+    ] = False,
 ) -> None:
-    """Translate an existing subtitle file."""
-    console.print(f"[yellow]translate is not implemented yet:[/yellow] {input_file}")
+    """Preview placeholder; translation is post-v0."""
+    payload = _error_payload(
+        code="not_implemented",
+        stage="translate",
+        message="Translation is not implemented in fast-sub v0.",
+        action_hint="Generate source subtitles with `fast-sub auto input.mp4`.",
+        details={"input": str(input_file)},
+    )
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False))
+    else:
+        err_console.print("[yellow]translate is not implemented in fast-sub v0.[/yellow]")
     raise typer.Exit(1)
 
 
@@ -934,14 +1154,15 @@ def refine_command(
             max_duration=max_duration,
         )
     except SubGenError as exc:
+        payload = _json_error_for_exception(exc, stage="refine", code="invalid_input")
         if json_output:
-            console.print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+            typer.echo(json.dumps(payload, ensure_ascii=False))
         else:
-            console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1) from exc
+            err_console.print(f"[red]Error:[/red] {_redact_secrets(str(exc))}")
+        raise typer.Exit(_exit_code_for_payload(payload)) from exc
 
     if json_output:
-        console.print(
+        typer.echo(
             json.dumps(
                 {
                     "ok": True,
@@ -1025,8 +1246,17 @@ def providers_test_command(
     """Check whether a provider contract can be selected."""
     registry = default_registry()
     if registry.get(provider_id) is None:
-        console.print(f"[red]Unknown provider:[/red] {provider_id}")
-        raise typer.Exit(1)
+        payload = _error_payload(
+            code="invalid_input",
+            stage="provider",
+            message=f"Unknown provider: {provider_id}",
+            action_hint="Run `fast-sub providers list` to see available providers.",
+        )
+        if json_output:
+            typer.echo(json.dumps(payload, ensure_ascii=False))
+        else:
+            err_console.print(f"[red]Unknown provider:[/red] {_redact_secrets(provider_id)}")
+        raise typer.Exit(2)
 
     provider = registry.inspect(provider_id)
     if json_output:
@@ -1039,95 +1269,95 @@ def providers_test_command(
 
 @app.command("run")
 def run(
-    input_file: Annotated[Path, typer.Argument(help="Input video/audio file or directory.")],
-    mode: Annotated[Mode | None, typer.Option(help="Subtitle mode.")] = None,
-    original_only: Annotated[
-        bool,
-        typer.Option(
-            help="Shortcut for --mode original. Generates source-language subtitles only."
-        ),
-    ] = False,
-    source_lang: Annotated[
-        str | None, typer.Option(help="Source language, for example en.")
-    ] = None,
-    target_lang: Annotated[
-        str | None, typer.Option(help="Target language. Defaults to en.")
-    ] = None,
-    stt_base_url: Annotated[
-        str | None, typer.Option(help="OpenAI-compatible STT base URL.")
-    ] = None,
-    stt_api_key: Annotated[str | None, typer.Option(help="STT API key.")] = None,
-    stt_provider: Annotated[
-        SttProvider | None,
-        typer.Option(help="STT provider backend."),
-    ] = None,
-    stt_model: Annotated[str | None, typer.Option(help="STT model name.")] = None,
-    stt_temperature: Annotated[
-        float | None,
-        typer.Option(help="STT sampling temperature. OpenAI accepts 0 to 1."),
-    ] = None,
-    whisperx_device: Annotated[
-        WhisperXDevice | None,
-        typer.Option(help="WhisperX runtime device."),
-    ] = None,
-    whisperx_compute_type: Annotated[
-        WhisperXComputeType | None,
-        typer.Option(help="WhisperX compute type."),
-    ] = None,
-    whisperx_batch_size: Annotated[
+    input_file: Annotated[Path, typer.Argument(help="Input video/audio file.")],
+    provider: Annotated[
+        str,
+        typer.Option("--provider", help="STT provider id. v0 defaults to local-faster-whisper."),
+    ] = "local-faster-whisper",
+    model: Annotated[
+        str,
+        typer.Option("--model", help="ASR model id."),
+    ] = "whisper-small",
+    language: Annotated[
+        str,
+        typer.Option("--language", help="Language: auto, zh, en, ja, or ko."),
+    ] = "auto",
+    device: Annotated[
+        str,
+        typer.Option("--device", help="Worker device: auto, cuda, or cpu."),
+    ] = "auto",
+    compute: Annotated[
+        str,
+        typer.Option("--compute", help="Worker compute type."),
+    ] = "auto",
+    batch_size: Annotated[
         int | None,
-        typer.Option(help="WhisperX transcription batch size."),
+        typer.Option("--batch-size", help="Worker batch size. Overrides --gpu-load."),
     ] = None,
-    max_audio_mb: Annotated[
-        float | None,
-        typer.Option(help="Maximum prepared audio upload size in MB. OpenAI default is 25."),
-    ] = None,
-    translator: Annotated[
-        str | None,
-        typer.Option(help="translators service name, for example bing or alibaba."),
-    ] = None,
+    gpu_load: Annotated[
+        str,
+        typer.Option("--gpu-load", help="GPU load profile: low, balanced, or max."),
+    ] = "balanced",
+    vad: Annotated[
+        str,
+        typer.Option("--vad", help="VAD mode: auto, off, normal, or aggressive."),
+    ] = "auto",
+    mode: Annotated[
+        str,
+        typer.Option("--mode", help="Transcription mode: fast, balanced, or quality."),
+    ] = "balanced",
     output: Annotated[
         Path | None,
-        typer.Option(
-            help="Output subtitle path. For directory input, this is an output directory."
-        ),
+        typer.Option("--output", "-o", help="Final output .srt path."),
     ] = None,
-    subtitle_format: Annotated[
-        SubtitleFormat | None, typer.Option("--format", help="Subtitle format. v0.1 supports srt.")
-    ] = None,
-    max_line_chars: Annotated[
-        int | None, typer.Option(help="Soft maximum characters per subtitle line.")
-    ] = None,
-    bilingual_order: Annotated[
-        BilingualOrder | None, typer.Option(help="Text order for bilingual subtitles.")
-    ] = None,
-    keep_temp: Annotated[bool, typer.Option(help="Keep temporary files.")] = False,
-    config: Annotated[Path | None, typer.Option(help="TOML config file.")] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Print the auto plan without downloading or transcribing."),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Allow automatic local model installation."),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable result metadata."),
+    ] = False,
+    keep_temp: Annotated[
+        bool,
+        typer.Option("--keep-temp", help="Keep prepared audio and worker JSON files."),
+    ] = False,
 ) -> None:
+    """Compatibility alias for `fast-sub auto` using the v0 local pipeline."""
+    _run_auto_entry(
+        input_file=input_file,
+        provider=provider,
+        model=model,
+        language=language,
+        device=device,
+        compute=compute,
+        batch_size=batch_size,
+        gpu_load=gpu_load,
+        vad=vad,
+        mode=mode,
+        output=output,
+        dry_run=dry_run,
+        yes=yes,
+        json_output=json_output,
+        keep_temp=keep_temp,
+    )
+
+
+def legacy_run(
+    input_file: Path,
+    output: Path | None,
+    options: AppConfig,
+    keep_temp: bool,
+) -> None:
+    """Legacy OpenAI-compatible/WhisperX pipeline kept off the v0 CLI surface."""
     try:
-        options = _resolve_options(
-            config_path=config,
-            mode=mode,
-            original_only=original_only,
-            source_lang=source_lang,
-            target_lang=target_lang,
-            stt_base_url=stt_base_url,
-            stt_api_key=stt_api_key,
-            stt_provider=stt_provider,
-            stt_model=stt_model,
-            stt_temperature=stt_temperature,
-            whisperx_device=whisperx_device,
-            whisperx_compute_type=whisperx_compute_type,
-            whisperx_batch_size=whisperx_batch_size,
-            max_audio_mb=max_audio_mb,
-            translator=translator,
-            subtitle_format=subtitle_format,
-            max_line_chars=max_line_chars,
-            bilingual_order=bilingual_order,
-        )
         _run_input(input_file=input_file, output=output, options=options, keep_temp=keep_temp)
     except SubGenError as exc:
-        console.print(f"[red]Error:[/red] {exc}")
+        err_console.print(f"[red]Error:[/red] {_redact_secrets(str(exc))}")
         raise typer.Exit(1) from exc
 
 

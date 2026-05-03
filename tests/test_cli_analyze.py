@@ -79,7 +79,8 @@ def test_analyze_command_returns_json_error(monkeypatch):
 
     result = runner.invoke(cli.app, ["analyze", "tests/fixtures/sample.wav", "--json"])
 
-    assert result.exit_code == 1
+    assert result.exit_code == 2
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
-    assert "No audio stream" in payload["error"]
+    assert payload["error"]["code"] == "invalid_input"
+    assert "No audio stream" in payload["error"]["message"]

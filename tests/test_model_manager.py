@@ -506,7 +506,7 @@ def test_models_verify_missing_exits_nonzero(
 
         result = runner.invoke(cli.app, ["models", "verify", "tiny", "--json"])
 
-        assert result.exit_code == 1
+        assert result.exit_code == 4
         body = json.loads(result.stdout)
         assert body["status"] == "missing"
     finally:

@@ -1,342 +1,180 @@
-# MVP：OpenAI 兼容视频字幕 CLI
+# Fast Sub v0 MVP
 
 ## 目标
 
-构建第一版 CLI 原型：输入一个本地视频/音频文件，或一个包含视频/音频文件的本地目录，通过 OpenAI 兼容的语音 API 和 `translators` 包生成字幕文件。
+Fast Sub v0 是一个本地优先的 CLI，用本地视频或音频生成原文 `.srt` 字幕。
 
-第一版聚焦一个可靠的命令行流程：
-
-```text
-video.mp4/audio.wav 或媒体目录 -> 准备音频 -> 语音转写 -> 可选翻译 -> 字幕文件
-```
-
-工具命令名为 `fast-sub`。
-
-工具需要支持 Speaches 这类 OpenAI 兼容的 STT 服务，并使用 `translators` 包生成译文和双语字幕。
-
-## 不做的内容
-
-第一版不包含：
-
-- GUI 或 Web UI
-- 视频字幕烧录
-- 递归批量目录处理
-- 说话人分离
-- 手动字幕编辑
-- 实时转写
-- 队列管理
-- 媒体服务器集成
-- 基于 VAD 的高级音频分段
-
-## 核心模式
-
-### 原文字幕
-
-生成源语言字幕。
-
-预期流程：
-
-```text
-视频 -> 音频 -> /audio/transcriptions -> original.srt
-```
-
-当服务提供方支持时，该模式默认使用 `response_format=srt`。
-
-### 译文字幕
-
-只生成目标语言字幕。
-
-预期流程：
-
-```text
-视频 -> 音频 -> verbose transcription segments -> translators 包 -> translated.srt
-```
-
-该模式要求 STT 服务返回带时间戳的 segments。
-
-如果省略 `--target-lang`，默认目标语言为英文。
-
-### 双语字幕
-
-生成同时包含原文和译文的字幕。
-
-预期流程：
-
-```text
-视频 -> 音频 -> verbose transcription segments -> translators 包 -> bilingual.srt
-```
-
-示例输出：
-
-```srt
-1
-00:00:01,200 --> 00:00:04,500
-Hello everyone.
-大家好。
-```
-
-## CLI 设计
+推荐命令：
 
 ```bash
-fast-sub video.mp4 \
-  --mode bilingual \
-  --source-lang en \
-  --target-lang zh \
-  --stt-base-url http://localhost:8000/v1 \
-  --stt-api-key dummy \
-  --stt-model Systran/faster-whisper-small \
-  --translator bing \
-  --output video.en-zh.bilingual.srt
+fast-sub auto input.mp4
 ```
 
-## 必填参数
+兼容入口：
 
-- `video`：输入视频或音频路径
-- `--mode`：`original`、`translated` 或 `bilingual`
-- `--stt-base-url`：OpenAI 兼容的 STT API base URL
-- `--stt-api-key`：STT API key；本地服务可使用 `dummy`
-- `--stt-model`：STT 模型名称
-- `--source-lang`：可选源语言提示，用于语音转写；默认值为 `auto`
-
-默认值：
-
-- `--mode`：`original`
-- `--source-lang`：`auto`
-- `--stt-base-url`：`OPENAI_BASE_URL`，否则为 `https://api.openai.com/v1`
-- `--stt-api-key`：`OPENAI_API_KEY`
-- `--stt-model`：仅官方 OpenAI 默认 `whisper-1`；其他服务需要显式提供
-- `--stt-temperature`：`0`
-- `--max-audio-mb`：仅官方 OpenAI 默认 `25`；其他服务默认不做客户端大小限制，除非显式设置
-
-如果省略 `--output`，CLI 会自动生成输出路径。
-
-## 翻译参数
-
-`translated` 和 `bilingual` 模式使用：
-
-- `--translator`：`translators` 服务名称；默认值为 `bing`
-- `--target-lang`：目标字幕语言；默认值为 `en`
-
-## 可选参数
-
-- `--format`：字幕格式，第一版为 `srt`，后续支持 `ass`
-- `--stt-temperature`：STT 采样温度，OpenAI 范围为 `0` 到 `1`
-- `--max-audio-mb`：准备后音频的上传大小限制；官方 OpenAI 默认 `25`
-- `--max-line-chars`：单行字幕的软性字符限制
-- `--bilingual-order`：`original-first` 或 `translated-first`
-- `--original-only`：快捷参数，等价于本次运行强制使用 `--mode original`
-- `--keep-temp`：保留临时音频和中间 JSON 文件
-- `--config`：从 TOML 配置文件加载选项
-
-当输入路径是目录时，CLI 会处理该目录第一层中支持的视频/音频文件。v0.1 不递归处理子目录。如果目录输入时提供 `--output`，它会被解释为输出目录。目录运行会把 `.fast-sub-progress.json` 写到输出目录；如果省略 `--output`，则写到输入目录，因此命令中断后再次运行可以跳过已完成文件继续处理。
-
-## 配置文件
-
-v0.1 支持 TOML 配置文件。命令行参数会覆盖配置文件中的值。
-
-```toml
-[stt]
-base_url = "http://localhost:8000/v1"
-api_key = "dummy"
-model = "Systran/faster-whisper-small"
-
-[translator]
-service = "bing"
-
-[subtitle]
-mode = "bilingual"
-source_lang = "auto"
-target_lang = "zh"
-format = "srt"
-bilingual_order = "original-first"
+```bash
+fast-sub input.mp4
+fast-sub run input.mp4
 ```
 
-## 内部流程
+这三个入口都走同一条 v0 本地链路，不会静默上传音频，不会静默调用 OpenAI-compatible API，也不会静默进入 WhisperX 旧流程。
 
-1. 校验输入路径和输出路径。
-2. 检查 `ffmpeg` 和 `ffprobe` 是否可用。
-3. 从输入视频或音频文件中准备音频。
-4. 使用 STT endpoint 转写音频。
-5. 如果音频超过服务上传限制，停止执行并给出清晰的 provider limit 错误信息。
-6. 在需要时规范化带时间戳的 segments。
-7. 在需要时翻译 segments。
-8. 校验翻译输出。
-9. 生成字幕文件。
-10. 当翻译部分失败时，写入部分输出和错误报告。
-11. 除非设置了 `--keep-temp`，否则清理临时文件。
-
-v0.1 不要求支持长媒体切片。第一版假设准备后的音频可以放入服务提供方的上传限制内。
-
-## 推荐项目结构
-
-使用 Python 和 `uv`。
+## v0 链路
 
 ```text
-pyproject.toml
-uv.lock
-src/fast_sub/
-  cli.py
-  config.py
-  media.py
-  stt.py
-  translate.py
-  subtitle.py
-  models.py
+ffmpeg/ffprobe
+-> probe
+-> extract/analyze
+-> provider/model resolution
+-> local-faster-whisper worker
+-> transcribe
+-> refine
+-> final .srt
 ```
 
-建议运行时依赖：
+底层命令 `fast-sub transcribe input.mp4` 只做原文转写，也供 `bench` 使用。
 
-- `typer` 或 `click`
-- `httpx`
-- `pydantic`
-- `pysubs2`
-- `rich`
-- `platformdirs`
+## 安装
 
-建议开发依赖：
+基础 CLI：
 
-- `pytest`
-- `ruff`
-- `pyright`
+```bash
+pip install fast-sub
+```
 
-## Provider 兼容规则
+本地 ASR 依赖：
 
-`original` 模式：
+```bash
+pip install "fast-sub[local-asr]"
+```
 
-- 当服务支持时，优先使用 `response_format=srt`。
-- 如果不可用，则降级为 `verbose_json` 并在本地生成 SRT。
+源码开发：
 
-`translated` 和 `bilingual` 模式：
+```bash
+uv sync --extra local-asr
+```
 
-- 要求返回带时间戳的 `segments`。
-- 优先使用 `response_format=verbose_json`。
-- 如果服务只返回不带时间戳的纯文本，需要给出清晰错误信息并失败退出。
+v0 打包阶段仍要求 `ffmpeg` 和 `ffprobe` 可在 PATH 中找到。
 
-OpenAI 兼容性检查：
+## 首次运行
 
-- 仅使用官方 OpenAI 时，准备后的音频会按 `25 MB` 检查；如果显式传入 `--max-audio-mb`，则按该值检查。
-- 语言提示需要看起来像 ISO 语言代码，例如 `en` 或 `zh`；`auto` 会省略 OpenAI 可选的 `language` 参数，让 STT 服务自行检测语言。
-- v0.1 会拒绝 `gpt-4o-transcribe`、`gpt-4o-mini-transcribe` 和 `gpt-4o-transcribe-diarize`，因为 OpenAI 当前文档说明它们只支持 `response_format=json`，而本工具需要 `srt` 或带时间戳的 `verbose_json`。
+检查本机状态：
 
-## 翻译规则
+```bash
+fast-sub doctor
+fast-sub models list
+fast-sub providers list
+```
 
-翻译应通过 `translators` 包按 segment 逐条进行，以保持 STT 时间轴对齐。
+显式安装模型：
 
-以下情况 CLI 应重试：
+```bash
+fast-sub models install whisper-small
+```
 
-- 任意翻译结果为空。
+或允许 `auto` 自动安装本地模型：
 
-如果某个翻译批次重试后仍然失败，CLI 应写入部分输出和机器可读的错误报告，而不是丢弃整个运行结果。
+```bash
+fast-sub auto input.mp4 --yes
+```
 
-## 临时文件
+`--yes` 只授权本地模型下载/安装，不会授权 API 上传。
 
-使用可预测的任务目录：
+## JSON 和错误
+
+支持 `--json` 的命令会保持 stdout 可被 `json.loads(stdout)` 解析。进度、warning 和人类诊断输出到 stderr。
+
+v0 常用 exit code：
 
 ```text
-.fast-sub/jobs/<video-hash>/
-  audio.wav
-  transcript.json
-  translation.zh.json
-  output.srt
-  errors.json
+0 成功
+1 命令失败
+2 输入或 CLI 用法无效
+3 缺本地依赖
+4 缺模型
+5 下载、校验或缓存失败
 ```
 
-第一版可以实现 `--keep-temp`，并为未来的 `--resume` 预留目录结构。
-
-## 输出命名
-
-推荐默认命名：
+缺本地 ASR 依赖时提示：
 
 ```text
-video.en.srt
-video.zh.srt
-video.en-zh.bilingual.srt
+uv sync --extra local-asr
+pip install fast-sub[local-asr]
 ```
 
-v0.1 只要求输出 `.srt`。`.ass` 延后到 v0.2。
+缺模型时提示：
 
-双语 SRT 默认先显示原文，再显示译文。
+```text
+fast-sub models install <id>
+fast-sub auto --yes
+```
 
-## MVP 验收标准
+API key 和 token 不得出现在 stdout、stderr、JSON payload 或报告中。
 
-第一版在以下命令可用时视为成功：
+## v0 命令
+
+v0 稳定命令：
+
+- `fast-sub auto input.mp4`
+- `fast-sub input.mp4`
+- `fast-sub run input.mp4`
+- `fast-sub transcribe input.mp4`
+- `fast-sub probe input.mp4`
+- `fast-sub extract input.mp4`
+- `fast-sub analyze input.mp4`
+- `fast-sub refine input.srt`
+- `fast-sub burn input.mp4 input.srt`
+- `fast-sub models list/install/verify`
+- `fast-sub providers list/test`
+- `fast-sub bench input.mp4`
+
+占位命令：
+
+- `fast-sub translate input.srt` 会非零退出，并说明 v0 尚未实现翻译。
+
+## 隐私边界
+
+v0 默认 provider 是 `local-faster-whisper`，音频留在本机。
+
+API provider 仍可作为后续 provider 工作的一部分被枚举，但不属于默认 v0 字幕链路。任何未来 API 上传行为都必须显式 opt-in。
+
+## Benchmark
+
+`fast-sub bench` 测量 `transcribe_media_v1`：
+
+```text
+input media -> probe -> prepare_audio -> local-faster-whisper worker -> source SRT
+```
+
+benchmark 媒体和报告放在已忽略的 `local_tests/` 下。`scripts/bench_assets.py` 是开发/手动素材准备工具，不是正式产品 CLI。
+
+## 已知限制
+
+- v0 只生成原文字幕。
+- 翻译 provider 放到 v0 后。
+- provider 统一和旧 API/WhisperX 清理放到 v0 后。
+- Electron UI 和 Web UI 放到 v0 后。
+- whisper.cpp、SenseVoice、Paraformer、Parakeet、ONNX、TensorRT 等新 STT 后端放到 v0 后。
+- v0 不随仓库提交真实模型或 benchmark 媒体。
+- 真实模型 smoke test 需要手动跑，因为它可能涉及网络、大模型下载和本机硬件差异。
+
+## Release Smoke
+
+默认自动化测试保持离线，不下载真实模型或真实媒体。
+
+手动真实模型 smoke：
 
 ```bash
-fast-sub video.mp4 \
-  --mode original \
-  --source-lang en \
-  --stt-base-url http://localhost:8000/v1 \
-  --stt-api-key dummy \
-  --stt-model Systran/faster-whisper-small
+uv run fast-sub --version
+uv run fast-sub doctor
+uv run fast-sub models list
+uv run fast-sub providers list
+uv run fast-sub auto tests/fixtures/sample.wav --dry-run --json
+uv run fast-sub transcribe <real-local-sample> --model whisper-small --device auto
+uv run fast-sub auto <real-local-sample> --yes
+uv run fast-sub <real-local-sample> --yes
+uv run fast-sub run <real-local-sample> --yes
+uv run fast-sub bench <real-local-sample> --repeat 1 --profile auto --json
 ```
 
-也支持直接输入音频文件：
-
-```bash
-fast-sub audio.wav \
-  --mode original \
-  --source-lang en \
-  --stt-base-url http://localhost:8000/v1 \
-  --stt-api-key dummy \
-  --stt-model Systran/faster-whisper-small
-```
-
-支持直接输入目录，处理目录第一层中的媒体文件：
-
-```bash
-fast-sub ./media \
-  --mode original \
-  --source-lang auto \
-  --stt-base-url http://localhost:8000/v1 \
-  --stt-api-key dummy \
-  --stt-model Systran/faster-whisper-small \
-  --output ./subtitles
-```
-
-Windows PowerShell 中可以直接使用 UNC 共享路径，建议用引号包起来：
-
-```powershell
-uv run fast-sub "\\NAS\data\others\资料\others\sample-user\1" `
-  --original-only `
-  --source-lang auto `
-  --stt-base-url http://localhost:8000/v1 `
-  --stt-api-key dummy `
-  --stt-model Systran/faster-whisper-small `
-  --output "\\NAS\data\others\资料\others\sample-user\1\subtitles"
-```
-
-```bash
-fast-sub video.mp4 \
-  --mode bilingual \
-  --source-lang en \
-  --target-lang zh \
-  --stt-base-url http://localhost:8000/v1 \
-  --stt-api-key dummy \
-  --stt-model Systran/faster-whisper-small \
-  --translator bing \
-  --output video.en-zh.bilingual.srt
-```
-
-## v0.1 决策
-
-1. 命令名：`fast-sub`。
-2. `original` 模式默认使用 `response_format=srt`。
-3. `translated` 模式在省略 `--target-lang` 时默认翻译为英文。
-4. 翻译使用 `translators` 包，不再使用 OpenAI 兼容的 Chat endpoint。
-5. v0.1 中 `--source-lang` 可选，默认自动检测。
-6. v0.1 只需要 `.srt`；`.ass` 延后到 v0.2。
-7. v0.1 假设音频满足 provider 上传限制；不满足时给出清晰的限制错误。
-8. 默认提取音频格式为 `wav`。
-9. 临时任务文件存放在 `.fast-sub/`。
-10. v0.1 包含 `--config config.toml`。
-11. 翻译按带时间戳的 segment 逐条执行。
-12. 翻译批次失败时写入部分输出和错误报告。
-13. 双语 SRT 默认原文在前。
-14. 省略 `--output` 时自动生成输出文件名。
-15. v0.1 不计划支持已有 `.srt` 输入翻译。
-16. 目录输入只处理顶层目录中的支持文件。
-17. 目录输入会写入进度文件，重新运行时从未完成文件继续。
-
-## 待确认问题
-
-v0.1 暂无未确认问题。
+生成的模型缓存、媒体、benchmark 输出和本地报告都不应提交。

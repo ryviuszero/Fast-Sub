@@ -103,7 +103,7 @@ def test_auto_command_outputs_json_error(monkeypatch) -> None:
 
     result = runner.invoke(cli.app, ["auto", "input.mp4", "--json"])
 
-    assert result.exit_code == 1
+    assert result.exit_code == 4
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
     assert payload["steps"][0]["status"] == "missing_model"

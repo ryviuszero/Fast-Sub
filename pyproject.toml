@@ -1,7 +1,7 @@
 [project]
 name = "fast-sub"
 version = "0.1.0"
-description = "OpenAI-compatible video subtitle CLI"
+description = "Local-first CLI for generating video subtitles"
 readme = "mvp.md"
 requires-python = ">=3.11"
 dependencies = [

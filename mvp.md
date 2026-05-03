@@ -1,342 +1,180 @@
-# MVP: OpenAI-Compatible Video Subtitle CLI
+# Fast Sub v0 MVP
 
 ## Goal
 
-Build a first CLI prototype that takes a local video/audio file or a local directory of video/audio files and generates subtitle files by using an OpenAI-compatible speech API and the `translators` Python package.
+Fast Sub v0 is a local-first CLI for generating source-language `.srt` subtitles from a local video or audio file.
 
-The first version should focus on a reliable command-line workflow:
-
-```text
-video.mp4/audio.wav or media directory -> audio preparation -> transcription -> optional translation -> subtitle file(s)
-```
-
-The tool command name is `fast-sub`.
-
-The tool should work with OpenAI-compatible STT services such as Speaches, and should use `translators` services for translated and bilingual subtitles.
-
-## Non-Goals
-
-The first version will not include:
-
-- GUI or web UI
-- Video subtitle burn-in
-- Recursive batch directory processing
-- Speaker diarization
-- Manual subtitle editing
-- Realtime transcription
-- Queue management
-- Media server integration
-- Advanced VAD-based segmentation
-
-## Core Modes
-
-### Original Subtitle
-
-Generate subtitles in the source language.
-
-Expected flow:
-
-```text
-video -> audio -> /audio/transcriptions -> original.srt
-```
-
-This mode uses `response_format=srt` by default when supported by the provider.
-
-### Translated Subtitle
-
-Generate subtitles only in the target language.
-
-Expected flow:
-
-```text
-video -> audio -> verbose transcription segments -> translators package -> translated.srt
-```
-
-This mode requires timestamped segments from the STT provider.
-
-The default target language is English when `--target-lang` is omitted.
-
-### Bilingual Subtitle
-
-Generate subtitles with both original and translated text.
-
-Expected flow:
-
-```text
-video -> audio -> verbose transcription segments -> translators package -> bilingual.srt
-```
-
-Example output:
-
-```srt
-1
-00:00:01,200 --> 00:00:04,500
-Hello everyone.
-大家好。
-```
-
-## Proposed CLI
+The recommended command is:
 
 ```bash
-fast-sub video.mp4 \
-  --mode bilingual \
-  --source-lang en \
-  --target-lang zh \
-  --stt-base-url http://localhost:8000/v1 \
-  --stt-api-key dummy \
-  --stt-model Systran/faster-whisper-small \
-  --translator bing \
-  --output video.en-zh.bilingual.srt
+fast-sub auto input.mp4
 ```
 
-## Required Parameters
+Compatibility aliases:
 
-- `video`: input video or audio path
-- `--mode`: `original`, `translated`, or `bilingual`
-- `--stt-base-url`: OpenAI-compatible STT API base URL
-- `--stt-api-key`: STT API key; local providers may use `dummy`
-- `--stt-model`: STT model name
-- `--source-lang`: optional source language hint for transcription; defaults to `auto`
-
-Defaults:
-
-- `--mode`: `original`
-- `--source-lang`: `auto`
-- `--stt-base-url`: `OPENAI_BASE_URL`, or `https://api.openai.com/v1`
-- `--stt-api-key`: `OPENAI_API_KEY`
-- `--stt-model`: `whisper-1` only when using official OpenAI; otherwise explicit value required
-- `--stt-temperature`: `0`
-- `--max-audio-mb`: `25` only when using official OpenAI; otherwise no client-side limit unless explicitly set
-
-If `--output` is omitted, the CLI generates an output path automatically.
-
-## Translation Parameters
-
-Used for `translated` and `bilingual` modes:
-
-- `--translator`: `translators` service name; defaults to `bing`
-- `--target-lang`: target subtitle language; defaults to `en`
-
-## Optional Parameters
-
-- `--format`: subtitle format, initially `srt`; later `ass`
-- `--stt-temperature`: STT sampling temperature, OpenAI range `0` to `1`
-- `--max-audio-mb`: prepared audio upload size limit; official OpenAI default is `25`
-- `--max-line-chars`: soft limit for subtitle line length
-- `--bilingual-order`: `original-first` or `translated-first`
-- `--original-only`: shortcut that forces `--mode original` for this run
-- `--keep-temp`: keep temporary audio and intermediate JSON files
-- `--config`: load options from a TOML config file
-
-When the input path is a directory, the CLI processes supported video/audio files in that directory only. It does not recurse into nested directories in v0.1. If `--output` is provided for a directory input, it is treated as an output directory. Directory runs write `.fast-sub-progress.json` to the output directory, or to the input directory when `--output` is omitted, so interrupted runs can resume by skipping completed files.
-
-## Config File
-
-The CLI supports a TOML config file in v0.1. CLI arguments override config file values.
-
-```toml
-[stt]
-base_url = "http://localhost:8000/v1"
-api_key = "dummy"
-model = "Systran/faster-whisper-small"
-
-[translator]
-service = "bing"
-
-[subtitle]
-mode = "bilingual"
-source_lang = "auto"
-target_lang = "zh"
-format = "srt"
-bilingual_order = "original-first"
+```bash
+fast-sub input.mp4
+fast-sub run input.mp4
 ```
 
-## Internal Pipeline
+All three routes use the same v0 local pipeline. They do not silently upload audio, call OpenAI-compatible APIs, or use WhisperX.
 
-1. Validate input path and output path.
-2. Check that `ffmpeg` and `ffprobe` are available.
-3. Prepare audio from the input video or audio file.
-4. Transcribe audio with the STT endpoint.
-5. Stop with a clear provider limit message if the audio exceeds the upload limit.
-6. Normalize timestamped segments when needed.
-7. Translate segments when required.
-8. Validate translation output.
-9. Generate subtitle file.
-10. Write partial output and an error report when translation partially fails.
-11. Clean up temporary files unless `--keep-temp` is set.
-
-Long media chunking is not required in v0.1. The first version assumes the prepared audio fits the provider upload limit.
-
-## Recommended Project Shape
-
-Use Python with `uv`.
+## v0 Pipeline
 
 ```text
-pyproject.toml
-uv.lock
-src/fast_sub/
-  cli.py
-  config.py
-  media.py
-  stt.py
-  translate.py
-  subtitle.py
-  models.py
+ffmpeg/ffprobe
+-> probe
+-> extract/analyze
+-> provider/model resolution
+-> local-faster-whisper worker
+-> transcribe
+-> refine
+-> final .srt
 ```
 
-Suggested runtime dependencies:
+The lower-level `fast-sub transcribe input.mp4` command runs source transcription only and is used by `bench`.
 
-- `typer` or `click`
-- `httpx`
-- `pydantic`
-- `pysubs2`
-- `rich`
-- `platformdirs`
+## Install
 
-Suggested development dependencies:
+Base CLI:
 
-- `pytest`
-- `ruff`
-- `pyright`
+```bash
+pip install fast-sub
+```
 
-## Provider Compatibility Rules
+Local ASR support:
 
-`original` mode:
+```bash
+pip install "fast-sub[local-asr]"
+```
 
-- Prefer `response_format=srt` when supported.
-- If unavailable, fall back to `verbose_json` and local SRT generation.
+For source checkouts:
 
-`translated` and `bilingual` modes:
+```bash
+uv sync --extra local-asr
+```
 
-- Require timestamped `segments`.
-- Prefer `response_format=verbose_json`.
-- Fail with a clear message if the provider returns plain text without timestamps.
+`ffmpeg` and `ffprobe` must be available on PATH in v0 packaging.
 
-OpenAI compatibility checks:
+## First Run
 
-- Prepared audio is checked against `25 MB` only when using official OpenAI, or against `--max-audio-mb` when explicitly set.
-- Language hints should look like ISO language codes, for example `en` or `zh`; `auto` omits OpenAI's optional `language` parameter and lets the STT provider detect the language.
-- `gpt-4o-transcribe`, `gpt-4o-mini-transcribe`, and `gpt-4o-transcribe-diarize` are rejected in v0.1 because OpenAI currently documents them as supporting only `response_format=json`, while this tool needs `srt` or timestamped `verbose_json`.
+Inspect local readiness:
 
-## Translation Rules
+```bash
+fast-sub doctor
+fast-sub models list
+fast-sub providers list
+```
 
-Translation should be done per segment through the `translators` package so the STT timestamp alignment is preserved.
+Install a model explicitly:
 
-The CLI should retry if:
+```bash
+fast-sub models install whisper-small
+```
 
-- Any translation is empty.
+Or allow the local model install during auto planning:
 
-If a translation batch still fails after retries, the CLI should write partial output and a machine-readable error report instead of discarding the whole run.
+```bash
+fast-sub auto input.mp4 --yes
+```
 
-## Temporary Files
+`--yes` only authorizes local model download/install. It does not enable API upload.
 
-Use a predictable job directory:
+## JSON And Errors
+
+Commands with `--json` keep stdout parseable with `json.loads(stdout)`. Progress, warnings, and human diagnostics go to stderr.
+
+Common v0 exit codes:
 
 ```text
-.fast-sub/jobs/<video-hash>/
-  audio.wav
-  transcript.json
-  translation.zh.json
-  output.srt
-  errors.json
+0 success
+1 command failed
+2 invalid input or CLI usage
+3 missing local dependency
+4 missing model
+5 download, checksum, or cache failure
 ```
 
-The first version can implement `--keep-temp` and reserve the structure for future `--resume`.
-
-## Output Naming
-
-Recommended default naming:
+Missing local ASR dependencies point to:
 
 ```text
-video.en.srt
-video.zh.srt
-video.en-zh.bilingual.srt
+uv sync --extra local-asr
+pip install fast-sub[local-asr]
 ```
 
-Only `.srt` output is required in v0.1. `.ass` is delayed to v0.2.
+Missing models point to:
 
-Bilingual SRT defaults to original text first, then translated text.
+```text
+fast-sub models install <id>
+fast-sub auto --yes
+```
 
-## MVP Acceptance Criteria
+API keys and tokens must not be printed to stdout, stderr, JSON payloads, or reports.
 
-The first version is considered successful when these commands work:
+## v0 Commands
+
+Stable v0:
+
+- `fast-sub auto input.mp4`
+- `fast-sub input.mp4`
+- `fast-sub run input.mp4`
+- `fast-sub transcribe input.mp4`
+- `fast-sub probe input.mp4`
+- `fast-sub extract input.mp4`
+- `fast-sub analyze input.mp4`
+- `fast-sub refine input.srt`
+- `fast-sub burn input.mp4 input.srt`
+- `fast-sub models list/install/verify`
+- `fast-sub providers list/test`
+- `fast-sub bench input.mp4`
+
+Placeholder:
+
+- `fast-sub translate input.srt` exits non-zero and reports that translation is not implemented in v0.
+
+## Privacy Boundary
+
+The v0 default provider is `local-faster-whisper`. Audio remains local.
+
+API providers remain listed for future provider work, but they are not part of the default v0 subtitle workflow. Any future API upload behavior must be explicit opt-in.
+
+## Benchmark
+
+`fast-sub bench` measures `transcribe_media_v1`:
+
+```text
+input media -> probe -> prepare_audio -> local-faster-whisper worker -> source SRT
+```
+
+Benchmark media and reports belong under ignored `local_tests/` paths. The helper `scripts/bench_assets.py` is a developer/manual asset preparation tool, not a public product CLI.
+
+## Known Limits
+
+- v0 generates source-language subtitles only.
+- Translation providers are post-v0.
+- Provider unification and legacy API/WhisperX cleanup are post-v0.
+- Electron UI and Web UI are post-v0.
+- New STT backends such as whisper.cpp, SenseVoice, Paraformer, Parakeet, ONNX, and TensorRT are post-v0.
+- v0 does not bundle real models or benchmark media.
+- Real-model smoke tests are manual because they can require network, large downloads, and local hardware.
+
+## Release Smoke
+
+Default automated tests stay offline and do not download real models or media.
+
+Manual real-model smoke:
 
 ```bash
-fast-sub video.mp4 \
-  --mode original \
-  --source-lang en \
-  --stt-base-url http://localhost:8000/v1 \
-  --stt-api-key dummy \
-  --stt-model Systran/faster-whisper-small
+uv run fast-sub --version
+uv run fast-sub doctor
+uv run fast-sub models list
+uv run fast-sub providers list
+uv run fast-sub auto tests/fixtures/sample.wav --dry-run --json
+uv run fast-sub transcribe <real-local-sample> --model whisper-small --device auto
+uv run fast-sub auto <real-local-sample> --yes
+uv run fast-sub <real-local-sample> --yes
+uv run fast-sub run <real-local-sample> --yes
+uv run fast-sub bench <real-local-sample> --repeat 1 --profile auto --json
 ```
 
-Audio input is also supported:
-
-```bash
-fast-sub audio.wav \
-  --mode original \
-  --source-lang en \
-  --stt-base-url http://localhost:8000/v1 \
-  --stt-api-key dummy \
-  --stt-model Systran/faster-whisper-small
-```
-
-Directory input is supported for the files directly inside the directory:
-
-```bash
-fast-sub ./media \
-  --mode original \
-  --source-lang auto \
-  --stt-base-url http://localhost:8000/v1 \
-  --stt-api-key dummy \
-  --stt-model Systran/faster-whisper-small \
-  --output ./subtitles
-```
-
-Windows PowerShell can use UNC share paths directly. Quoting the path is recommended:
-
-```powershell
-uv run fast-sub "\\NAS\data\others\资料\others\sample-user\1" `
-  --original-only `
-  --source-lang auto `
-  --stt-base-url http://localhost:8000/v1 `
-  --stt-api-key dummy `
-  --stt-model Systran/faster-whisper-small `
-  --output "\\NAS\data\others\资料\others\sample-user\1\subtitles"
-```
-
-```bash
-fast-sub video.mp4 \
-  --mode bilingual \
-  --source-lang en \
-  --target-lang zh \
-  --stt-base-url http://localhost:8000/v1 \
-  --stt-api-key dummy \
-  --stt-model Systran/faster-whisper-small \
-  --translator bing \
-  --output video.en-zh.bilingual.srt
-```
-
-## v0.1 Decisions
-
-1. Command name: `fast-sub`.
-2. `original` mode uses `response_format=srt` by default.
-3. `translated` mode defaults to English when `--target-lang` is omitted.
-4. Translation uses the `translators` package instead of an OpenAI-compatible chat endpoint.
-5. `--source-lang` is optional in v0.1 and defaults to automatic detection.
-6. v0.1 only needs `.srt`; `.ass` is delayed to v0.2.
-7. v0.1 assumes audio fits the provider upload limit and reports a clear limit error when it does not.
-8. Default extracted audio format is `wav`.
-9. Temporary job files live in `.fast-sub/`.
-10. v0.1 includes `--config config.toml`.
-11. Translation is performed per timestamped segment.
-12. Failed translation batches write partial output plus an error report.
-13. Bilingual SRT defaults to original text first.
-14. Output file names are generated automatically when `--output` is omitted.
-15. Existing `.srt` input translation is not planned for v0.1.
-16. Directory input processes supported files in the top-level directory only.
-17. Directory input writes a progress file and resumes from completed items on rerun.
-
-## Questions To Confirm
-
-No open questions for v0.1.
+Generated model caches, media, benchmark outputs, and local reports should not be committed.
