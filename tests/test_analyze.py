@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from fast_sub.analyze import (
+from fast_sub.contracts.errors import SubGenError
+from fast_sub.media.service import (
     CLIPPING_RISK_WARNING,
     FRAGMENTED_SPEECH_WARNING,
     HIGH_SILENCE_RATIO_WARNING,
@@ -16,7 +17,6 @@ from fast_sub.analyze import (
     recommend_mode,
     recommend_vad,
 )
-from fast_sub.errors import SubGenError
 
 
 def test_parse_ffmpeg_analysis_extracts_volume_and_silence_segments() -> None:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import fast_sub.cli as cli
+import fast_sub.cli.runtime as cli
 
 runner = CliRunner()
 TEST_WORKDIR_ROOT = Path(".test-work") / "cli-bench-translate"
@@ -248,14 +248,14 @@ def test_bench_translate_reads_translator_config(monkeypatch) -> None:
     config_file = work_dir / "fast-sub.toml"
     model_dir = work_dir / "model-dir"
     config_file.write_text(
-        '[translator]\n'
+        "[translator]\n"
         'provider = "api-openai-chat"\n'
         'model = "configured-model"\n'
         'base_url = "http://localhost:1234/v1"\n'
         f'model_path = "{model_dir.as_posix()}"\n'
-        'batch_size = 3\n'
-        'timeout = 9\n'
-        'sleep_seconds = 0.25\n',
+        "batch_size = 3\n"
+        "timeout = 9\n"
+        "sleep_seconds = 0.25\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-secret123456")

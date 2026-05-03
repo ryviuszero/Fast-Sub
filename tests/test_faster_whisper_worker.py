@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from fast_sub.worker_models import SttWorkerRequest
+from fast_sub.contracts.worker import SttWorkerRequest
 from fast_sub_workers import faster_whisper as worker
 
 TEST_WORKDIR_ROOT = Path(".test-work") / "faster-whisper-worker"

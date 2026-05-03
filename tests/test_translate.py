@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from fast_sub.models import Segment
-from fast_sub.translate import (
+from fast_sub.translation.service import (
     TranslationProviderError,
     detect_subtitle_language,
     flores_code,
@@ -24,7 +24,7 @@ def test_translate_segments_uses_translators_package(monkeypatch) -> None:
         calls.append((text, translator, from_language, to_language))
         return f"{text}-zh"
 
-    monkeypatch.setattr("fast_sub.translate._translate_text", fake_translate_text)
+    monkeypatch.setattr("fast_sub.translation.service._translate_text", fake_translate_text)
 
     result = translate_segments(
         segments=[Segment(id=1, start=0, end=1, text="hello")],
@@ -42,7 +42,7 @@ def test_translate_segments_records_failed_segment(monkeypatch) -> None:
     def fake_translate_text(*, text, translator, from_language, to_language):
         raise RuntimeError("service down")
 
-    monkeypatch.setattr("fast_sub.translate._translate_text", fake_translate_text)
+    monkeypatch.setattr("fast_sub.translation.service._translate_text", fake_translate_text)
 
     result = translate_segments(
         segments=[Segment(id=1, start=0, end=1, text="hello")],
@@ -87,7 +87,9 @@ def test_chat_provider_splits_batch_then_falls_back_to_single(monkeypatch) -> No
             raise ValueError("bad json")
         return {batch[0].id: f"{batch[0].text}-ok"}
 
-    monkeypatch.setattr("fast_sub.translate._request_openai_chat_translation", fake_request)
+    monkeypatch.setattr(
+        "fast_sub.translation.service._request_openai_chat_translation", fake_request
+    )
 
     result = translate_segments(
         segments=[
@@ -125,7 +127,7 @@ def test_nllb_language_mapping_and_auto_rejection() -> None:
 
 def test_resolve_nllb_missing_model_points_to_install(monkeypatch) -> None:
     monkeypatch.setattr(
-        "fast_sub.translate.verify_model",
+        "fast_sub.translation.service.verify_model",
         lambda model: type(
             "Status",
             (),

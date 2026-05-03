@@ -10,8 +10,8 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from fast_sub.provider_models import ProviderWord, SttProviderSegment
-from fast_sub.worker_models import SttWorkerRequest, SttWorkerResponse, WorkerErrorResponse
+from fast_sub.contracts.provider import ProviderWord, SttProviderSegment
+from fast_sub.contracts.worker import SttWorkerRequest, SttWorkerResponse, WorkerErrorResponse
 
 PROVIDER_ID = "local-faster-whisper"
 SUPPORTED_DEVICES = {"auto", "cuda", "cpu"}

@@ -6,8 +6,8 @@ from pathlib import Path
 import pysubs2
 from typer.testing import CliRunner
 
-from fast_sub.cli import app
-from fast_sub.subtitle import RefineOptions, refine_srt_text
+from fast_sub.app import app
+from fast_sub.subtitles.srt import RefineOptions, refine_srt_text
 
 SRT_WITH_EMPTY_AND_OVERLAP = """1
 00:00:00,000 --> 00:00:00,500

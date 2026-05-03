@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from fast_sub.provider_models import (
+from fast_sub.contracts.provider import (
     ProviderInfo,
     ProviderLocation,
     ProviderMetadata,

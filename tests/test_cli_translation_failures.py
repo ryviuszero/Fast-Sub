@@ -1,4 +1,4 @@
-from fast_sub.cli import _all_translation_batches_failed
+from fast_sub.cli.runtime import _all_translation_batches_failed
 from fast_sub.models import Segment, TranslationError, TranslationResult
 
 

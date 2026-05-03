@@ -10,14 +10,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from fast_sub.bench_translate import (
+from fast_sub.benchmark.translation import (
     BenchTranslateError,
     BenchTranslateOptions,
     _metric_info,
     run_bench_translate,
     score_translation_quality,
 )
-from fast_sub.translate import TranslateSrtResult, TranslationProviderError
+from fast_sub.translation.service import TranslateSrtResult, TranslationProviderError
 
 
 @pytest.fixture
@@ -466,7 +466,5 @@ def _write_srt(path: Path, texts: list[str]) -> Path:
 def _srt_text(texts: list[str]) -> str:
     blocks = []
     for index, text in enumerate(texts, start=1):
-        blocks.append(
-            f"{index}\n00:00:{index - 1:02d},000 --> 00:00:{index:02d},000\n{text}\n"
-        )
+        blocks.append(f"{index}\n00:00:{index - 1:02d},000 --> 00:00:{index:02d},000\n{text}\n")
     return "\n".join(blocks)

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from fast_sub.errors import SubGenError
-from fast_sub.media import (
+from fast_sub.contracts.errors import SubGenError
+from fast_sub.infrastructure.ffmpeg import (
     _decode_process_output,
     doctor_ok,
     doctor_status,

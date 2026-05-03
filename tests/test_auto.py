@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from fast_sub.auto import AutoOptions, AutoPipelineError, auto_media
-from fast_sub.model_manager import ModelStatus
-from fast_sub.transcribe import TranscribeResult
+from fast_sub.model_store.manager import ModelStatus
+from fast_sub.pipeline.orchestrator import AutoOptions, AutoPipelineError, auto_media
+from fast_sub.stt.service import TranscribeResult
 
 
 def test_auto_dry_run_reports_missing_model_without_install_or_transcribe(
@@ -19,9 +19,15 @@ def test_auto_dry_run_reports_missing_model_without_install_or_transcribe(
     input_file.write_bytes(b"media")
     calls: list[str] = []
     _patch_common(monkeypatch)
-    monkeypatch.setattr("fast_sub.auto.resolve_stt_provider", _missing_model_resolution)
-    monkeypatch.setattr("fast_sub.auto.install_model", lambda model: calls.append("install"))
-    monkeypatch.setattr("fast_sub.auto.transcribe_media", lambda path, options: calls.append("stt"))
+    monkeypatch.setattr(
+        "fast_sub.pipeline.orchestrator.resolve_stt_provider", _missing_model_resolution
+    )
+    monkeypatch.setattr(
+        "fast_sub.pipeline.orchestrator.install_model", lambda model: calls.append("install")
+    )
+    monkeypatch.setattr(
+        "fast_sub.pipeline.orchestrator.transcribe_media", lambda path, options: calls.append("stt")
+    )
 
     result = auto_media(input_file, AutoOptions(dry_run=True))
 
@@ -30,8 +36,7 @@ def test_auto_dry_run_reports_missing_model_without_install_or_transcribe(
     assert calls == []
     assert any(step.status == "missing_model" for step in result.steps)
     assert any(
-        "fast-sub models install whisper-small" in (step.action_hint or "")
-        for step in result.steps
+        "fast-sub models install whisper-small" in (step.action_hint or "") for step in result.steps
     )
 
 
@@ -42,7 +47,9 @@ def test_auto_missing_model_without_yes_fails_with_install_hint(
     input_file = work_dir / "input.wav"
     input_file.write_bytes(b"media")
     _patch_common(monkeypatch)
-    monkeypatch.setattr("fast_sub.auto.resolve_stt_provider", _missing_model_resolution)
+    monkeypatch.setattr(
+        "fast_sub.pipeline.orchestrator.resolve_stt_provider", _missing_model_resolution
+    )
 
     with pytest.raises(AutoPipelineError) as exc_info:
         auto_media(input_file, AutoOptions())
@@ -66,10 +73,12 @@ def test_auto_yes_installs_model_then_transcribes_and_refines(
     transcribed: list[object] = []
     _patch_common(monkeypatch)
     monkeypatch.setattr(
-        "fast_sub.auto.resolve_stt_provider",
+        "fast_sub.pipeline.orchestrator.resolve_stt_provider",
         lambda *args, **kwargs: resolutions.pop(0),
     )
-    monkeypatch.setattr("fast_sub.auto.get_model", lambda model_id: SimpleNamespace(id=model_id))
+    monkeypatch.setattr(
+        "fast_sub.pipeline.orchestrator.get_model", lambda model_id: SimpleNamespace(id=model_id)
+    )
 
     def fake_install(model: object) -> ModelStatus:
         installed.append(model.id)
@@ -113,8 +122,8 @@ there
             warnings=[],
         )
 
-    monkeypatch.setattr("fast_sub.auto.install_model", fake_install)
-    monkeypatch.setattr("fast_sub.auto.transcribe_media", fake_transcribe)
+    monkeypatch.setattr("fast_sub.pipeline.orchestrator.install_model", fake_install)
+    monkeypatch.setattr("fast_sub.pipeline.orchestrator.transcribe_media", fake_transcribe)
 
     result = auto_media(
         input_file,
@@ -148,10 +157,14 @@ def test_auto_yes_wraps_model_install_filesystem_errors(
     input_file = work_dir / "input.wav"
     input_file.write_bytes(b"media")
     _patch_common(monkeypatch)
-    monkeypatch.setattr("fast_sub.auto.resolve_stt_provider", _missing_model_resolution)
-    monkeypatch.setattr("fast_sub.auto.get_model", lambda model_id: SimpleNamespace(id=model_id))
     monkeypatch.setattr(
-        "fast_sub.auto.install_model",
+        "fast_sub.pipeline.orchestrator.resolve_stt_provider", _missing_model_resolution
+    )
+    monkeypatch.setattr(
+        "fast_sub.pipeline.orchestrator.get_model", lambda model_id: SimpleNamespace(id=model_id)
+    )
+    monkeypatch.setattr(
+        "fast_sub.pipeline.orchestrator.install_model",
         lambda model: (_ for _ in ()).throw(PermissionError("cache denied")),
     )
 
@@ -173,7 +186,7 @@ def test_auto_dry_run_reports_missing_dependency_as_blocked(
     input_file.write_bytes(b"media")
     _patch_common(monkeypatch)
     monkeypatch.setattr(
-        "fast_sub.auto.resolve_stt_provider",
+        "fast_sub.pipeline.orchestrator.resolve_stt_provider",
         lambda *args, **kwargs: _missing_dependency_resolution(),
     )
 
@@ -193,9 +206,9 @@ def test_auto_rejects_invalid_input() -> None:
 
 
 def _patch_common(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("fast_sub.auto.ensure_media_tools", lambda: None)
+    monkeypatch.setattr("fast_sub.pipeline.orchestrator.ensure_media_tools", lambda: None)
     monkeypatch.setattr(
-        "fast_sub.auto.probe_media",
+        "fast_sub.pipeline.orchestrator.probe_media",
         lambda path: {
             "duration_sec": 1.0,
             "audio_streams": [{"index": 0}],
@@ -203,7 +216,7 @@ def _patch_common(monkeypatch: pytest.MonkeyPatch) -> None:
         },
     )
     monkeypatch.setattr(
-        "fast_sub.auto.analyze_media",
+        "fast_sub.pipeline.orchestrator.analyze_media",
         lambda path: SimpleNamespace(
             as_dict=lambda: {
                 "duration_sec": 1.0,

@@ -10,7 +10,7 @@ import pysubs2
 import pytest
 from typer.testing import CliRunner
 
-import fast_sub.cli as cli
+import fast_sub.cli.runtime as cli
 from fast_sub.models import TranslationResult
 
 runner = CliRunner()
@@ -84,7 +84,7 @@ def test_translate_replace_success_json_pure(monkeypatch, work_dir: Path) -> Non
         calls.append((text, translator, from_language, to_language))
         return f"{text}-zh"
 
-    monkeypatch.setattr("fast_sub.translate._translate_text", fake_translate_text)
+    monkeypatch.setattr("fast_sub.translation.service._translate_text", fake_translate_text)
 
     result = runner.invoke(
         cli.app,
@@ -117,7 +117,7 @@ def test_translate_bilingual_success(monkeypatch, work_dir: Path) -> None:
     output = tmp_path / "out.srt"
 
     monkeypatch.setattr(
-        "fast_sub.translate._translate_text",
+        "fast_sub.translation.service._translate_text",
         lambda *, text, translator, from_language, to_language: f"{text}-zh",
     )
 
@@ -158,7 +158,7 @@ def test_translate_partial_failure_writes_errors_and_keeps_original(
             raise RuntimeError("service down sk-secret123456")
         return "你好"
 
-    monkeypatch.setattr("fast_sub.translate._translate_text", fake_translate_text)
+    monkeypatch.setattr("fast_sub.translation.service._translate_text", fake_translate_text)
 
     result = runner.invoke(
         cli.app,
@@ -193,7 +193,7 @@ def test_translate_all_failure_exits_nonzero_without_final_srt(
     input_file = _write_srt(tmp_path)
     output = tmp_path / "out.srt"
     monkeypatch.setattr(
-        "fast_sub.translate._translate_text",
+        "fast_sub.translation.service._translate_text",
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("service down")),
     )
 
@@ -232,7 +232,7 @@ def test_translate_checkpoint_resume_and_no_resume(monkeypatch, work_dir: Path) 
         calls.append(text)
         return f"{text}-zh"
 
-    monkeypatch.setattr("fast_sub.translate._translate_text", fake_translate_text)
+    monkeypatch.setattr("fast_sub.translation.service._translate_text", fake_translate_text)
     args = [
         "translate",
         str(input_file),
@@ -263,8 +263,7 @@ def test_translate_api_openai_chat_reads_dotenv(monkeypatch, work_dir: Path) -> 
     original_cwd = Path.cwd()
     monkeypatch.chdir(work_dir)
     Path(".env").write_text(
-        "OPENAI_API_KEY=sk-dotenv-secret123456\n"
-        "OPENAI_BASE_URL=https://api.example.test/v1\n",
+        "OPENAI_API_KEY=sk-dotenv-secret123456\nOPENAI_BASE_URL=https://api.example.test/v1\n",
         encoding="utf-8",
     )
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -274,7 +273,9 @@ def test_translate_api_openai_chat_reads_dotenv(monkeypatch, work_dir: Path) -> 
         calls.append((kwargs["api_key"], kwargs["base_url"], [segment.id for segment in batch]))
         return {segment.id: f"{segment.text}-zh" for segment in batch}
 
-    monkeypatch.setattr("fast_sub.translate._request_openai_chat_translation", fake_request)
+    monkeypatch.setattr(
+        "fast_sub.translation.service._request_openai_chat_translation", fake_request
+    )
 
     try:
         result = runner.invoke(
@@ -311,8 +312,7 @@ def test_translate_api_openai_chat_reads_model_from_dotenv(monkeypatch, work_dir
     original_cwd = Path.cwd()
     monkeypatch.chdir(work_dir)
     Path(".env").write_text(
-        "OPENAI_API_KEY=sk-dotenv-secret123456\n"
-        "OPENAI_MODEL=qwen3-4b\n",
+        "OPENAI_API_KEY=sk-dotenv-secret123456\nOPENAI_MODEL=qwen3-4b\n",
         encoding="utf-8",
     )
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -322,7 +322,9 @@ def test_translate_api_openai_chat_reads_model_from_dotenv(monkeypatch, work_dir
         calls.append(kwargs["model"])
         return {segment.id: f"{segment.text}-zh" for segment in batch}
 
-    monkeypatch.setattr("fast_sub.translate._request_openai_chat_translation", fake_request)
+    monkeypatch.setattr(
+        "fast_sub.translation.service._request_openai_chat_translation", fake_request
+    )
 
     try:
         result = runner.invoke(
@@ -361,7 +363,7 @@ def test_translate_local_nllb_auto_detects_english_source(monkeypatch, work_dir:
             segment.translation = f"{segment.text}-zh"
         return TranslationResult(segments=segments)
 
-    monkeypatch.setattr("fast_sub.translate.translate_segments", fake_translate_segments)
+    monkeypatch.setattr("fast_sub.translation.service.translate_segments", fake_translate_segments)
 
     result = runner.invoke(
         cli.app,
@@ -399,7 +401,7 @@ def test_translate_local_nllb_ignores_openai_model_env(monkeypatch, work_dir: Pa
             segment.translation = f"{segment.text}-zh"
         return TranslationResult(segments=segments)
 
-    monkeypatch.setattr("fast_sub.translate.translate_segments", fake_translate_segments)
+    monkeypatch.setattr("fast_sub.translation.service.translate_segments", fake_translate_segments)
 
     result = runner.invoke(
         cli.app,
@@ -438,7 +440,7 @@ def test_translate_local_nllb_ignores_chat_model_config(monkeypatch, work_dir: P
             segment.translation = f"{segment.text}-zh"
         return TranslationResult(segments=segments)
 
-    monkeypatch.setattr("fast_sub.translate.translate_segments", fake_translate_segments)
+    monkeypatch.setattr("fast_sub.translation.service.translate_segments", fake_translate_segments)
 
     result = runner.invoke(
         cli.app,
@@ -464,8 +466,7 @@ def test_translate_local_nllb_ignores_chat_model_config(monkeypatch, work_dir: P
 def _write_srt(tmp_path: Path) -> Path:
     path = tmp_path / "input.srt"
     path.write_text(
-        "1\n00:00:00,000 --> 00:00:01,000\nHello\n\n"
-        "2\n00:00:01,000 --> 00:00:02,000\nWorld\n",
+        "1\n00:00:00,000 --> 00:00:01,000\nHello\n\n2\n00:00:01,000 --> 00:00:02,000\nWorld\n",
         encoding="utf-8",
     )
     return path

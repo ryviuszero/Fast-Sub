@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fast_sub.models import Mode
-from fast_sub.paths import default_output_path, model_cache_dir
+from fast_sub.output.paths import default_output_path, model_cache_dir
 
 
 def test_default_output_path_for_bilingual() -> None:
@@ -39,10 +39,9 @@ def test_model_cache_dir_uses_single_app_directory(monkeypatch) -> None:
         return str(Path("AppData") / "Local" / appname)
 
     monkeypatch.setattr(
-        "fast_sub.paths.user_data_dir",
+        "fast_sub.output.paths.user_data_dir",
         fake_user_data_dir,
     )
 
     assert model_cache_dir() == Path("AppData") / "Local" / "FastSub" / "models"
     assert calls == [("FastSub", False)]
-

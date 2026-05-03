@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from fast_sub.errors import WorkerRunnerError
-from fast_sub.worker_models import SttWorkerRequest
-from fast_sub.worker_runner import run_stt_worker
+from fast_sub.contracts.errors import WorkerRunnerError
+from fast_sub.contracts.worker import SttWorkerRequest
+from fast_sub.infrastructure.workers import run_stt_worker
 
 FAKE_WORKER = Path(__file__).parent / "fixtures" / "workers" / "fake_stt_worker.py"
 TEST_WORKDIR_ROOT = Path(".test-work") / "worker-runner"

@@ -4,8 +4,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from fast_sub.cli import app
-from fast_sub.provider_models import (
+from fast_sub.app import app
+from fast_sub.contracts.provider import (
     SttProviderRequest,
     SttProviderResponse,
     SttProviderSegment,

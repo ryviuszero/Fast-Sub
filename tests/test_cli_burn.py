@@ -2,7 +2,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import fast_sub.cli as cli
+import fast_sub.cli.commands.media_cmd as media_cmd
+import fast_sub.cli.runtime as cli
+from fast_sub.contracts.errors import SubGenError
 
 runner = CliRunner()
 
@@ -14,7 +16,7 @@ def test_burn_command_writes_output(monkeypatch):
         calls.append((input_file, subtitle_file, output, options))
         return output or Path("input.subtitled.mp4")
 
-    monkeypatch.setattr(cli, "burn_subtitles", fake_burn_subtitles)
+    monkeypatch.setattr(media_cmd, "burn_subtitles", fake_burn_subtitles)
 
     result = runner.invoke(
         cli.app,
@@ -46,9 +48,9 @@ def test_burn_command_writes_output(monkeypatch):
 
 def test_burn_command_returns_error(monkeypatch):
     def fake_burn_subtitles(input_file, subtitle_file, output=None, options=None):  # noqa: ANN001
-        raise cli.SubGenError("ffmpeg failed to burn subtitles: bad filter")
+        raise SubGenError("ffmpeg failed to burn subtitles: bad filter")
 
-    monkeypatch.setattr(cli, "burn_subtitles", fake_burn_subtitles)
+    monkeypatch.setattr(media_cmd, "burn_subtitles", fake_burn_subtitles)
 
     result = runner.invoke(cli.app, ["burn", "input.mp4", "input.srt"])
 

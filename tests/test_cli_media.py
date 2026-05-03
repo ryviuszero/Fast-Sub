@@ -6,13 +6,15 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import fast_sub.cli as cli
+import fast_sub.cli.commands.media_cmd as media_cmd
+import fast_sub.cli.runtime as cli
+from fast_sub.contracts.errors import SubGenError
 
 runner = CliRunner()
 
 
 def test_doctor_command_json_reports_missing_tools(monkeypatch):
-    monkeypatch.setattr(cli, "doctor_status", lambda: _doctor_status(False))
+    monkeypatch.setattr(media_cmd, "doctor_status", lambda: _doctor_status(False))
 
     result = runner.invoke(cli.app, ["doctor", "--json"])
 
@@ -24,7 +26,7 @@ def test_doctor_command_json_reports_missing_tools(monkeypatch):
 def test_probe_command_outputs_json(monkeypatch):
     sample = Path("tests/fixtures/sample.wav")
     monkeypatch.setattr(
-        cli,
+        media_cmd,
         "probe_media",
         lambda path: {
             "path": str(path),
@@ -74,9 +76,9 @@ def test_extract_command_passes_audio_stream(monkeypatch):
     calls = []
 
     try:
-        monkeypatch.setattr(cli, "ensure_media_tools", lambda: None)
+        monkeypatch.setattr(media_cmd, "ensure_media_tools", lambda: None)
         monkeypatch.setattr(
-            cli,
+            media_cmd,
             "prepare_audio",
             lambda input_file, output, audio_stream=None: calls.append(
                 (input_file, output, audio_stream)
@@ -96,9 +98,9 @@ def test_extract_command_passes_audio_stream(monkeypatch):
 
 def test_probe_command_returns_input_error_code(monkeypatch):
     def fail(path):
-        raise cli.SubGenError(f"No audio stream found in: {path}")
+        raise SubGenError(f"No audio stream found in: {path}")
 
-    monkeypatch.setattr(cli, "probe_media", fail)
+    monkeypatch.setattr(media_cmd, "probe_media", fail)
 
     result = runner.invoke(cli.app, ["probe", "tests/fixtures/sample.wav", "--json"])
 

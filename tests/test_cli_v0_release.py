@@ -6,9 +6,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import fast_sub.cli as cli
-from fast_sub.auto import AutoOptions, AutoPipelineError, AutoResult, AutoStep
-from fast_sub.transcribe import TranscribeError
+import fast_sub.cli.runtime as cli
+from fast_sub.pipeline.orchestrator import AutoOptions, AutoPipelineError, AutoResult, AutoStep
+from fast_sub.stt.service import TranscribeError
 
 runner = CliRunner()
 
@@ -62,8 +62,7 @@ def test_auto_missing_model_json_is_parseable_and_exits_4(monkeypatch) -> None:
                 "missing_model",
                 "Model is not installed: whisper-small.",
                 action_hint=(
-                    "Run `fast-sub models install whisper-small` "
-                    "or `fast-sub auto --yes`."
+                    "Run `fast-sub models install whisper-small` or `fast-sub auto --yes`."
                 ),
             )
         ],

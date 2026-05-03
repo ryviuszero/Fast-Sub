@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from fast_sub.bench import (
+from fast_sub.benchmark.transcription import (
     BenchError,
     BenchOptions,
     BenchProfile,
@@ -16,8 +16,8 @@ from fast_sub.bench import (
     run_bench,
     summarize_runs,
 )
-from fast_sub.errors import SubGenError
-from fast_sub.transcribe import TranscribeResult
+from fast_sub.contracts.errors import SubGenError
+from fast_sub.stt.service import TranscribeResult
 
 TEST_WORKDIR_ROOT = Path(".test-work") / "bench"
 
@@ -252,8 +252,7 @@ def test_summarize_runs_ignores_failed_and_skipped_for_timing() -> None:
     assert summary["rtfx_e2e_best"] == 15.0
 
 
-def test_run_bench_keeps_unknown_actual_device_when_worker_does_not_report(
-) -> None:
+def test_run_bench_keeps_unknown_actual_device_when_worker_does_not_report() -> None:
     work_dir = _work_dir()
     input_file = work_dir / "sample.wav"
     input_file.write_bytes(b"fake wav")
@@ -376,7 +375,7 @@ def test_detect_hardware_tolerates_missing_gpu(monkeypatch) -> None:
     def fail_run(*args, **kwargs):  # noqa: ANN002, ANN003
         raise OSError("nvidia-smi missing")
 
-    monkeypatch.setattr("fast_sub.bench.subprocess.run", fail_run)
+    monkeypatch.setattr("fast_sub.benchmark.transcription.subprocess.run", fail_run)
     hardware = detect_hardware()
 
     assert hardware["gpu"] is None
@@ -650,7 +649,7 @@ def test_run_bench_counts_invalid_srt_timeline() -> None:
 
 
 def test_render_brief_and_markdown_include_quality_without_paths() -> None:
-    from fast_sub.bench import render_brief_report
+    from fast_sub.benchmark.transcription import render_brief_report
 
     report = {
         "generated_at": "2026-05-02T00:00:00Z",
@@ -720,7 +719,7 @@ def test_render_brief_and_markdown_include_quality_without_paths() -> None:
 
 
 def test_render_brief_hides_quality_columns_without_reference() -> None:
-    from fast_sub.bench import render_brief_report
+    from fast_sub.benchmark.transcription import render_brief_report
 
     report = {
         "input_basename": "sample.wav",

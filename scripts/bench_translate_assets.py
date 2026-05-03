@@ -435,9 +435,7 @@ def render_srt(texts: list[str]) -> str:
 
 def wrap_subtitle_text(text: str) -> str:
     has_cjk = any(
-        "\u4e00" <= char <= "\u9fff"
-        or "\u3040" <= char <= "\u30ff"
-        or "\uac00" <= char <= "\ud7af"
+        "\u4e00" <= char <= "\u9fff" or "\u3040" <= char <= "\u30ff" or "\uac00" <= char <= "\ud7af"
         for char in text
     )
     if has_cjk:
@@ -626,7 +624,9 @@ def print_human(payload: dict[str, Any]) -> None:
             print(item["source_subtitle_path"])
     if payload.get("directions"):
         for direction, status in payload["directions"].items():
-            print(f"{direction}\ttatoeba={status['tatoeba_available']}\tiwslt={status['iwslt_ted_available']}")
+            print(
+                f"{direction}\ttatoeba={status['tatoeba_available']}\tiwslt={status['iwslt_ted_available']}"
+            )
 
 
 if __name__ == "__main__":

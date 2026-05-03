@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from fast_sub.provider_models import SttProviderSegment
-from fast_sub.worker_models import SttWorkerRequest, SttWorkerResponse, WorkerErrorResponse
+from fast_sub.contracts.provider import SttProviderSegment
+from fast_sub.contracts.worker import SttWorkerRequest, SttWorkerResponse, WorkerErrorResponse
 
 
 def test_worker_contracts_round_trip_json() -> None:

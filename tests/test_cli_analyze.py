@@ -3,8 +3,10 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import fast_sub.cli as cli
-from fast_sub.analyze import AnalysisResult
+import fast_sub.cli.commands.media_cmd as media_cmd
+import fast_sub.cli.runtime as cli
+from fast_sub.contracts.errors import SubGenError
+from fast_sub.media.service import AnalysisResult
 
 runner = CliRunner()
 
@@ -12,7 +14,7 @@ runner = CliRunner()
 def test_analyze_command_outputs_json(monkeypatch):
     sample = Path("tests/fixtures/sample.wav")
     monkeypatch.setattr(
-        cli,
+        media_cmd,
         "analyze_media",
         lambda path: AnalysisResult(
             duration_sec=10.0,
@@ -48,7 +50,7 @@ def test_analyze_command_outputs_json(monkeypatch):
 
 def test_analyze_command_prints_human_readable_result(monkeypatch):
     monkeypatch.setattr(
-        cli,
+        media_cmd,
         "analyze_media",
         lambda path: AnalysisResult(
             duration_sec=10.0,
@@ -73,9 +75,9 @@ def test_analyze_command_prints_human_readable_result(monkeypatch):
 
 def test_analyze_command_returns_json_error(monkeypatch):
     def fail(path):
-        raise cli.SubGenError(f"No audio stream found in: {path}")
+        raise SubGenError(f"No audio stream found in: {path}")
 
-    monkeypatch.setattr(cli, "analyze_media", fail)
+    monkeypatch.setattr(media_cmd, "analyze_media", fail)
 
     result = runner.invoke(cli.app, ["analyze", "tests/fixtures/sample.wav", "--json"])
 

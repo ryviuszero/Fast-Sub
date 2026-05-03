@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from fast_sub.burn import (
+from fast_sub.contracts.errors import SubGenError
+from fast_sub.output.burn import (
     BurnOptions,
     build_ffmpeg_burn_command,
     burn_subtitles,
     default_burn_output_path,
 )
-from fast_sub.errors import SubGenError
 
 
 def test_default_burn_output_path_uses_subtitled_suffix() -> None:
@@ -132,9 +132,9 @@ def test_burn_subtitles_copies_subtitle_and_runs_in_job_dir(
 
         def fake_run(command, cwd, capture_output, check):  # noqa: ANN001
             cwd_path = Path(cwd)
-            assert (cwd_path / "subtitle.srt").read_text(
+            assert (cwd_path / "subtitle.srt").read_text(encoding="utf-8") == subtitle.read_text(
                 encoding="utf-8"
-            ) == subtitle.read_text(encoding="utf-8")
+            )
             calls.append((command, cwd_path))
             output.write_bytes(b"mp4")
             return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")

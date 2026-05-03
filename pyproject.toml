@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-fast-sub = "fast_sub.cli:main"
+fast-sub = "fast_sub.app:main"
 fast-sub-worker-faster-whisper = "fast_sub_workers.faster_whisper:main"
 
 [project.optional-dependencies]

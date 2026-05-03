@@ -9,15 +9,16 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import fast_sub.cli as cli
-from fast_sub.model_manager import (
+import fast_sub.cli.commands.models_cmd as models_cmd
+import fast_sub.cli.runtime as cli
+from fast_sub.model_store.manager import (
     ModelManagerError,
     ModelStatus,
     install_model,
     model_path,
     verify_model,
 )
-from fast_sub.model_manifest import ModelManifestEntry, ModelManifestFile, list_models
+from fast_sub.model_store.manifest import ModelManifestEntry, ModelManifestFile, list_models
 
 runner = CliRunner()
 
@@ -209,7 +210,7 @@ def test_verify_directory_model_reports_inaccessible_file_open(
                 raise PermissionError("cannot open")
             return ""
 
-        monkeypatch.setattr("fast_sub.model_manager.sha256_file", fake_sha256_file)
+        monkeypatch.setattr("fast_sub.model_store.manager.sha256_file", fake_sha256_file)
 
         status = verify_model(model, work_dir)
 
@@ -250,7 +251,7 @@ def test_install_model_writes_part_file_then_verifies(
             assert progress is None
             part_path.write_bytes(payload)
 
-        monkeypatch.setattr("fast_sub.model_manager._download", fake_download)
+        monkeypatch.setattr("fast_sub.model_store.manager._download", fake_download)
 
         status = install_model(model, work_dir, downloader="httpx")
 
@@ -300,7 +301,7 @@ def test_install_model_deletes_bad_part_and_succeeds_with_mirror(
             assert not part_path.exists()
             part_path.write_bytes(payload)
 
-        monkeypatch.setattr("fast_sub.model_manager._download", fake_download)
+        monkeypatch.setattr("fast_sub.model_store.manager._download", fake_download)
 
         status = install_model(model, work_dir)
 
@@ -350,15 +351,13 @@ def test_install_model_reports_download_progress(
             progress(label, len(payload), len(payload))
             part_path.write_bytes(payload)
 
-        monkeypatch.setattr("fast_sub.model_manager._download", fake_download)
+        monkeypatch.setattr("fast_sub.model_store.manager._download", fake_download)
 
         status = install_model(
             model,
             work_dir,
             downloader="httpx",
-            progress=lambda label, downloaded, total: events.append(
-                (label, downloaded, total)
-            ),
+            progress=lambda label, downloaded, total: events.append((label, downloaded, total)),
         )
 
         assert status.installed
@@ -393,7 +392,7 @@ def test_install_directory_model_skips_verified_existing_files(
             downloads.append(label)
             part_path.write_bytes(b"model")
 
-        monkeypatch.setattr("fast_sub.model_manager._download", fake_download)
+        monkeypatch.setattr("fast_sub.model_store.manager._download", fake_download)
 
         status = install_model(model, work_dir, downloader="httpx")
 
@@ -413,7 +412,7 @@ def test_install_model_uses_aria2_backend_when_requested(
         calls = []
 
         monkeypatch.setattr(
-            "fast_sub.model_manager._aria2_executable",
+            "fast_sub.model_store.manager._aria2_executable",
             lambda: Path("aria2c"),
         )
 
@@ -428,7 +427,7 @@ def test_install_model_uses_aria2_backend_when_requested(
             calls.append((url, connections, split))
             part_path.write_bytes(payload)
 
-        monkeypatch.setattr("fast_sub.model_manager._download_aria2", fake_aria2)
+        monkeypatch.setattr("fast_sub.model_store.manager._download_aria2", fake_aria2)
 
         status = install_model(
             model,
@@ -450,7 +449,7 @@ def test_models_list_json_includes_initial_models(
     work_dir = _make_work_dir()
     try:
         monkeypatch.setattr(
-            cli,
+            models_cmd,
             "verify_model",
             lambda model: ModelStatus(
                 id=model.id,
@@ -461,7 +460,7 @@ def test_models_list_json_includes_initial_models(
             ),
         )
         monkeypatch.setattr(
-            cli,
+            models_cmd,
             "model_path",
             lambda model: work_dir / model.id / "model.bin",
         )
@@ -513,9 +512,9 @@ def test_models_verify_missing_exits_nonzero(
     work_dir = _make_work_dir()
     try:
         model = _model(b"expected")
-        monkeypatch.setattr(cli, "get_model", lambda model_id: model)
+        monkeypatch.setattr(models_cmd, "get_model", lambda model_id: model)
         monkeypatch.setattr(
-            cli,
+            models_cmd,
             "verify_model",
             lambda model: ModelStatus(
                 id=model.id,
@@ -542,7 +541,7 @@ def test_models_install_passes_downloader_options(
     try:
         model = _model(b"expected")
         calls = []
-        monkeypatch.setattr(cli, "get_model", lambda model_id: model)
+        monkeypatch.setattr(models_cmd, "get_model", lambda model_id: model)
 
         class NullProgress:
             def __enter__(self):  # noqa: ANN204
@@ -551,7 +550,7 @@ def test_models_install_passes_downloader_options(
             def __exit__(self, exc_type, exc, tb):  # noqa: ANN001, ANN204
                 return False
 
-        monkeypatch.setattr(cli, "_model_download_progress", lambda: NullProgress())
+        monkeypatch.setattr(models_cmd, "_model_download_progress", lambda: NullProgress())
 
         def fake_install_model(model, **kwargs):  # noqa: ANN001
             calls.append(kwargs)
@@ -564,7 +563,7 @@ def test_models_install_passes_downloader_options(
                 checked_files=1,
             )
 
-        monkeypatch.setattr(cli, "install_model", fake_install_model)
+        monkeypatch.setattr(models_cmd, "install_model", fake_install_model)
 
         result = runner.invoke(
             cli.app,

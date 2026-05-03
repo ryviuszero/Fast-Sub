@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from fast_sub.cli import _resolve_options, _should_use_command_app, _validate_input
+from fast_sub.cli.runtime import _resolve_options, _should_use_command_app, _validate_input
 from fast_sub.config import load_dotenv
-from fast_sub.errors import SubGenError
+from fast_sub.contracts.errors import SubGenError
 from fast_sub.models import Mode, SttProvider, SubtitleFormat
 
 

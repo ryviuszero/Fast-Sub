@@ -4,9 +4,9 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from fast_sub import stt
-from fast_sub.errors import ProviderResponseError
+from fast_sub.contracts.errors import ProviderResponseError
 from fast_sub.models import WhisperXComputeType, WhisperXDevice
+from fast_sub.stt import legacy as stt
 
 
 def test_transcription_request_omits_language_for_auto(

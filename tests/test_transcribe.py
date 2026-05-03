@@ -8,11 +8,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from fast_sub.analyze import AnalysisResult
-from fast_sub.errors import SubGenError
-from fast_sub.paths import job_dir
-from fast_sub.provider_models import SttProviderSegment
-from fast_sub.transcribe import (
+from fast_sub.contracts.errors import SubGenError
+from fast_sub.contracts.provider import SttProviderSegment
+from fast_sub.media.service import AnalysisResult
+from fast_sub.output.paths import job_dir
+from fast_sub.stt.service import (
     TranscribeError,
     TranscribeOptions,
     _resolve_model_path,
@@ -34,9 +34,9 @@ def test_transcribe_media_writes_srt_and_keeps_worker_files(monkeypatch) -> None
     model_dir = work_root / "models" / "whisper-small"
     model_dir.mkdir(parents=True)
 
-    monkeypatch.setattr("fast_sub.transcribe.ensure_media_tools", lambda: None)
+    monkeypatch.setattr("fast_sub.stt.service.ensure_media_tools", lambda: None)
     monkeypatch.setattr(
-        "fast_sub.transcribe.probe_media",
+        "fast_sub.stt.service.probe_media",
         lambda path: {
             "duration_sec": 10.0,
             "audio_streams": [{"index": 0}],
@@ -48,13 +48,13 @@ def test_transcribe_media_writes_srt_and_keeps_worker_files(monkeypatch) -> None
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.write_bytes(b"wav")
 
-    monkeypatch.setattr("fast_sub.transcribe.prepare_audio", fake_prepare_audio)
+    monkeypatch.setattr("fast_sub.stt.service.prepare_audio", fake_prepare_audio)
     monkeypatch.setattr(
-        "fast_sub.transcribe._resolve_model_path",
+        "fast_sub.stt.service._resolve_model_path",
         lambda provider, model: model_dir,
     )
     monkeypatch.setattr(
-        "fast_sub.transcribe.analyze_media",
+        "fast_sub.stt.service.analyze_media",
         lambda path: AnalysisResult(
             duration_sec=10.0,
             speech_ratio=0.8,
@@ -119,16 +119,16 @@ def test_transcribe_media_gpu_load_low_reduces_default_batch_size(monkeypatch) -
     model_dir = work_root / "models" / "whisper-small"
     model_dir.mkdir(parents=True)
 
-    monkeypatch.setattr("fast_sub.transcribe.ensure_media_tools", lambda: None)
-    monkeypatch.setattr("fast_sub.transcribe.probe_media", lambda path: {"duration_sec": 10.0})
+    monkeypatch.setattr("fast_sub.stt.service.ensure_media_tools", lambda: None)
+    monkeypatch.setattr("fast_sub.stt.service.probe_media", lambda path: {"duration_sec": 10.0})
 
     def fake_prepare_audio(input_path: Path, audio_path: Path) -> None:
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.write_bytes(b"wav")
 
-    monkeypatch.setattr("fast_sub.transcribe.prepare_audio", fake_prepare_audio)
+    monkeypatch.setattr("fast_sub.stt.service.prepare_audio", fake_prepare_audio)
     monkeypatch.setattr(
-        "fast_sub.transcribe._resolve_model_path", lambda provider, model: model_dir
+        "fast_sub.stt.service._resolve_model_path", lambda provider, model: model_dir
     )
 
     result = transcribe_media(
@@ -157,16 +157,16 @@ def test_transcribe_media_explicit_batch_size_overrides_gpu_load(monkeypatch) ->
     model_dir = work_root / "models" / "whisper-small"
     model_dir.mkdir(parents=True)
 
-    monkeypatch.setattr("fast_sub.transcribe.ensure_media_tools", lambda: None)
-    monkeypatch.setattr("fast_sub.transcribe.probe_media", lambda path: {"duration_sec": 10.0})
+    monkeypatch.setattr("fast_sub.stt.service.ensure_media_tools", lambda: None)
+    monkeypatch.setattr("fast_sub.stt.service.probe_media", lambda path: {"duration_sec": 10.0})
 
     def fake_prepare_audio(input_path: Path, audio_path: Path) -> None:
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.write_bytes(b"wav")
 
-    monkeypatch.setattr("fast_sub.transcribe.prepare_audio", fake_prepare_audio)
+    monkeypatch.setattr("fast_sub.stt.service.prepare_audio", fake_prepare_audio)
     monkeypatch.setattr(
-        "fast_sub.transcribe._resolve_model_path", lambda provider, model: model_dir
+        "fast_sub.stt.service._resolve_model_path", lambda provider, model: model_dir
     )
 
     result = transcribe_media(
@@ -235,7 +235,7 @@ def test_resolve_model_path_uses_provider_resolution(monkeypatch) -> None:
             model_path=model_dir,
         )
 
-    monkeypatch.setattr("fast_sub.transcribe.resolve_stt_provider", fake_resolve)
+    monkeypatch.setattr("fast_sub.stt.service.resolve_stt_provider", fake_resolve)
 
     assert _resolve_model_path("local-faster-whisper", "whisper-small") == model_dir
 
@@ -252,7 +252,7 @@ def test_resolve_model_path_reports_provider_resolution_failures(
             model_path=Path("models/whisper-small"),
         )
 
-    monkeypatch.setattr("fast_sub.transcribe.resolve_stt_provider", fake_resolve)
+    monkeypatch.setattr("fast_sub.stt.service.resolve_stt_provider", fake_resolve)
 
     with pytest.raises(TranscribeError, match="missing_dependency") as exc_info:
         _resolve_model_path("local-faster-whisper", "whisper-small")
@@ -274,7 +274,7 @@ def test_resolve_model_path_reports_missing_model_install_hint(
             model_path=Path("models/whisper-small"),
         )
 
-    monkeypatch.setattr("fast_sub.transcribe.resolve_stt_provider", fake_resolve)
+    monkeypatch.setattr("fast_sub.stt.service.resolve_stt_provider", fake_resolve)
 
     with pytest.raises(TranscribeError, match="missing_model") as exc_info:
         _resolve_model_path("local-faster-whisper", "whisper-small")
@@ -292,16 +292,16 @@ def test_transcribe_media_keep_temp_writes_failure_metadata(monkeypatch) -> None
     model_dir = work_root / "models" / "whisper-small"
     model_dir.mkdir(parents=True)
 
-    monkeypatch.setattr("fast_sub.transcribe.ensure_media_tools", lambda: None)
-    monkeypatch.setattr("fast_sub.transcribe.probe_media", lambda path: {"duration_sec": 10.0})
+    monkeypatch.setattr("fast_sub.stt.service.ensure_media_tools", lambda: None)
+    monkeypatch.setattr("fast_sub.stt.service.probe_media", lambda path: {"duration_sec": 10.0})
 
     def fake_prepare_audio(input_path: Path, audio_path: Path) -> None:
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.write_bytes(b"wav")
 
-    monkeypatch.setattr("fast_sub.transcribe.prepare_audio", fake_prepare_audio)
+    monkeypatch.setattr("fast_sub.stt.service.prepare_audio", fake_prepare_audio)
     monkeypatch.setattr(
-        "fast_sub.transcribe._resolve_model_path", lambda provider, model: model_dir
+        "fast_sub.stt.service._resolve_model_path", lambda provider, model: model_dir
     )
 
     with pytest.raises(TranscribeError) as exc_info:

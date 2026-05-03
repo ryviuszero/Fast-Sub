@@ -5,8 +5,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import fast_sub.cli as cli
-from fast_sub.transcribe import TranscribeResult
+import fast_sub.cli.runtime as cli
+from fast_sub.stt.service import TranscribeResult
 
 runner = CliRunner()
 

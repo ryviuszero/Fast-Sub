@@ -6,7 +6,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import fast_sub.cli as cli
+import fast_sub.cli.runtime as cli
 
 runner = CliRunner()
 TEST_WORKDIR_ROOT = Path(".test-work") / "cli-bench"

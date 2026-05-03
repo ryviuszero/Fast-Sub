@@ -108,4 +108,3 @@ def load_config(path: Path | None) -> AppConfig:
     with path.open("rb") as file:
         data = tomllib.load(file)
     return AppConfig.model_validate(data)
-

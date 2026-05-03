@@ -5,8 +5,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import fast_sub.cli as cli
-from fast_sub.auto import AutoOptions, AutoPipelineError, AutoResult, AutoStep
+import fast_sub.cli.runtime as cli
+from fast_sub.pipeline.orchestrator import AutoOptions, AutoPipelineError, AutoResult, AutoStep
 
 runner = CliRunner()
 
