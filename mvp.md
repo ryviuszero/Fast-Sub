@@ -180,7 +180,8 @@ Stable v0:
 - `fast-sub models list/install/verify`
 - `fast-sub providers list/test`
 - `fast-sub bench input.mp4`
-- Planned Round 7.5 standalone command: `fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider <id>`
+- `fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider <id>`
+- `fast-sub bench-translate-manifest`
 
 ## Privacy Boundary
 
@@ -202,13 +203,15 @@ API upload behavior must be explicit opt-in.
 input media -> probe -> prepare_audio -> local-faster-whisper worker -> source SRT
 ```
 
-Round 7.5 plans the standalone `fast-sub bench-translate` command for translation quality checks:
+Round 7.5 adds the standalone `fast-sub bench-translate` command for translation quality checks:
 
 ```bash
 fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider local-nllb-ct2
 ```
 
-The planned translation benchmark uses reference SRT/TXT files to report Fast Sub lightweight BLEU, chrF, exact match, elapsed time, throughput, and failed cue counts. It is a reproducible rough signal, not a human-quality guarantee. The existing `fast-sub bench` command remains focused on media transcription benchmarks.
+The translation benchmark uses reference SRT/TXT files to report BLEU, chrF, exact match, elapsed time, throughput, and failed cue counts. It is a reproducible rough signal, not a human-quality guarantee. JSON canonical scores use 0-1. When sacreBLEU is installed, the report records sacreBLEU signature and raw 0-100 scores; otherwise it records `metric_implementation=fast_sub_lightweight_v1`, which is not equivalent to sacreBLEU. Repeat summaries include avg/min/max/stddev. The existing `fast-sub bench` command remains focused on media transcription benchmarks.
+
+`fast-sub bench-translate-manifest` prints the local-only manifest schema/example for provider matrices over light/standard translation samples. Real datasets are manually downloaded into `local_tests/bench_translate/raw/`; generated samples cover `en/ja/ko -> zh` and `zh/ja/ko -> en` when available and remain ignored.
 
 Benchmark media, reference files, generated model caches, and reports belong under ignored `local_tests/` paths. The helper `scripts/bench_assets.py` is a developer/manual asset preparation tool, not a public product CLI. Do not commit real models, real media, real reference corpora, or local benchmark reports.
 

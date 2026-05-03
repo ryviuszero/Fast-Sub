@@ -637,28 +637,28 @@ mvp.zh.md
 
 ## Checklist
 
-- [ ] 新增 `bench-translate` CLI 计划和实现。
-- [ ] 新增 translation benchmark runner。
-- [ ] 复用 `translate_srt()`，不绕过 provider 安全边界。
-- [ ] 新增 BLEU/chrF/exact_match 轻量指标。
-- [ ] 优先接入或对齐 sacreBLEU，并记录 metric signature。
-- [ ] 统一 canonical score scale，并保留 raw score/scale。
-- [ ] 支持 reference SRT。
-- [ ] 支持 reference TXT。
-- [ ] 支持 JSON report。
-- [ ] 支持 Markdown report。
-- [ ] 支持 repeat 聚合 avg/min/max/stddev。
-- [ ] 支持 manifest schema/example 和 provider matrix。
+- [x] 新增 `bench-translate` CLI 计划和实现。
+- [x] 新增 translation benchmark runner。
+- [x] 复用 `translate_srt()`，不绕过 provider 安全边界。
+- [x] 新增 BLEU/chrF/exact_match 轻量指标。
+- [x] 优先接入或对齐 sacreBLEU，并记录 metric signature。
+- [x] 统一 canonical score scale，并保留 raw score/scale。
+- [x] 支持 reference SRT。
+- [x] 支持 reference TXT。
+- [x] 支持 JSON report。
+- [x] 支持 Markdown report。
+- [x] 支持 repeat 聚合 avg/min/max/stddev。
+- [x] 支持 manifest schema/example 和 provider matrix。
 - [ ] 增加 public dataset sampling 规划和本地采样脚本说明。
 - [ ] 支持 light/standard 两档采样 profile。
 - [ ] 覆盖 `en/ja/ko -> zh` 和 `zh/ja/ko -> en` 六个核心方向。
-- [ ] 记录 input/reference/config hash 和 dependency versions。
-- [ ] 记录 provider privacy class 和 upload boundary。
-- [ ] 覆盖 CLI 错误路径。
-- [ ] 覆盖 metric edge cases。
-- [ ] 覆盖 partial/all failure。
-- [ ] 覆盖 JSON purity 和 secret redaction。
-- [ ] 同步文档。
+- [x] 记录 input/reference/config hash 和 dependency versions。
+- [x] 记录 provider privacy class 和 upload boundary。
+- [x] 覆盖 CLI 错误路径。
+- [x] 覆盖 metric edge cases。
+- [x] 覆盖 partial/all failure。
+- [x] 覆盖 JSON purity 和 secret redaction。
+- [x] 同步文档。
 
 ## Merge Criteria
 

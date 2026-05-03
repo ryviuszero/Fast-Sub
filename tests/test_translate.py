@@ -1,4 +1,8 @@
+import shutil
+import sys
+import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -131,6 +135,65 @@ def test_resolve_nllb_missing_model_points_to_install(monkeypatch) -> None:
 
     with pytest.raises(TranslationProviderError, match="models install nllb-200"):
         resolve_nllb_model_path(model=None, explicit_model_path=None)
+
+
+def test_local_nllb_disables_unknown_token_generation(monkeypatch) -> None:
+    root = (Path(".test-work") / uuid.uuid4().hex).resolve()
+    model_path = root / "model"
+    model_path.mkdir(parents=True)
+    (model_path / "sentencepiece.bpe.model").write_text("fake", encoding="utf-8")
+    calls = []
+
+    class FakeSentencePieceProcessor:
+        def __init__(self, *, model_file: str) -> None:
+            assert model_file == str(model_path / "sentencepiece.bpe.model")
+
+        def encode(self, text: str, *, out_type: type[str]) -> list[str]:
+            assert out_type is str
+            return [f"_{text}"]
+
+        def decode(self, tokens: list[str]) -> str:
+            return "".join(tokens)
+
+    class FakeTranslator:
+        def __init__(self, path: str, *, device: str) -> None:
+            assert path == str(model_path)
+            assert device == "auto"
+
+        def translate_batch(self, source_tokens, **kwargs):  # noqa: ANN001, ANN003
+            calls.append((source_tokens, kwargs))
+            return [SimpleNamespace(hypotheses=[["zho_Hans", "汤姆"]])]
+
+    monkeypatch.setitem(
+        sys.modules,
+        "sentencepiece",
+        SimpleNamespace(SentencePieceProcessor=FakeSentencePieceProcessor),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "ctranslate2",
+        SimpleNamespace(Translator=FakeTranslator),
+    )
+
+    try:
+        result = translate_segments(
+            segments=[Segment(id=1, start=0, end=1, text="Tom")],
+            provider="local-nllb-ct2",
+            source_lang="en",
+            target_lang="zh",
+            model_path=model_path,
+        )
+
+        assert result.errors == []
+        assert result.segments[0].translation == "汤姆"
+        assert calls == [
+            (
+                [["eng_Latn", "_Tom", "</s>"]],
+                {"target_prefix": [["zho_Hans"]], "disable_unk": True},
+            )
+        ]
+    finally:
+        shutil.rmtree(root)
 
 
 def test_detect_subtitle_language_handles_supported_languages() -> None:

@@ -306,7 +306,7 @@ api-custom-http-translate
 - [x] `scripts/bench_assets.py` 真实 benchmark 数据准备与受控下载器，详见 `FAST_SUB_PARALLEL_ROUND5_5.md`。
 - [x] `auto` 最小自动调度，支持 dry-run、缺模型提示、`--yes` 本地模型安装、transcribe/refine 串联。
 - [x] 翻译 provider loop 和默认 NLLB/CTranslate2 翻译模型 manifest。
-- [ ] 翻译 benchmark 计划中，详见 `FAST_SUB_PARALLEL_ROUND7_5.md`：新增独立 `fast-sub bench-translate`，不塞进现有 `fast-sub bench`；使用 reference SRT/TXT 计算 lightweight BLEU、chrF、exact match、耗时和失败率。
+- [x] 翻译 benchmark，详见 `FAST_SUB_PARALLEL_ROUND7_5.md`：新增独立 `fast-sub bench-translate`，不塞进现有 `fast-sub bench`；复用 `translate_srt_v1`，使用 reference SRT/TXT 计算 BLEU、chrF、exact match、耗时和失败率；默认无 sacreBLEU 时记录 `fast_sub_lightweight_v1` 口径。
 - [ ] 更完整 provider 统一、Electron UI 和 Web 版均放到后续轮次。
 
 第二轮并行组合已完成：
@@ -332,7 +332,7 @@ api-custom-http-translate
 
 第 7.5 轮计划：
 
-- [ ] `codex/fast-sub-translate-bench`：新增独立 `fast-sub bench-translate` 翻译 benchmark，复用 `translate_srt_v1`，通过 reference SRT/TXT 输出 lightweight BLEU、chrF、exact match、吞吐、失败率和 JSON/Markdown report；不做 LLM judge，不提交真实媒体、真实 reference 或本地报告。
+- [x] `codex/fast-sub-translate-bench`：新增独立 `fast-sub bench-translate` 翻译 benchmark，复用 `translate_srt_v1`，通过 reference SRT/TXT 输出 BLEU、chrF、exact match、吞吐、失败率和 JSON/Markdown report；不做 LLM judge，不提交真实媒体、真实 reference 或本地报告。
 
 第五轮和 5.5 轮已完成：
 
@@ -786,6 +786,7 @@ fast-sub burn input.mp4 input.srt
 ```bash
 fast-sub bench input.mp4
 fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider local-nllb-ct2
+fast-sub bench-translate-manifest --json
 ```
 
 参数：
@@ -802,7 +803,7 @@ fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --pr
 
 - JSON 报告。
 - Markdown 报告。
-- 翻译 benchmark 报告使用 reference SRT/TXT，输出 lightweight BLEU、chrF、exact match、耗时和失败率；这是独立的 `bench-translate` 命令，不复用媒体转写 `bench` 入口。
+- 翻译 benchmark 报告使用 reference SRT/TXT，输出 BLEU、chrF、exact match、耗时和失败率；这是独立的 `bench-translate` 命令，不复用媒体转写 `bench` 入口。若环境安装 sacreBLEU，报告记录 sacreBLEU signature、raw 0-100 score 和 canonical 0-1 score；否则记录 `metric_implementation=fast_sub_lightweight_v1`，该 lightweight 分数不等价于 sacreBLEU。
 
 指标：
 

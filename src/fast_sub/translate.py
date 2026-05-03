@@ -535,7 +535,8 @@ def _translate_nllb_segments(
             "missing_dependency",
             (
                 "local-nllb-ct2 requires ctranslate2 and sentencepiece. "
-                "Install the local translation extra."
+                "Run `uv run --extra local-translate fast-sub ...` for one-off use, "
+                "or `uv sync --extra local-translate` to install the local translation extra."
             ),
         ) from exc
 
@@ -555,6 +556,7 @@ def _translate_nllb_segments(
             results = translator.translate_batch(
                 source_tokens,
                 target_prefix=[[target_code] for _ in batch],
+                disable_unk=True,
             )
             if len(results) != len(batch):
                 raise ValueError("NLLB returned a mismatched translation count.")

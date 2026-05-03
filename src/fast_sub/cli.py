@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import sys
+import tomllib
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Annotated, Any, TypeVar
@@ -32,6 +33,16 @@ from fast_sub.bench import (
     render_sample_manifest_schema,
     run_bench,
     sample_manifest_schema_payload,
+)
+from fast_sub.bench_translate import (
+    BenchTranslateError,
+    BenchTranslateOptions,
+    render_translate_sample_manifest_schema,
+    run_bench_translate,
+    translate_sample_manifest_schema_payload,
+)
+from fast_sub.bench_translate import (
+    render_markdown_report as render_translate_bench_markdown_report,
 )
 from fast_sub.burn import BurnOptions, burn_subtitles
 from fast_sub.config import AppConfig, load_config, load_dotenv
@@ -91,6 +102,8 @@ COMMAND_NAMES = {
     "analyze",
     "auto",
     "bench",
+    "bench-translate",
+    "bench-translate-manifest",
     "bench-manifest",
     "burn",
     "doctor",
@@ -625,6 +638,21 @@ def bench_manifest_command(
     console.print(render_sample_manifest_schema())
 
 
+@app.command("bench-translate-manifest")
+def bench_translate_manifest_command(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable translation manifest schema."),
+    ] = False,
+) -> None:
+    """Show the manifest fields planned for `fast-sub bench-translate` matrices."""
+    payload = translate_sample_manifest_schema_payload()
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    console.print(render_translate_sample_manifest_schema())
+
+
 @app.command("bench", context_settings={"allow_extra_args": True})
 def bench_command(
     ctx: typer.Context,
@@ -851,6 +879,213 @@ def _format_progress_number(value: Any) -> str:
         return "" if value is None else f"{float(value):.3f}"
     except (TypeError, ValueError):
         return ""
+
+
+@app.command("bench-translate")
+def bench_translate_command(
+    input_file: Annotated[Path, typer.Argument(help="Input source SRT file.")],
+    reference: Annotated[
+        Path | None,
+        typer.Option("--reference", help="Target-language reference .srt or .txt path."),
+    ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", help="Translation provider id."),
+    ] = None,
+    source_lang: Annotated[
+        str,
+        typer.Option("--from", help="Source language: auto, en, zh, ja, ko."),
+    ] = "auto",
+    target_lang: Annotated[
+        str | None,
+        typer.Option("--to", help="Target language: en, zh, ja, ko."),
+    ] = None,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option("--output-dir", help="Benchmark output directory."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Print machine-readable JSON report."),
+    ] = False,
+    markdown: Annotated[
+        bool,
+        typer.Option("--markdown", help="Write a Markdown report."),
+    ] = False,
+    markdown_path: Annotated[
+        Path | None,
+        typer.Option("--markdown-path", help="Write Markdown report to this path."),
+    ] = None,
+    repeat: Annotated[
+        int,
+        typer.Option("--repeat", help="Number of benchmark repeats."),
+    ] = 1,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", help="Provider model id or local model manifest id."),
+    ] = None,
+    model_path_option: Annotated[
+        Path | None,
+        typer.Option("--model-path", help="Local provider model directory."),
+    ] = None,
+    batch_size: Annotated[
+        int | None,
+        typer.Option("--batch-size", help="Translation batch size."),
+    ] = None,
+    timeout: Annotated[
+        float | None,
+        typer.Option("--timeout", help="Provider timeout in seconds."),
+    ] = None,
+    sleep_seconds: Annotated[
+        float | None,
+        typer.Option("--sleep-seconds", help="Sleep between web translation cue calls."),
+    ] = None,
+    api_key: Annotated[
+        str | None,
+        typer.Option("--api-key", help="API key for api-openai-chat."),
+    ] = None,
+    base_url: Annotated[
+        str | None,
+        typer.Option("--base-url", help="OpenAI-compatible base URL."),
+    ] = None,
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", help="Optional TOML config path."),
+    ] = None,
+) -> None:
+    """Benchmark source SRT -> translate_srt_v1 -> target SRT quality."""
+    try:
+        try:
+            config = load_config(config_path)
+        except (FileNotFoundError, OSError, tomllib.TOMLDecodeError, ValueError) as exc:
+            raise BenchTranslateError(f"Could not read config: {exc}") from exc
+        resolved_provider = provider or config.translator.provider
+        if resolved_provider is None:
+            raise BenchTranslateError(
+                "Missing required option: --provider. Remote providers are never selected silently."
+            )
+        if target_lang is None:
+            raise BenchTranslateError("Missing required option: --to.")
+        if reference is None:
+            raise BenchTranslateError("Missing required option: --reference.")
+        if resolved_provider in {"web-bing", "web-google"} and not json_output:
+            err_console.print(
+                "[yellow]Privacy:[/yellow] subtitle text will be sent to a third-party web "
+                "translation service for this benchmark."
+            )
+        if resolved_provider == "api-openai-chat" and not json_output:
+            err_console.print(
+                "[yellow]Privacy:[/yellow] subtitle text will be sent to the configured "
+                "OpenAI-compatible API for this benchmark."
+            )
+        resolved_model = _resolve_bench_translate_model(
+            provider=resolved_provider,
+            cli_model=model,
+            config_model=config.translator.model,
+            config_provider=config.translator.provider,
+        )
+        resolved_model_path = model_path_option or (
+            Path(config.translator.model_path) if config.translator.model_path else None
+        )
+        resolved_api_key = api_key or os.getenv(config.translator.api_key_env)
+        resolved_base_url = base_url or config.translator.base_url or OPENAI_BASE_URL
+        if resolved_provider == "api-openai-chat":
+            if not resolved_model:
+                raise BenchTranslateError(
+                    "api-openai-chat requires --model or OPENAI_MODEL for bench-translate."
+                )
+            if not resolved_api_key:
+                raise BenchTranslateError(
+                    "api-openai-chat requires --api-key or OPENAI_API_KEY for bench-translate."
+                )
+        report = run_bench_translate(
+            input_file,
+            BenchTranslateOptions(
+                reference=reference,
+                provider=resolved_provider,
+                source_language=source_lang,
+                target_language=target_lang,
+                output_dir=output_dir,
+                markdown=markdown,
+                markdown_path=markdown_path,
+                repeat=repeat,
+                model=resolved_model,
+                model_path=resolved_model_path,
+                batch_size=batch_size
+                if batch_size is not None
+                else config.translator.batch_size,
+                timeout=timeout if timeout is not None else config.translator.timeout,
+                sleep_seconds=sleep_seconds
+                if sleep_seconds is not None
+                else config.translator.sleep_seconds,
+                api_key=resolved_api_key,
+                base_url=resolved_base_url,
+                command=sys.argv[1:],
+            ),
+        )
+    except BenchTranslateError as exc:
+        if exc.report is not None:
+            if json_output:
+                typer.echo(json.dumps(exc.report, ensure_ascii=False, indent=2))
+            else:
+                err_console.print(f"[red]Error:[/red] {_redact_secrets(str(exc))}")
+                console.print(render_translate_bench_markdown_report(exc.report))
+            raise typer.Exit(_bench_translate_report_exit_code(exc.report)) from exc
+        payload = _bench_translate_error_payload(exc)
+        if json_output:
+            typer.echo(json.dumps(payload, ensure_ascii=False))
+        else:
+            err_console.print(f"[red]Error:[/red] {_redact_secrets(str(exc))}")
+        raise typer.Exit(2) from exc
+
+    if json_output:
+        typer.echo(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+    console.print(render_translate_bench_markdown_report(report))
+
+
+def _bench_translate_error_payload(exc: BenchTranslateError) -> dict[str, Any]:
+    message = str(exc)
+    lower = message.lower()
+    code = "invalid_options"
+    if "unknown provider" in lower:
+        code = "invalid_provider"
+    elif "input file does not exist" in lower or "reference file does not exist" in lower:
+        code = "invalid_input"
+    elif "could not read" in lower or "must be .srt" in lower or "must be .txt" in lower:
+        code = "invalid_input"
+    return _error_payload(code=code, stage="bench-translate", message=message)
+
+
+def _bench_translate_report_exit_code(report: dict[str, Any]) -> int:
+    codes = {
+        str((run.get("error") or {}).get("code", "")).lower()
+        for run in report.get("runs", [])
+        if isinstance(run, dict)
+    }
+    if codes & {"invalid_input", "invalid_options", "invalid_provider"}:
+        return 2
+    if codes & {"missing_dependency"}:
+        return 3
+    if codes & {"missing_model", "model_not_found"}:
+        return 4
+    return 1
+
+
+def _resolve_bench_translate_model(
+    *,
+    provider: str,
+    cli_model: str | None,
+    config_model: str | None,
+    config_provider: str | None,
+) -> str | None:
+    if cli_model:
+        return cli_model
+    if config_model and config_provider in {None, provider}:
+        return config_model
+    if provider == "api-openai-chat":
+        return os.getenv("OPENAI_MODEL")
+    return None
 
 
 @app.command("transcribe")

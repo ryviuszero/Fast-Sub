@@ -22,12 +22,12 @@ Round 11: desktop UI
 Round 12: Web version
 ```
 
-Round 7 translation has landed in the Python CLI before Go owns the main subtitle path, closing a user-visible product gap. Round 7.5 plans a Python-side standalone `bench-translate` report so translation quality can be compared before Go migration; the existing `bench` command remains scoped to media transcription benchmark. Round 8 Go foundation should still stay limited to `doctor`, `probe`, `extract`, shared contracts, and compatibility tests. Round 8 must not replace the Python v0 CLI or change the user-facing default path.
+Round 7 translation has landed in the Python CLI before Go owns the main subtitle path, closing a user-visible product gap. Round 7.5 adds a Python-side standalone `bench-translate` report so translation quality can be compared before Go migration; the existing `bench` command remains scoped to media transcription benchmark. Round 8 Go foundation should still stay limited to `doctor`, `probe`, `extract`, shared contracts, and compatibility tests. Round 8 must not replace the Python v0 CLI or change the user-facing default path.
 
 Compatibility boundary:
 
 - Go must preserve the user-facing semantics of `translate_srt_v1` when it later owns translation orchestration.
-- Go must preserve or explicitly version the planned `bench_translate_v1` report schema: provider/model/source/target, cue counts, partial/all failure status, elapsed time, throughput, BLEU, chrF, exact match, and reference alignment status.
+- Go must preserve or explicitly version the Python `bench_translate_v1` report schema: provider/model/source/target, hashes, privacy/upload class, cue counts, partial/all failure status, elapsed time, throughput, BLEU, chrF, exact match, reference alignment status, and canonical 0-1 score scale.
 - Go compatibility tests should normalize JSON formatting but keep field meaning, exit code behavior, path redaction, and secret redaction compatible with the Python CLI.
 
 ## Target Architecture

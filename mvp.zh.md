@@ -176,7 +176,8 @@ v0 稳定命令：
 - `fast-sub models list/install/verify`
 - `fast-sub providers list/test`
 - `fast-sub bench input.mp4`
-- 第 7.5 轮计划新增独立命令：`fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider <id>`
+- `fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider <id>`
+- `fast-sub bench-translate-manifest`
 
 ## 隐私边界
 
@@ -198,13 +199,15 @@ v0 默认 provider 是 `local-faster-whisper`，音频留在本机。
 input media -> probe -> prepare_audio -> local-faster-whisper worker -> source SRT
 ```
 
-第 7.5 轮计划新增独立的 `fast-sub bench-translate` 命令，用于粗略评估翻译质量：
+第 7.5 轮新增独立的 `fast-sub bench-translate` 命令，用于粗略评估翻译质量：
 
 ```bash
 fast-sub bench-translate input.srt --reference ref.zh.srt --from en --to zh --provider local-nllb-ct2
 ```
 
-翻译 benchmark 使用目标语言 reference SRT/TXT，报告 Fast Sub lightweight BLEU、chrF、exact match、耗时、吞吐和失败 cue 数。它是可复现的粗略质量信号，不是人工质量保证。现有 `fast-sub bench` 继续专注媒体转写 benchmark。
+翻译 benchmark 使用目标语言 reference SRT/TXT，报告 BLEU、chrF、exact match、耗时、吞吐和失败 cue 数。它是可复现的粗略质量信号，不是人工质量保证。JSON canonical score 使用 0-1；如果环境安装了 sacreBLEU，报告会记录 sacreBLEU signature 和 raw 0-100 分；否则记录 `metric_implementation=fast_sub_lightweight_v1`，该 lightweight 分数不等价于 sacreBLEU。repeat summary 包含 avg/min/max/stddev。现有 `fast-sub bench` 继续专注媒体转写 benchmark。
+
+`fast-sub bench-translate-manifest` 会输出本地 manifest schema/example，用 samples + provider matrix 表达 light/standard 翻译样本。真实数据集由用户手动下载到 `local_tests/bench_translate/raw/`；生成样本按可用数据覆盖 `en/ja/ko -> zh` 和 `zh/ja/ko -> en`，并保持 ignored。
 
 benchmark 媒体、reference、生成的模型缓存和报告都放在已忽略的 `local_tests/` 下。`scripts/bench_assets.py` 是开发/手动素材准备工具，不是正式产品 CLI。不要提交真实模型、真实媒体、真实 reference corpus 或本地 benchmark 报告。
 
