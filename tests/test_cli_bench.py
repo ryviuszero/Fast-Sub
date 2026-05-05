@@ -7,6 +7,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 import fast_sub.cli.runtime as cli
+from fast_sub.cli.commands import bench_cmd
 
 runner = CliRunner()
 TEST_WORKDIR_ROOT = Path(".test-work") / "cli-bench"
@@ -104,7 +105,11 @@ def test_bench_command_infers_local_sample_defaults(monkeypatch) -> None:
     manifest = Path("local_tests/manifests/benchmark-assets-light.json")
     calls = []
 
-    monkeypatch.setattr(cli, "load_sample_metadata", lambda *args, **kwargs: {"language": "zh"})
+    monkeypatch.setattr(
+        bench_cmd,
+        "load_sample_metadata",
+        lambda *args, **kwargs: {"language": "zh"},
+    )
 
     def fake_run_bench(input_arg, options):  # noqa: ANN001
         calls.append((input_arg, options))
@@ -174,7 +179,7 @@ def test_bench_command_falls_back_to_auto_for_unknown_manifest_language(monkeypa
     calls = []
 
     monkeypatch.setattr(
-        cli,
+        bench_cmd,
         "load_sample_metadata",
         lambda *args, **kwargs: {"language": "unknown"},
     )
@@ -212,7 +217,7 @@ def test_bench_command_outputs_failed_report_as_json(monkeypatch) -> None:
     }
 
     def fail(input_file, options):  # noqa: ANN001
-        raise cli.BenchError("All benchmark profiles failed.", report=report)
+        raise bench_cmd.BenchError("All benchmark profiles failed.", report=report)
 
     monkeypatch.setattr(cli, "run_bench", fail)
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 import fast_sub.cli.runtime as cli
+from fast_sub.cli.commands import bench_cmd
 
 runner = CliRunner()
 TEST_WORKDIR_ROOT = Path(".test-work") / "cli-bench-translate"
@@ -361,7 +362,7 @@ def test_bench_translate_failed_report_exits_nonzero(monkeypatch) -> None:
     }
 
     def fail(_input, _options):  # noqa: ANN001
-        raise cli.BenchTranslateError("all failed", report=report)
+        raise bench_cmd.BenchTranslateError("all failed", report=report)
 
     monkeypatch.setattr(cli, "run_bench_translate", fail)
 
