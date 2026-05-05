@@ -7,7 +7,8 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 import fast_sub.cli.runtime as cli
-from fast_sub.pipeline.orchestrator import AutoOptions, AutoPipelineError, AutoResult, AutoStep
+from fast_sub.pipeline.errors import AutoPipelineError
+from fast_sub.pipeline.models import AutoOptions, AutoResult, AutoStep
 from fast_sub.stt.errors import TranscribeError
 
 runner = CliRunner()

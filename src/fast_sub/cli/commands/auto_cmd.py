@@ -9,7 +9,9 @@ import typer
 from fast_sub.cli.errors import exit_code_for_payload, json_error_for_exception
 from fast_sub.cli.helpers import console, echo_json, err_console, redact_secrets
 from fast_sub.contracts.errors import SubGenError
-from fast_sub.pipeline.orchestrator import AutoOptions, AutoPipelineError, auto_media
+from fast_sub.pipeline.errors import AutoPipelineError
+from fast_sub.pipeline.models import AutoOptions
+from fast_sub.pipeline.orchestrator import auto_media
 
 AutoMediaRunner = Callable[[Path, AutoOptions], Any]
 
