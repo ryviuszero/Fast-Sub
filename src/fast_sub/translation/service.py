@@ -5,7 +5,7 @@ import json
 import os
 import re
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +29,13 @@ from fast_sub.translation.models import (
 from fast_sub.translation.parsing import parse_chat_translations as parse_chat_translations
 
 
+@dataclass(frozen=True)
+class _TranslatePaths:
+    output: Path
+    progress: Path
+    errors: Path
+
+
 def translate_srt(input_file: Path, options: TranslateOptions) -> TranslateSrtResult:
     """Translate an SRT file and write the translated subtitle output.
 
@@ -39,115 +46,230 @@ def translate_srt(input_file: Path, options: TranslateOptions) -> TranslateSrtRe
     if not input_file.exists() or not input_file.is_file():
         raise _TranslationProviderError("invalid_input", f"Input file does not exist: {input_file}")
 
+    paths = _translate_paths(input_file, options)
+    segments = read_srt_segments(input_file)
+    options = _resolve_local_source_language(options, segments)
+    input_hash = sha256_file(input_file)
+    fingerprint = _checkpoint_fingerprint(input_file, input_hash, options)
+    translated_by_id = _checkpoint_translations(paths.progress, fingerprint, resume=options.resume)
+    errors: list[TranslationError] = []
+    warnings: list[str] = []
+
+    _translate_missing_segments(
+        segments,
+        options,
+        translated_by_id=translated_by_id,
+        errors=errors,
+        warnings=warnings,
+        progress_path=paths.progress,
+        fingerprint=fingerprint,
+    )
+
+    return _finish_translate_srt(
+        segments,
+        options,
+        paths,
+        translated_by_id=translated_by_id,
+        errors=errors,
+        warnings=warnings,
+    )
+
+
+def _translate_paths(input_file: Path, options: TranslateOptions) -> _TranslatePaths:
     output = options.output or input_file.with_name(
         f"{input_file.stem}.{options.target_language}.srt"
     )
-    progress_path = Path(str(output) + ".translate-progress.json")
-    errors_path = output.with_suffix(".errors.json")
-    segments = read_srt_segments(input_file)
-    if options.provider == "local-nllb-ct2" and options.source_language == "auto":
-        detected_language = detect_subtitle_language(segments)
-        if detected_language is None:
-            raise _TranslationProviderError(
-                "invalid_options",
-                (
-                    "local-nllb-ct2 could not reliably detect the subtitle source "
-                    "language; pass --from en|zh|ja|ko."
-                ),
-            )
-        options = replace(options, source_language=detected_language)
-    input_hash = sha256_file(input_file)
-    fingerprint = _checkpoint_fingerprint(input_file, input_hash, options)
-    checkpoint = _load_checkpoint(progress_path, fingerprint) if options.resume else {}
+    return _TranslatePaths(
+        output=output,
+        progress=Path(str(output) + ".translate-progress.json"),
+        errors=output.with_suffix(".errors.json"),
+    )
 
-    translated_by_id: dict[int, str] = {
+
+def _resolve_local_source_language(
+    options: TranslateOptions,
+    segments: list[Segment],
+) -> TranslateOptions:
+    if options.provider != "local-nllb-ct2" or options.source_language != "auto":
+        return options
+
+    detected_language = detect_subtitle_language(segments)
+    if detected_language is None:
+        raise _TranslationProviderError(
+            "invalid_options",
+            (
+                "local-nllb-ct2 could not reliably detect the subtitle source "
+                "language; pass --from en|zh|ja|ko."
+            ),
+        )
+    return replace(options, source_language=detected_language)
+
+
+def _checkpoint_translations(
+    progress_path: Path,
+    fingerprint: dict[str, Any],
+    *,
+    resume: bool,
+) -> dict[int, str]:
+    checkpoint = _load_checkpoint(progress_path, fingerprint) if resume else {}
+    return {
         int(key): str(value)
         for key, value in checkpoint.get("translations", {}).items()
         if str(key).isdigit()
     }
-    errors: list[TranslationError] = []
-    warnings: list[str] = []
 
+
+def _translate_missing_segments(
+    segments: list[Segment],
+    options: TranslateOptions,
+    *,
+    translated_by_id: dict[int, str],
+    errors: list[TranslationError],
+    warnings: list[str],
+    progress_path: Path,
+    fingerprint: dict[str, Any],
+) -> None:
     to_translate = [segment for segment in segments if segment.id not in translated_by_id]
-    if to_translate:
-        result = translate_segments(
-            segments=to_translate,
-            provider=options.provider,
-            source_lang=options.source_language,
-            target_lang=options.target_language,
-            model=options.model,
-            model_path=options.model_path,
-            batch_size=options.batch_size,
-            timeout=options.timeout,
-            sleep_seconds=options.sleep_seconds,
-            api_key=options.api_key,
-            base_url=options.base_url,
-        )
-        warnings.extend(getattr(result, "warnings", []))
-        errors.extend(result.errors)
-        for segment in result.segments:
-            if segment.translation:
-                translated_by_id[segment.id] = segment.translation
-                _write_checkpoint(progress_path, fingerprint, translated_by_id, errors)
-    else:
+    if not to_translate:
         warnings.append("Reused all cue translations from checkpoint.")
+        return
 
-    final_segments: list[Segment] = []
-    for segment in segments:
-        copy = segment.model_copy()
-        copy.translation = translated_by_id.get(segment.id)
-        if copy.translation is None and any(
-            error.batch_start_id <= segment.id <= error.batch_end_id for error in errors
-        ):
-            copy.translation = copy.text
-        final_segments.append(copy)
+    result = translate_segments(
+        segments=to_translate,
+        provider=options.provider,
+        source_lang=options.source_language,
+        target_lang=options.target_language,
+        model=options.model,
+        model_path=options.model_path,
+        batch_size=options.batch_size,
+        timeout=options.timeout,
+        sleep_seconds=options.sleep_seconds,
+        api_key=options.api_key,
+        base_url=options.base_url,
+    )
+    warnings.extend(getattr(result, "warnings", []))
+    errors.extend(result.errors)
+    for segment in result.segments:
+        if segment.translation:
+            translated_by_id[segment.id] = segment.translation
+            _write_checkpoint(progress_path, fingerprint, translated_by_id, errors)
 
+
+def _finish_translate_srt(
+    segments: list[Segment],
+    options: TranslateOptions,
+    paths: _TranslatePaths,
+    *,
+    translated_by_id: dict[int, str],
+    errors: list[TranslationError],
+    warnings: list[str],
+) -> TranslateSrtResult:
+    final_segments = _final_segments(segments, translated_by_id, errors)
     failed_count = sum(1 for segment in final_segments if segment.id not in translated_by_id)
     translated_count = len(translated_by_id)
     if errors:
         write_translation_errors(
-            errors_path,
+            paths.errors,
             provider=options.provider,
             errors=errors,
             warnings=warnings,
         )
-    if segments and translated_count == 0:
-        if not errors:
-            errors = [
-                TranslationError(
-                    batch_start_id=segments[0].id,
-                    batch_end_id=segments[-1].id,
-                    message="No cue was translated.",
-                    raw_response=None,
-                )
-            ]
-            write_translation_errors(errors_path, provider=options.provider, errors=errors)
-        raise _TranslationProviderError(
-            "provider_failed",
-            "All translation cues failed; no final SRT was written.",
-            hint=f"See {errors_path} for per-cue errors.",
-        )
+    _raise_if_no_translation(segments, translated_count, errors, options, paths.errors)
+    _write_translated_srt(paths.output, final_segments, options)
+    return _translate_srt_result(
+        paths,
+        options,
+        cues_count=len(segments),
+        translated_count=translated_count,
+        failed_count=failed_count,
+        has_errors=bool(errors),
+        warnings=warnings,
+    )
 
+
+def _final_segments(
+    segments: list[Segment],
+    translated_by_id: dict[int, str],
+    errors: list[TranslationError],
+) -> list[Segment]:
+    final_segments: list[Segment] = []
+    for segment in segments:
+        copy = segment.model_copy()
+        copy.translation = translated_by_id.get(segment.id)
+        if copy.translation is None and _segment_has_error(segment.id, errors):
+            copy.translation = copy.text
+        final_segments.append(copy)
+    return final_segments
+
+
+def _segment_has_error(segment_id: int, errors: list[TranslationError]) -> bool:
+    return any(error.batch_start_id <= segment_id <= error.batch_end_id for error in errors)
+
+
+def _raise_if_no_translation(
+    segments: list[Segment],
+    translated_count: int,
+    errors: list[TranslationError],
+    options: TranslateOptions,
+    errors_path: Path,
+) -> None:
+    if not segments or translated_count > 0:
+        return
+
+    if not errors:
+        errors.append(
+            TranslationError(
+                batch_start_id=segments[0].id,
+                batch_end_id=segments[-1].id,
+                message="No cue was translated.",
+                raw_response=None,
+            )
+        )
+        write_translation_errors(errors_path, provider=options.provider, errors=errors)
+    raise _TranslationProviderError(
+        "provider_failed",
+        "All translation cues failed; no final SRT was written.",
+        hint=f"See {errors_path} for per-cue errors.",
+    )
+
+
+def _write_translated_srt(
+    output: Path,
+    segments: list[Segment],
+    options: TranslateOptions,
+) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         render_srt(
-            final_segments,
+            segments,
             mode=options.mode,
             bilingual_order=options.bilingual_order,
         ),
         encoding="utf-8",
     )
+
+
+def _translate_srt_result(
+    paths: _TranslatePaths,
+    options: TranslateOptions,
+    *,
+    cues_count: int,
+    translated_count: int,
+    failed_count: int,
+    has_errors: bool,
+    warnings: list[str],
+) -> TranslateSrtResult:
     return TranslateSrtResult(
-        srt_path=output,
+        srt_path=paths.output,
         provider=options.provider,
         source_language=options.source_language,
         target_language=options.target_language,
         mode=options.mode.value,
-        cues_count=len(segments),
+        cues_count=cues_count,
         translated_count=translated_count,
         failed_count=failed_count,
-        errors_path=errors_path if errors else None,
-        checkpoint_path=progress_path,
+        errors_path=paths.errors if has_errors else None,
+        checkpoint_path=paths.progress,
         warnings=warnings,
     )
 
