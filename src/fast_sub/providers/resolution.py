@@ -8,11 +8,13 @@ from pydantic import BaseModel
 from fast_sub.contracts.provider import ProviderLocation, ProviderStatusCode, ProviderType
 from fast_sub.model_store.manager import model_path, verify_model
 from fast_sub.model_store.manifest import ModelManifestEntry, list_models
-from fast_sub.providers import ProviderDefinition, ProviderRegistry, default_registry
-
-LOCAL_FASTER_WHISPER_PROVIDER = "local-faster-whisper"
-DEFAULT_STT_PROVIDER = LOCAL_FASTER_WHISPER_PROVIDER
-DEFAULT_STT_MODEL = "whisper-small"
+from fast_sub.providers.constants import (
+    DEFAULT_STT_MODEL,
+    DEFAULT_STT_PROVIDER,
+    LOCAL_FASTER_WHISPER_PROVIDER,
+)
+from fast_sub.providers.models import ProviderDefinition, ProviderRegistry
+from fast_sub.providers.registry import default_registry
 
 _COMPATIBLE_STT_MODEL_BACKENDS: dict[str, set[str] | None] = {
     LOCAL_FASTER_WHISPER_PROVIDER: {"faster-whisper"},
@@ -250,3 +252,12 @@ def _find_model(
         if model.id == model_id:
             return model
     return None
+
+
+__all__ = [
+    "DEFAULT_STT_MODEL",
+    "DEFAULT_STT_PROVIDER",
+    "LOCAL_FASTER_WHISPER_PROVIDER",
+    "ProviderResolution",
+    "resolve_stt_provider",
+]

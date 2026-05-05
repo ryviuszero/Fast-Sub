@@ -17,6 +17,7 @@ from fast_sub.model_store.manager import model_path, verify_model
 from fast_sub.model_store.manifest import get_model
 from fast_sub.subtitles.models import Mode, Segment
 from fast_sub.subtitles.srt import render_srt
+from fast_sub.translation import constants as translation_constants
 from fast_sub.translation.errors import TranslationProviderError as _TranslationProviderError
 from fast_sub.translation.language import detect_subtitle_language, flores_code
 from fast_sub.translation.models import (
@@ -26,11 +27,6 @@ from fast_sub.translation.models import (
     TranslationResult,
 )
 from fast_sub.translation.parsing import parse_chat_translations as parse_chat_translations
-
-DEFAULT_NLLB_MODEL_ID = "nllb-200-distilled-600m-ct2-int8"
-TRANSLATION_PROVIDERS = {"web-bing", "web-google", "api-openai-chat", "local-nllb-ct2"}
-LANGUAGES = {"auto", "en", "zh", "ja", "ko"}
-TARGET_LANGUAGES = {"en", "zh", "ja", "ko"}
 
 
 def translate_srt(input_file: Path, options: TranslateOptions) -> TranslateSrtResult:
@@ -472,7 +468,7 @@ def resolve_nllb_model_path(*, model: str | None, explicit_model_path: Path | No
             f"Model path does not exist: {explicit_model_path}",
         )
 
-    model_id = model or DEFAULT_NLLB_MODEL_ID
+    model_id = model or translation_constants.DEFAULT_NLLB_MODEL_ID
     try:
         manifest = get_model(model_id)
     except KeyError as exc:
@@ -517,14 +513,14 @@ def write_translation_errors(
 
 
 def _validate_translate_options(options: TranslateOptions) -> None:
-    if options.provider not in TRANSLATION_PROVIDERS:
+    if options.provider not in translation_constants.TRANSLATION_PROVIDERS:
         raise _TranslationProviderError("invalid_provider", f"Unknown provider: {options.provider}")
-    if options.source_language not in LANGUAGES:
+    if options.source_language not in translation_constants.LANGUAGES:
         raise _TranslationProviderError(
             "invalid_options",
             f"Unsupported source language: {options.source_language}",
         )
-    if options.target_language not in TARGET_LANGUAGES:
+    if options.target_language not in translation_constants.TARGET_LANGUAGES:
         raise _TranslationProviderError(
             "invalid_options",
             f"Unsupported target language: {options.target_language}",
@@ -639,7 +635,7 @@ def _find_sentencepiece_model(path: Path) -> Path:
     raise _TranslationProviderError(
         "missing_model",
         f"NLLB sentencepiece model is missing in {path}. "
-        f"Run `fast-sub models install {DEFAULT_NLLB_MODEL_ID}`.",
+        f"Run `fast-sub models install {translation_constants.DEFAULT_NLLB_MODEL_ID}`.",
     )
 
 

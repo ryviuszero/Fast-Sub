@@ -14,12 +14,14 @@ from typing import Any
 import pysubs2
 
 from fast_sub.contracts.errors import SubGenError
-from fast_sub.stt.service import (
+from fast_sub.stt.constants import (
     DEFAULT_GPU_LOAD,
     DEFAULT_LANGUAGE,
     DEFAULT_MODE,
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
+)
+from fast_sub.stt.service import (
     TranscribeOptions,
     transcribe_media,
 )

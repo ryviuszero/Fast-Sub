@@ -13,12 +13,12 @@ from fast_sub.clients.downloads import (
     download_aria2,
     download_httpx,
 )
+from fast_sub.model_store import constants as model_store_constants
 from fast_sub.model_store.errors import ModelManagerError as _ModelManagerError
 from fast_sub.model_store.manifest import ModelManifestEntry, ModelManifestFile
 from fast_sub.output.paths import model_cache_dir
 
 DownloadProgress = Callable[[str, int, int | None], None]
-MODEL_DOWNLOADERS = {"auto", "httpx", "aria2"}
 
 
 @dataclass(frozen=True)
@@ -398,10 +398,10 @@ def _download(
 
 
 def _resolve_downloader(value: str) -> str:
-    if value not in MODEL_DOWNLOADERS:
+    if value not in model_store_constants.MODEL_DOWNLOADERS:
         raise _ModelManagerError(
             f"Unsupported model downloader: {value}. "
-            f"Choose one of: {', '.join(sorted(MODEL_DOWNLOADERS))}."
+            f"Choose one of: {', '.join(sorted(model_store_constants.MODEL_DOWNLOADERS))}."
         )
     if value == "auto":
         return "aria2" if _aria2_executable() else "httpx"

@@ -2,27 +2,15 @@ from __future__ import annotations
 
 import importlib.util
 import os
-from dataclasses import dataclass
-from pathlib import Path
 
 from fast_sub.contracts.provider import (
-    ProviderInfo,
     ProviderLocation,
     ProviderMetadata,
     ProviderStatus,
     ProviderStatusCode,
     ProviderType,
 )
-
-
-@dataclass(frozen=True)
-class ProviderDefinition:
-    metadata: ProviderMetadata
-    api_key_env: str | None = None
-    dependency_module: str | tuple[str, ...] | None = None
-    model_path: Path | None = None
-    install_hint: str | None = None
-
+from fast_sub.providers.models import ProviderDefinition, ProviderRegistry
 
 DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
     ProviderDefinition(
@@ -131,29 +119,19 @@ DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
 )
 
 
-class ProviderRegistry:
+class DefaultProviderRegistry(ProviderRegistry):
     def __init__(
         self,
         definitions: tuple[ProviderDefinition, ...] = DEFAULT_PROVIDER_DEFINITIONS,
     ) -> None:
-        self._definitions = {definition.metadata.id: definition for definition in definitions}
+        super().__init__(definitions)
 
-    def list(self) -> list[ProviderInfo]:
-        return [self.inspect(provider_id) for provider_id in sorted(self._definitions)]
-
-    def get(self, provider_id: str) -> ProviderDefinition | None:
-        return self._definitions.get(provider_id)
-
-    def inspect(self, provider_id: str) -> ProviderInfo:
-        definition = self._definitions[provider_id]
-        return ProviderInfo(
-            metadata=definition.metadata,
-            status=_provider_status(definition),
-        )
+    def _provider_status(self, definition: ProviderDefinition) -> ProviderStatus:
+        return _provider_status(definition)
 
 
 def default_registry() -> ProviderRegistry:
-    return ProviderRegistry()
+    return DefaultProviderRegistry()
 
 
 def _provider_status(definition: ProviderDefinition) -> ProviderStatus:
@@ -201,3 +179,10 @@ def _missing_dependency_message(definition: ProviderDefinition, module: str) -> 
     if definition.install_hint:
         return f"{message} {definition.install_hint}"
     return message
+
+
+__all__ = [
+    "DEFAULT_PROVIDER_DEFINITIONS",
+    "DefaultProviderRegistry",
+    "default_registry",
+]

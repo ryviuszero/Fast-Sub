@@ -17,9 +17,9 @@ from rich.progress import (
 from fast_sub.cli.context import console, err_console
 from fast_sub.cli.errors import error_payload
 from fast_sub.cli.redaction import redact_secrets
+from fast_sub.model_store.constants import MODEL_DOWNLOADERS
 from fast_sub.model_store.errors import ModelManagerError
 from fast_sub.model_store.manager import (
-    MODEL_DOWNLOADERS,
     install_model,
     model_path,
     verify_model,

@@ -78,9 +78,9 @@ from fast_sub.models import (
 )
 from fast_sub.output.paths import default_output_path, job_dir
 from fast_sub.pipeline.orchestrator import AutoOptions, AutoPipelineError, auto_media
+from fast_sub.stt.constants import VALID_LANGUAGES
 from fast_sub.stt.legacy import transcribe_segments, transcribe_segments_whisperx, transcribe_srt
 from fast_sub.stt.service import (
-    VALID_LANGUAGES,
     TranscribeOptions,
     transcribe_error_payload,
     transcribe_media,

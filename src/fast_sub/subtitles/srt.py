@@ -2,11 +2,8 @@ from __future__ import annotations
 
 import pysubs2
 
+from fast_sub.subtitles import constants as subtitle_constants
 from fast_sub.subtitles.models import BilingualOrder, Mode, RefineOptions, Segment, SubtitleCue
-
-CJK_DEFAULT_LINE_CHARS = 22
-EN_DEFAULT_LINE_CHARS = 42
-MIN_SPLIT_DURATION_SEC = 0.5
 
 
 def render_srt(
@@ -198,7 +195,7 @@ def _split_long_cues(
 ) -> list[SubtitleCue]:
     split: list[SubtitleCue] = []
     max_duration_ms = _seconds_to_ms(options.max_duration)
-    min_split_ms = _seconds_to_ms(MIN_SPLIT_DURATION_SEC)
+    min_split_ms = _seconds_to_ms(subtitle_constants.MIN_SPLIT_DURATION_SEC)
 
     for cue in cues:
         chunks = _text_chunks(cue.text, max_chars)
@@ -271,8 +268,8 @@ def _resolve_max_chars(cues: list[SubtitleCue], options: RefineOptions) -> int:
         return options.max_chars
     lang = options.lang.lower()
     if lang in {"zh", "ja", "ko"} or (lang == "auto" and _contains_cjk(cues)):
-        return CJK_DEFAULT_LINE_CHARS
-    return EN_DEFAULT_LINE_CHARS
+        return subtitle_constants.CJK_DEFAULT_LINE_CHARS
+    return subtitle_constants.EN_DEFAULT_LINE_CHARS
 
 
 def _contains_cjk(cues: list[SubtitleCue]) -> bool:

@@ -41,6 +41,7 @@ NORMALIZED_AUDIO_CODEC = "pcm_s16le"
 
 
 def ensure_media_tools() -> None:
+    """Ensure ffmpeg and ffprobe are available on the system PATH."""
     missing = [tool for tool in ("ffmpeg", "ffprobe") if shutil.which(tool) is None]
     if missing:
         joined = ", ".join(missing)
@@ -48,6 +49,7 @@ def ensure_media_tools() -> None:
 
 
 def doctor_status(cache_dir: Path | None = None, jobs_dir: Path | None = None) -> dict[str, Any]:
+    """Return diagnostic status for media tools, Python, and writable directories."""
     cache_path = cache_dir or Path(".fast-sub")
     jobs_path = jobs_dir or cache_path / "jobs"
     return {
@@ -64,6 +66,7 @@ def doctor_status(cache_dir: Path | None = None, jobs_dir: Path | None = None) -
 
 
 def doctor_ok(status: dict[str, Any]) -> bool:
+    """Return whether a doctor status payload satisfies all required checks."""
     return all(
         (
             status["ffmpeg"]["available"],
@@ -76,18 +79,22 @@ def doctor_ok(status: dict[str, Any]) -> bool:
 
 
 def is_audio_file(path: Path) -> bool:
+    """Return whether a path has a supported audio file extension."""
     return path.suffix.lower() in AUDIO_EXTENSIONS
 
 
 def is_media_file(path: Path) -> bool:
+    """Return whether a path is a supported audio or video file."""
     return path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS
 
 
 def list_media_files(directory: Path) -> list[Path]:
+    """List supported media files directly inside a directory."""
     return sorted(path for path in directory.iterdir() if is_media_file(path))
 
 
 def probe_media(input_file: Path) -> dict[str, Any]:
+    """Probe a media file with ffprobe and return normalized stream metadata."""
     if not input_file.exists():
         raise SubGenError(f"Input file does not exist: {input_file}")
     if not input_file.is_file():
@@ -141,6 +148,7 @@ def probe_media(input_file: Path) -> dict[str, Any]:
 
 
 def prepare_audio(input_file: Path, output: Path, audio_stream: int | None = None) -> None:
+    """Convert a media file audio stream into normalized WAV output."""
     _convert_to_wav(input_file, output, audio_stream=audio_stream)
 
 

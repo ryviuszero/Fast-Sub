@@ -7,12 +7,12 @@ from typing import Any
 
 from fast_sub.contracts.errors import SubGenError, WorkerRunnerError
 from fast_sub.infrastructure.ffmpeg import ensure_media_tools, is_media_file, probe_media
-from fast_sub.managers.providers import resolve_stt_provider
 from fast_sub.media.service import analyze_media
 from fast_sub.model_store.errors import ModelManagerError
 from fast_sub.model_store.manager import install_model
 from fast_sub.model_store.manifest import get_model
-from fast_sub.stt.service import (
+from fast_sub.providers.resolution import resolve_stt_provider
+from fast_sub.stt.constants import (
     DEFAULT_COMPUTE_TYPE,
     DEFAULT_DEVICE,
     DEFAULT_GPU_LOAD,
@@ -21,6 +21,8 @@ from fast_sub.stt.service import (
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
     DEFAULT_VAD,
+)
+from fast_sub.stt.service import (
     TranscribeOptions,
     TranscribeResult,
     transcribe_media,

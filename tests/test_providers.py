@@ -12,7 +12,7 @@ from fast_sub.contracts.provider import (
     TranslationProviderRequest,
     TranslationProviderResponse,
 )
-from fast_sub.providers import default_registry
+from fast_sub.providers.registry import default_registry
 
 
 def test_provider_contracts_are_json_serializable() -> None:
@@ -74,7 +74,7 @@ def test_local_faster_whisper_missing_dependency_mentions_local_asr(monkeypatch)
             return None
         return original_find_spec(name)
 
-    monkeypatch.setattr("fast_sub.providers.importlib.util.find_spec", fake_find_spec)
+    monkeypatch.setattr("fast_sub.providers.registry.importlib.util.find_spec", fake_find_spec)
 
     provider = default_registry().inspect("local-faster-whisper")
 

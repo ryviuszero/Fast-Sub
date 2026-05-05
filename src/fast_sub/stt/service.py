@@ -20,47 +20,26 @@ from fast_sub.infrastructure.ffmpeg import (
     probe_media,
 )
 from fast_sub.infrastructure.workers import run_stt_worker
-from fast_sub.managers.providers import resolve_stt_provider
 from fast_sub.media.service import analyze_media
 from fast_sub.models import Mode, Segment
 from fast_sub.output.paths import job_dir
+from fast_sub.providers.resolution import resolve_stt_provider
+from fast_sub.stt import constants as stt_constants
 from fast_sub.stt.errors import TranscribeError as _TranscribeError
 from fast_sub.subtitles.srt import render_srt
-
-DEFAULT_PROVIDER = "local-faster-whisper"
-DEFAULT_MODEL = "whisper-small"
-DEFAULT_LANGUAGE = "auto"
-DEFAULT_DEVICE = "auto"
-DEFAULT_COMPUTE_TYPE = "auto"
-DEFAULT_BATCH_SIZE = 4
-DEFAULT_GPU_LOAD = "balanced"
-DEFAULT_VAD = "auto"
-DEFAULT_MODE = "balanced"
-GPU_LOAD_BATCH_SIZES = {
-    "low": 2,
-    "balanced": DEFAULT_BATCH_SIZE,
-    "max": 8,
-}
-VALID_LANGUAGES = {"auto", "zh", "en", "ja", "ko"}
-VALID_DEVICES = {"auto", "cuda", "cpu"}
-VALID_COMPUTE_TYPES = {"auto", "float16", "int8_float16", "int8"}
-VALID_VAD = {"auto", "off", "normal", "aggressive"}
-VALID_MODES = {"fast", "balanced", "quality"}
-VALID_GPU_LOADS = set(GPU_LOAD_BATCH_SIZES)
-WORKER_COMMAND_ENV = "FAST_SUB_STT_WORKER_COMMAND"
 
 
 @dataclass(frozen=True)
 class TranscribeOptions:
-    provider: str = DEFAULT_PROVIDER
-    model: str = DEFAULT_MODEL
-    language: str = DEFAULT_LANGUAGE
-    device: str = DEFAULT_DEVICE
-    compute_type: str = DEFAULT_COMPUTE_TYPE
+    provider: str = stt_constants.DEFAULT_PROVIDER
+    model: str = stt_constants.DEFAULT_MODEL
+    language: str = stt_constants.DEFAULT_LANGUAGE
+    device: str = stt_constants.DEFAULT_DEVICE
+    compute_type: str = stt_constants.DEFAULT_COMPUTE_TYPE
     batch_size: int | None = None
-    gpu_load: str = DEFAULT_GPU_LOAD
-    vad: str = DEFAULT_VAD
-    mode: str = DEFAULT_MODE
+    gpu_load: str = stt_constants.DEFAULT_GPU_LOAD
+    vad: str = stt_constants.DEFAULT_VAD
+    mode: str = stt_constants.DEFAULT_MODE
     output: Path | None = None
     keep_temp: bool = False
     worker_command: list[str | Path] | None = None
@@ -283,7 +262,7 @@ def _resolve_model_path(provider_id: str, model_id: str) -> Path:
             stage="provider",
             code="UNSUPPORTED_PROVIDER",
         )
-    if provider_id != DEFAULT_PROVIDER:
+    if provider_id != stt_constants.DEFAULT_PROVIDER:
         raise _TranscribeError(
             f"Unsupported local STT provider for transcribe v0: {provider_id}",
             stage="provider",
@@ -315,7 +294,7 @@ def _format_resolution_error(resolution: Any) -> str:
 def _resolve_worker_command(options: TranscribeOptions) -> list[str | Path]:
     if options.worker_command:
         return options.worker_command
-    env_command = os.getenv(WORKER_COMMAND_ENV)
+    env_command = os.getenv(stt_constants.WORKER_COMMAND_ENV)
     if env_command:
         return shlex.split(env_command)
     return [sys.executable, "-m", "fast_sub_workers.faster_whisper"]
@@ -331,12 +310,12 @@ def _validate_input_file(input_file: Path) -> None:
 
 
 def _validate_options(options: TranscribeOptions) -> None:
-    _require_choice(options.language, VALID_LANGUAGES, "--language")
-    _require_choice(options.device, VALID_DEVICES, "--device")
-    _require_choice(options.compute_type, VALID_COMPUTE_TYPES, "--compute")
-    _require_choice(options.vad, VALID_VAD, "--vad")
-    _require_choice(options.mode, VALID_MODES, "--mode")
-    _require_choice(options.gpu_load, VALID_GPU_LOADS, "--gpu-load")
+    _require_choice(options.language, stt_constants.VALID_LANGUAGES, "--language")
+    _require_choice(options.device, stt_constants.VALID_DEVICES, "--device")
+    _require_choice(options.compute_type, stt_constants.VALID_COMPUTE_TYPES, "--compute")
+    _require_choice(options.vad, stt_constants.VALID_VAD, "--vad")
+    _require_choice(options.mode, stt_constants.VALID_MODES, "--mode")
+    _require_choice(options.gpu_load, stt_constants.VALID_GPU_LOADS, "--gpu-load")
     if options.batch_size is not None and options.batch_size <= 0:
         raise SubGenError("--batch-size must be greater than 0.")
 
@@ -344,7 +323,7 @@ def _validate_options(options: TranscribeOptions) -> None:
 def _resolve_batch_size(options: TranscribeOptions) -> int:
     if options.batch_size is not None:
         return options.batch_size
-    return GPU_LOAD_BATCH_SIZES[options.gpu_load]
+    return stt_constants.GPU_LOAD_BATCH_SIZES[options.gpu_load]
 
 
 def transcribe_error_payload(exc: SubGenError) -> dict[str, Any]:
@@ -361,7 +340,7 @@ def transcribe_error_payload(exc: SubGenError) -> dict[str, Any]:
 
 
 def _metadata_context(input_file: Path, options: TranscribeOptions) -> dict[str, Any]:
-    batch_size = options.batch_size or GPU_LOAD_BATCH_SIZES.get(options.gpu_load)
+    batch_size = options.batch_size or stt_constants.GPU_LOAD_BATCH_SIZES.get(options.gpu_load)
     return {
         "input": str(input_file),
         "provider": options.provider,

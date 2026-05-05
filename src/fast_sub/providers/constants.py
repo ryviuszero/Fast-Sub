@@ -1,0 +1,11 @@
+from __future__ import annotations
+
+LOCAL_FASTER_WHISPER_PROVIDER = "local-faster-whisper"
+DEFAULT_STT_PROVIDER = LOCAL_FASTER_WHISPER_PROVIDER
+DEFAULT_STT_MODEL = "whisper-small"
+
+__all__ = [
+    "DEFAULT_STT_MODEL",
+    "DEFAULT_STT_PROVIDER",
+    "LOCAL_FASTER_WHISPER_PROVIDER",
+]

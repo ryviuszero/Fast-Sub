@@ -26,6 +26,7 @@ def run_stt_worker(
     request_path: Path | None = None,
     response_path: Path | None = None,
 ) -> SttWorkerResponse:
+    """Run an STT worker process and parse its structured response."""
     if not command:
         raise WorkerRunnerError("Worker command is empty.")
 

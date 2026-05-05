@@ -1,0 +1,11 @@
+from __future__ import annotations
+
+CJK_DEFAULT_LINE_CHARS = 22
+EN_DEFAULT_LINE_CHARS = 42
+MIN_SPLIT_DURATION_SEC = 0.5
+
+__all__ = [
+    "CJK_DEFAULT_LINE_CHARS",
+    "EN_DEFAULT_LINE_CHARS",
+    "MIN_SPLIT_DURATION_SEC",
+]
