@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fast_sub.contracts.errors import SubGenError
-from fast_sub.infrastructure.ffmpeg import VIDEO_EXTENSIONS, _process_message
+from fast_sub.infrastructure.ffmpeg import process_message
+from fast_sub.media.constants import VIDEO_EXTENSIONS
 from fast_sub.output.paths import job_dir
 
 PRESET_ARGS: dict[str, tuple[str, str]] = {
@@ -160,7 +161,7 @@ def _escape_filter_value(value: str) -> str:
 
 
 def _burn_error_message(completed: subprocess.CompletedProcess[bytes]) -> str:
-    detail = _process_message(completed)
+    detail = process_message(completed)
     lowered = detail.lower()
     if "no such filter" in lowered or (
         "subtitles" in lowered and ("libass" in lowered or "error initializing" in lowered)

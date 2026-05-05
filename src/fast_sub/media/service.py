@@ -9,10 +9,10 @@ from typing import Any, Literal, cast
 
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.infrastructure.ffmpeg import (
-    _decode_process_output,
-    _process_message,
+    decode_process_output,
     is_media_file,
     probe_media,
+    process_message,
 )
 
 RecommendedVad = Literal["off", "normal", "aggressive"]
@@ -247,9 +247,9 @@ def _run_ffmpeg_analysis(input_file: Path, *, duration_sec: object) -> FfmpegAna
         "-",
     ]
     completed = subprocess.run(command, capture_output=True, check=False)
-    stderr = _decode_process_output(completed.stderr)
+    stderr = decode_process_output(completed.stderr)
     if completed.returncode != 0:
-        raise SubGenError(f"ffmpeg failed to analyze audio: {_process_message(completed)}")
+        raise SubGenError(f"ffmpeg failed to analyze audio: {process_message(completed)}")
     return parse_ffmpeg_analysis(stderr, duration_sec=_positive_float(duration_sec))
 
 
