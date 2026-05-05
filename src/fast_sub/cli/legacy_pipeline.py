@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import json
-import re
 import shutil
 from pathlib import Path
 from typing import TypeVar
 
 import typer
 
-from fast_sub.cli.constants import OPENAI_BASE_URL
+from fast_sub.cli.constants import (
+    DIRECTORY_PROGRESS_FILE,
+    LANGUAGE_CODE_PATTERN,
+    OPENAI_BASE_URL,
+    OPENAI_DEFAULT_MAX_AUDIO_MB,
+    OPENAI_DEFAULT_STT_MODEL,
+    OPENAI_TRANSCRIBE_JSON_ONLY_MODELS,
+    WHISPERX_DEFAULT_STT_MODEL,
+)
 from fast_sub.cli.helpers import console, err_console, redact_secrets
 from fast_sub.config import AppConfig, load_config
 from fast_sub.contracts.errors import ProviderResponseError, SubGenError
@@ -35,17 +42,6 @@ from fast_sub.subtitles.srt import render_srt
 from fast_sub.translation.service import translate_segments
 
 T = TypeVar("T")
-
-OPENAI_DEFAULT_STT_MODEL = "whisper-1"
-OPENAI_DEFAULT_MAX_AUDIO_MB = 25.0
-WHISPERX_DEFAULT_STT_MODEL = "small"
-OPENAI_TRANSCRIBE_JSON_ONLY_MODELS = {
-    "gpt-4o-transcribe",
-    "gpt-4o-mini-transcribe",
-    "gpt-4o-transcribe-diarize",
-}
-LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,3}(?:-[A-Za-z0-9]+)?$")
-DIRECTORY_PROGRESS_FILE = ".fast-sub-progress.json"
 
 
 def legacy_run(

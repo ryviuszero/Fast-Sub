@@ -10,14 +10,6 @@ from typing import Any
 import typer
 from rich.console import Console
 
-__all__ = [
-    "CliContext",
-    "console",
-    "echo_json",
-    "err_console",
-    "redact_secrets",
-    "redact_value",
-]
 
 console = Console()
 err_console = Console(stderr=True)
@@ -63,3 +55,13 @@ def redact_secrets(message: str) -> str:
     redacted = re.sub(r"sk-[A-Za-z0-9_-]{8,}", "sk-[redacted]", redacted)
     redacted = re.sub(r"(?i)(api[_-]?key|token)=([^&\s]+)", r"\1=[redacted]", redacted)
     return redacted
+
+
+__all__ = [
+    "CliContext",
+    "console",
+    "echo_json",
+    "err_console",
+    "redact_secrets",
+    "redact_value",
+]
