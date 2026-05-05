@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import os
 import re
 import statistics
 import time
-from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -17,6 +15,12 @@ from typing import Any
 
 import pysubs2
 
+from fast_sub.benchmark.text_metrics import (
+    lightweight_bleu_corpus,
+    lightweight_chrf_corpus,
+    normalize_quality_text,
+    normalize_subtitle_text,
+)
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.models import BilingualOrder, Mode
 from fast_sub.translation.constants import TARGET_LANGUAGES, TRANSLATION_PROVIDERS
@@ -476,8 +480,8 @@ def score_translation_quality(
     if metric_info["metric_implementation"] == "sacrebleu":
         bleu, chrf, raw = _score_sacrebleu(metric_predictions, metric_references, metric_info)
     else:
-        bleu = _lightweight_bleu_corpus(metric_predictions, metric_references)
-        chrf = _lightweight_chrf_corpus(metric_predictions, metric_references)
+        bleu = lightweight_bleu_corpus(metric_predictions, metric_references)
+        chrf = lightweight_chrf_corpus(metric_predictions, metric_references)
         raw = {
             "bleu_raw_score": bleu,
             "bleu_raw_scale": "0-1",
@@ -486,8 +490,8 @@ def score_translation_quality(
         }
     exact = None
     if alignment == "aligned":
-        normalized_predictions = [_normalize_quality_text(text) for text in prediction_texts]
-        normalized_references = [_normalize_quality_text(text) for text in reference_texts]
+        normalized_predictions = [normalize_quality_text(text) for text in prediction_texts]
+        normalized_references = [normalize_quality_text(text) for text in reference_texts]
         matches = sum(
             1
             for prediction, ref in zip(normalized_predictions, normalized_references, strict=True)
@@ -527,13 +531,13 @@ def _load_reference(path: Path) -> dict[str, Any]:
 
 def _load_srt_texts(path: Path) -> list[str]:
     subs = pysubs2.load(str(path), encoding="utf-8", format_="srt")
-    texts = [_normalize_subtitle_text(event.text) for event in subs.events]
+    texts = [normalize_subtitle_text(event.text) for event in subs.events]
     return [text for text in texts if text]
 
 
 def _load_txt_lines(path: Path) -> list[str]:
     raw_lines = path.read_text(encoding="utf-8").splitlines()
-    lines = [_normalize_subtitle_text(line) for line in raw_lines]
+    lines = [normalize_subtitle_text(line) for line in raw_lines]
     return [line for line in lines if line]
 
 
@@ -679,95 +683,6 @@ def _metric_corpus_sequences(
     if len(predictions) == len(references):
         return predictions, references
     return ["\n".join(predictions)], ["\n".join(references)]
-
-
-def _lightweight_bleu_corpus(predictions: list[str], references: list[str]) -> float | None:
-    return _lightweight_bleu("\n".join(predictions), "\n".join(references))
-
-
-def _lightweight_chrf_corpus(predictions: list[str], references: list[str]) -> float | None:
-    return _lightweight_chrf("\n".join(predictions), "\n".join(references))
-
-
-def _lightweight_bleu(prediction: str, reference: str) -> float | None:
-    pred_tokens = _quality_tokens(prediction)
-    ref_tokens = _quality_tokens(reference)
-    if not ref_tokens:
-        return None
-    if not pred_tokens:
-        return 0.0
-    precisions: list[float] = []
-    for n in range(1, 5):
-        pred_counts = _ngram_counts(pred_tokens, n)
-        ref_counts = _ngram_counts(ref_tokens, n)
-        if not pred_counts:
-            precisions.append(0.0)
-            continue
-        clipped = sum(min(count, ref_counts.get(ngram, 0)) for ngram, count in pred_counts.items())
-        precisions.append(clipped / sum(pred_counts.values()))
-    smooth = 1e-9
-    log_precision = sum(math.log(max(value, smooth)) for value in precisions) / 4
-    if len(pred_tokens) > len(ref_tokens):
-        bp = 1.0
-    else:
-        bp = math.exp(1 - len(ref_tokens) / len(pred_tokens))
-    return _round(bp * math.exp(log_precision))
-
-
-def _lightweight_chrf(
-    prediction: str,
-    reference: str,
-    *,
-    n: int = 6,
-    beta: float = 2.0,
-) -> float | None:
-    pred = _normalize_quality_text(prediction).replace(" ", "")
-    ref = _normalize_quality_text(reference).replace(" ", "")
-    if not ref:
-        return None
-    if not pred:
-        return 0.0
-    scores = []
-    for size in range(1, n + 1):
-        pred_counts = _ngram_counts(list(pred), size)
-        ref_counts = _ngram_counts(list(ref), size)
-        if not pred_counts or not ref_counts:
-            continue
-        overlap = sum(min(count, ref_counts.get(ngram, 0)) for ngram, count in pred_counts.items())
-        precision = overlap / sum(pred_counts.values())
-        recall = overlap / sum(ref_counts.values())
-        denom = beta * beta * precision + recall
-        scores.append(((1 + beta * beta) * precision * recall / denom) if denom else 0.0)
-    return _round(statistics.fmean(scores)) if scores else 0.0
-
-
-def _quality_tokens(text: str) -> list[str]:
-    normalized = _normalize_quality_text(text)
-    if any(_is_cjk(char) for char in normalized):
-        return [char for char in normalized if not char.isspace()]
-    return normalized.split()
-
-
-def _normalize_quality_text(text: str) -> str:
-    normalized = _normalize_subtitle_text(text).casefold()
-    normalized = re.sub(r"\s+", " ", normalized).strip()
-    return normalized
-
-
-def _normalize_subtitle_text(text: str) -> str:
-    normalized = text.replace("\\N", "\n").replace("\r\n", "\n").replace("\r", "\n")
-    normalized = re.sub(r"<[^>]+>", "", normalized)
-    return "\n".join(line.strip() for line in normalized.splitlines() if line.strip())
-
-
-def _ngram_counts(tokens: list[str], n: int) -> Counter[tuple[str, ...]]:
-    return Counter(tuple(tokens[index : index + n]) for index in range(0, len(tokens) - n + 1))
-
-
-def _is_cjk(char: str) -> bool:
-    return (
-        "\u4e00" <= char <= "\u9fff" or "\u3040" <= char <= "\u30ff" or "\uac00" <= char <= "\ud7af"
-    )
 
 
 def _null_quality(reference: dict[str, Any], metric_info: dict[str, Any]) -> dict[str, Any]:

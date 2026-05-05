@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import platform
-import re
 import statistics
 import subprocess
 import sys
@@ -14,6 +13,12 @@ from typing import Any
 
 import pysubs2
 
+from fast_sub.benchmark.text_metrics import (
+    error_rate,
+    normalize_for_cer,
+    normalize_for_wer,
+    normalize_subtitle_text,
+)
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.stt.constants import (
     DEFAULT_GPU_LOAD,
@@ -968,7 +973,7 @@ def _analyze_srt_output(path: Path) -> dict[str, Any]:
     invalid = 0
     previous_end = 0
     for event in subs.events:
-        text = _normalize_subtitle_text(event.text)
+        text = normalize_subtitle_text(event.text)
         if not text:
             invalid += 1
             continue
@@ -979,7 +984,7 @@ def _analyze_srt_output(path: Path) -> dict[str, Any]:
     joined = "\n".join(texts).strip()
     return {
         "text": joined,
-        "prediction_chars": len(_normalize_for_cer(joined)),
+        "prediction_chars": len(normalize_for_cer(joined)),
         "empty_output": not bool(joined),
         "invalid_segments_count": invalid,
     }
@@ -999,7 +1004,7 @@ def _score_quality(sample: dict[str, Any], prediction: str) -> dict[str, Any]:
             "wer": None,
             "cer": None,
             "reference_chars": None,
-            "prediction_chars": len(_normalize_for_cer(prediction)),
+            "prediction_chars": len(normalize_for_cer(prediction)),
         }
     path = Path(str(reference_path))
     if not path.is_absolute():
@@ -1010,60 +1015,20 @@ def _score_quality(sample: dict[str, Any], prediction: str) -> dict[str, Any]:
             "wer": None,
             "cer": None,
             "reference_chars": None,
-            "prediction_chars": len(_normalize_for_cer(prediction)),
+            "prediction_chars": len(normalize_for_cer(prediction)),
         }
     reference = path.read_text(encoding="utf-8")
-    reference_cer_text = _normalize_for_cer(reference)
-    prediction_cer_text = _normalize_for_cer(prediction)
-    reference_words = _normalize_for_wer(reference)
-    prediction_words = _normalize_for_wer(prediction)
+    reference_cer_text = normalize_for_cer(reference)
+    prediction_cer_text = normalize_for_cer(prediction)
+    reference_words = normalize_for_wer(reference)
+    prediction_words = normalize_for_wer(prediction)
     return {
         "reference_available": True,
-        "wer": _error_rate(reference_words, prediction_words),
-        "cer": _error_rate(list(reference_cer_text), list(prediction_cer_text)),
+        "wer": error_rate(reference_words, prediction_words),
+        "cer": error_rate(list(reference_cer_text), list(prediction_cer_text)),
         "reference_chars": len(reference_cer_text),
         "prediction_chars": len(prediction_cer_text),
     }
-
-
-def _normalize_subtitle_text(text: str) -> str:
-    normalized = text.replace("\\N", "\n").replace("\r\n", "\n").replace("\r", "\n")
-    normalized = re.sub(r"<[^>]+>", "", normalized)
-    return "\n".join(line.strip() for line in normalized.splitlines() if line.strip())
-
-
-def _normalize_for_cer(text: str) -> str:
-    normalized = _normalize_subtitle_text(text).casefold()
-    return "".join(char for char in normalized if char.isalnum())
-
-
-def _normalize_for_wer(text: str) -> list[str]:
-    normalized = _normalize_subtitle_text(text).casefold()
-    normalized = re.sub(r"[^\w\s]", " ", normalized, flags=re.UNICODE)
-    return [word for word in normalized.split() if word]
-
-
-def _error_rate(reference: list[str], prediction: list[str]) -> float | None:
-    if not reference:
-        return None
-    return _round(_edit_distance(reference, prediction) / len(reference))
-
-
-def _edit_distance(reference: list[str], prediction: list[str]) -> int:
-    previous = list(range(len(prediction) + 1))
-    for ref_index, ref_item in enumerate(reference, start=1):
-        current = [ref_index]
-        for pred_index, pred_item in enumerate(prediction, start=1):
-            cost = 0 if ref_item == pred_item else 1
-            current.append(
-                min(
-                    current[pred_index - 1] + 1,
-                    previous[pred_index] + 1,
-                    previous[pred_index - 1] + cost,
-                )
-            )
-        previous = current
-    return previous[-1]
 
 
 def _redacted_command_string(command: list[str] | None, *, input_file: Path) -> str | None:

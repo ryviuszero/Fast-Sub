@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Annotated, Any, cast
 
 import typer
@@ -145,7 +147,8 @@ def _validate_model_downloader(value: str) -> None:
         )
 
 
-def _model_download_progress():  # noqa: ANN202
+@contextmanager
+def _model_download_progress() -> Iterator[Callable[[str, int, int | None], None]]:
     progress = Progress(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
@@ -169,16 +172,11 @@ def _model_download_progress():  # noqa: ANN202
             progress.update(task_id, total=total)
         progress.update(task_id, completed=downloaded)
 
-    class ProgressContext:
-        def __enter__(self):  # noqa: ANN204
-            progress.start()
-            return update
-
-        def __exit__(self, exc_type, exc, tb):  # noqa: ANN001, ANN204
-            progress.stop()
-            return False
-
-    return ProgressContext()
+    progress.start()
+    try:
+        yield update
+    finally:
+        progress.stop()
 
 
 def _format_bytes(value: object) -> str:
