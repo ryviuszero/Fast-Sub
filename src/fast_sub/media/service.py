@@ -1,3 +1,5 @@
+"""Media analysis services built on ffprobe and ffmpeg output."""
+
 from __future__ import annotations
 
 import re
@@ -44,6 +46,7 @@ _PEAK_VOLUME_RE = re.compile(PEAK_VOLUME_PATTERN)
 
 
 def analyze_media(input_file: Path) -> AnalysisResult:
+    """Inspect a media file and return speech, silence, volume, and recommendation data."""
     _validate_analyze_input(input_file)
     info = probe_media(input_file)
     ffmpeg_analysis = _run_ffmpeg_analysis(input_file, duration_sec=info.get("duration_sec"))
@@ -62,6 +65,7 @@ def build_analysis_result(
     peak_volume_db: float | None,
     silence_segments: list[TimeInterval],
 ) -> AnalysisResult:
+    """Build an analysis result from probed duration and parsed ffmpeg audio metrics."""
     duration = _positive_float(duration_sec)
     bounded_silence = _bound_intervals(silence_segments, duration)
     speech_segments = _speech_segments(duration, bounded_silence)
@@ -105,6 +109,7 @@ def build_analysis_result(
 
 
 def recommend_vad(duration_sec: float | None, silence_ratio: float) -> RecommendedVad:
+    """Recommend a VAD level from media duration and silence ratio."""
     if silence_ratio > AGGRESSIVE_VAD_SILENCE_RATIO:
         return "aggressive"
     if silence_ratio > NORMAL_VAD_SILENCE_RATIO:
@@ -118,6 +123,7 @@ def recommend_mode(
     duration_sec: float | None,
     warnings: list[AnalysisWarning],
 ) -> RecommendedMode:
+    """Recommend a transcription mode from duration and analysis warnings."""
     quality_warnings = {
         LOW_VOLUME_WARNING,
         FRAGMENTED_SPEECH_WARNING,
@@ -131,6 +137,7 @@ def recommend_mode(
 
 
 def parse_ffmpeg_analysis(stderr: str, duration_sec: float | None = None) -> FfmpegAnalysis:
+    """Parse ffmpeg silencedetect and volumedetect stderr output."""
     open_silence_start: float | None = None
     silence_segments: list[TimeInterval] = []
     mean_volume_db: float | None = None

@@ -1,3 +1,5 @@
+"""Constants and typed value sets for media file handling and analysis."""
+
 from __future__ import annotations
 
 from typing import Literal

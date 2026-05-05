@@ -1,3 +1,9 @@
+"""Media constants exposed by the media package.
+
+The media package owns media file classification, audio analysis models,
+and ffmpeg-backed analysis services used by CLI and pipeline flows.
+"""
+
 from __future__ import annotations
 
 from fast_sub.media.constants import (
