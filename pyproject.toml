@@ -39,6 +39,7 @@ packages = ["src/fast_sub", "src/fast_sub_workers"]
 
 [dependency-groups]
 dev = [
+    "mypy>=1.20.2",
     "pytest>=8.3.0",
     "ruff>=0.8.0",
 ]
@@ -53,3 +54,8 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+follow_imports = "skip"
