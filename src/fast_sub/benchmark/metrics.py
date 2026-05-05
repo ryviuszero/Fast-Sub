@@ -6,14 +6,10 @@ from fast_sub.benchmark.text_metrics import (
     normalize_for_wer,
     normalize_quality_text,
 )
-from fast_sub.benchmark.translation import (
-    score_translation_quality,
-)
 
 __all__ = [
     "edit_distance",
     "normalize_for_cer",
     "normalize_for_wer",
     "normalize_quality_text",
-    "score_translation_quality",
 ]
