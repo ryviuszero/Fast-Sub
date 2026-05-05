@@ -1,3 +1,5 @@
+"""Errors raised by model store operations."""
+
 from __future__ import annotations
 
 

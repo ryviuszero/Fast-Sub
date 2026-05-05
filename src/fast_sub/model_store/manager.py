@@ -1,9 +1,9 @@
+"""Model installation, integrity verification, and download orchestration."""
+
 from __future__ import annotations
 
 import hashlib
 import shutil
-from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlparse
 
@@ -16,38 +16,12 @@ from fast_sub.clients.downloads import (
 from fast_sub.model_store import constants as model_store_constants
 from fast_sub.model_store.errors import ModelManagerError as _ModelManagerError
 from fast_sub.model_store.manifest import ModelManifestEntry, ModelManifestFile
+from fast_sub.model_store.models import DownloadProgress, ModelStatus
 from fast_sub.output.paths import model_cache_dir
-
-DownloadProgress = Callable[[str, int, int | None], None]
-
-
-@dataclass(frozen=True)
-class ModelStatus:
-    id: str
-    path: Path
-    installed: bool
-    status: str
-    message: str
-    sha256: str | None = None
-    size_bytes: int | None = None
-    checked_files: int = 0
-    manifest_type: str = "file"
-
-    def as_dict(self) -> dict[str, object]:
-        return {
-            "id": self.id,
-            "path": str(self.path),
-            "installed": self.installed,
-            "status": self.status,
-            "message": self.message,
-            "sha256": self.sha256,
-            "size_bytes": self.size_bytes,
-            "checked_files": self.checked_files,
-            "manifest_type": self.manifest_type,
-        }
 
 
 def model_path(model: ModelManifestEntry, cache_dir: Path | None = None) -> Path:
+    """Return the expected local install path for a manifest entry."""
     root = cache_dir or model_cache_dir()
     if model.files:
         return root / model.id
@@ -56,6 +30,7 @@ def model_path(model: ModelManifestEntry, cache_dir: Path | None = None) -> Path
 
 
 def verify_model(model: ModelManifestEntry, cache_dir: Path | None = None) -> ModelStatus:
+    """Verify whether a model exists locally and matches its manifest."""
     path = model_path(model, cache_dir)
     if model.files:
         return _verify_directory_model(model, path)
@@ -113,12 +88,13 @@ def install_model(
     model: ModelManifestEntry,
     cache_dir: Path | None = None,
     *,
-    timeout: float = 60,
+    timeout: float = model_store_constants.DEFAULT_MODEL_DOWNLOAD_TIMEOUT_SEC,
     downloader: str = "auto",
-    aria2_connections: int = 8,
-    aria2_split: int = 8,
+    aria2_connections: int = model_store_constants.DEFAULT_ARIA2_CONNECTIONS,
+    aria2_split: int = model_store_constants.DEFAULT_ARIA2_SPLIT,
     progress: DownloadProgress | None = None,
 ) -> ModelStatus:
+    """Install a model and verify the downloaded artifact before marking it installed."""
     existing = verify_model(model, cache_dir)
     if existing.installed:
         return existing
@@ -165,9 +141,10 @@ def install_model(
 
 
 def sha256_file(path: Path) -> str:
+    """Return the SHA-256 digest for a file."""
     digest = hashlib.sha256()
     with path.open("rb") as file:
-        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+        for chunk in iter(lambda: file.read(model_store_constants.SHA256_CHUNK_SIZE), b""):
             digest.update(chunk)
     return digest.hexdigest()
 
@@ -467,7 +444,10 @@ def _unlink_if_exists(path: Path) -> None:
 
 def _ensure_disk_space(directory: Path, required_bytes: int) -> None:
     usage = shutil.disk_usage(directory)
-    reserve = max(50 * 1024 * 1024, required_bytes // 20)
+    reserve = max(
+        model_store_constants.MIN_DISK_RESERVE_BYTES,
+        required_bytes // model_store_constants.DISK_RESERVE_RATIO_DIVISOR,
+    )
     if usage.free < required_bytes + reserve:
         raise _ModelManagerError(
             "Not enough free disk space for model download. "

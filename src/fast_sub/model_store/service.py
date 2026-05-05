@@ -1,3 +1,5 @@
+"""Use-case helpers for CLI model store commands."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
@@ -11,6 +13,7 @@ def list_model_rows(
     verify_model_func: Callable[[Any], Any],
     model_path_func: Callable[[Any], Path],
 ) -> list[dict[str, Any]]:
+    """Build rows describing every known model and its install status."""
     rows = []
     for model in list_models_func():
         status = verify_model_func(model)
@@ -39,6 +42,7 @@ def verify_model_status(
     get_model_func: Callable[[str], Any],
     verify_model_func: Callable[[Any], Any],
 ) -> Any:
+    """Resolve and verify a model by id."""
     return verify_model_func(get_model_func(model_id))
 
 
@@ -53,6 +57,7 @@ def install_model_use_case(
     validate_downloader_func: Callable[[str], None],
     install_model_func: Callable[..., Any],
 ) -> tuple[Any, Any]:
+    """Resolve, validate, and install a model with the selected downloader."""
     model = get_model_func(model_id)
     validate_downloader_func(downloader)
     status = install_model_func(

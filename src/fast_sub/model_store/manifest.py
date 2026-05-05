@@ -1,9 +1,13 @@
+"""Built-in model manifest entries and lookup helpers."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field, HttpUrl
 
 
 class ModelManifestFile(BaseModel):
+    """A single required file within a directory-style model manifest."""
+
     path: str
     size_bytes: int = Field(ge=0)
     sha256: str
@@ -12,6 +16,8 @@ class ModelManifestFile(BaseModel):
 
 
 class ModelManifestEntry(BaseModel):
+    """Metadata and integrity requirements for a downloadable model."""
+
     id: str
     name: str
     type: str
@@ -27,10 +33,12 @@ class ModelManifestEntry(BaseModel):
 
     @property
     def manifest_type(self) -> str:
+        """Return whether the model installs as one file or a directory."""
         return "directory" if self.files else "file"
 
     @property
     def required_file_count(self) -> int:
+        """Return how many files must be present for verification."""
         return len(self.files) if self.files else 1
 
 
@@ -198,10 +206,12 @@ MODELS: tuple[ModelManifestEntry, ...] = (
 
 
 def list_models() -> tuple[ModelManifestEntry, ...]:
+    """Return all built-in model manifest entries."""
     return MODELS
 
 
 def get_model(model_id: str) -> ModelManifestEntry:
+    """Return a built-in model manifest entry by id."""
     for model in MODELS:
         if model.id == model_id:
             return model
