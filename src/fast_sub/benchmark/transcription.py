@@ -6,13 +6,22 @@ import statistics
 import subprocess
 import sys
 from collections.abc import Iterable
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pysubs2
 
+from fast_sub.benchmark.manifests import (
+    BENCH_MEASUREMENT_SCOPE,
+    BENCH_SCHEMA_VERSION,
+)
+from fast_sub.benchmark.models import (
+    BENCH_PROFILE_CHOICES,
+    DEFAULT_PROFILES,
+    BenchOptions,
+    BenchProfile,
+)
 from fast_sub.benchmark.text_metrics import (
     error_rate,
     normalize_for_cer,
@@ -20,86 +29,13 @@ from fast_sub.benchmark.text_metrics import (
     normalize_subtitle_text,
 )
 from fast_sub.contracts.errors import SubGenError
-from fast_sub.stt.constants import (
-    DEFAULT_GPU_LOAD,
-    DEFAULT_LANGUAGE,
-    DEFAULT_MODE,
-    DEFAULT_MODEL,
-    DEFAULT_PROVIDER,
-)
+from fast_sub.stt.constants import DEFAULT_MODE, DEFAULT_MODEL, DEFAULT_PROVIDER
 from fast_sub.stt.service import (
     TranscribeOptions,
     transcribe_media,
 )
 
-BENCH_SCHEMA_VERSION = 1
-MEASUREMENT_SCOPE = "transcribe_media_v1"
-BENCH_PROFILE_CHOICES = {"all", "cpu-int8", "auto"}
-SAMPLE_MANIFEST_EXAMPLE = {
-    "schema_version": 1,
-    "samples": [
-        {
-            "id": "zh-interview-1m",
-            "kind": "sample",
-            "prepared_media_path": "local_tests/media/light/zh-interview-1m.wav",
-            "prepared_media_checksum_sha256": "<sha256>",
-            "reference_transcript_path": "local_tests/references/light/zh-interview-1m.txt",
-            "reference_transcript_checksum_sha256": "<sha256>",
-            "language": "zh",
-            "source_dataset": "AISHELL-1",
-            "source_url": "https://openslr.org/33/",
-            "license": "Apache-2.0",
-            "redistributable": True,
-            "target_metrics": ["rtfx", "cer", "segments_count", "invalid_segments_count"],
-        }
-    ],
-}
-SAMPLE_MANIFEST_REQUIRED_FIELDS = (
-    "samples",
-    "samples[].id",
-    "samples[].prepared_media_path",
-)
-SAMPLE_MANIFEST_RECOMMENDED_FIELDS = (
-    "samples[].prepared_media_checksum_sha256",
-    "samples[].reference_transcript_path",
-    "samples[].reference_transcript_checksum_sha256",
-    "samples[].language",
-    "samples[].source_dataset",
-    "samples[].source_url",
-    "samples[].license",
-    "samples[].redistributable",
-    "samples[].target_metrics",
-)
-
-
-@dataclass(frozen=True)
-class BenchProfile:
-    name: str
-    device: str
-    compute_type: str
-
-
-@dataclass(frozen=True)
-class BenchOptions:
-    provider: str = DEFAULT_PROVIDER
-    model: str = DEFAULT_MODEL
-    language: str = DEFAULT_LANGUAGE
-    mode: str = DEFAULT_MODE
-    repeat: int = 1
-    gpu_load: str = DEFAULT_GPU_LOAD
-    batch_size: int | None = None
-    markdown: Path | None = None
-    sample_manifest: Path | None = None
-    sample_id: str | None = None
-    command: list[str] | None = None
-    progress: Any | None = None
-    profile: str = "all"
-
-
-DEFAULT_PROFILES = (
-    BenchProfile(name="cpu-int8", device="cpu", compute_type="int8"),
-    BenchProfile(name="auto", device="auto", compute_type="auto"),
-)
+MEASUREMENT_SCOPE = BENCH_MEASUREMENT_SCOPE
 
 
 def run_bench(
@@ -238,49 +174,6 @@ def load_sample_metadata(
     if "checksum_sha256" not in metadata and selected.get("prepared_media_checksum_sha256"):
         metadata["checksum_sha256"] = selected.get("prepared_media_checksum_sha256")
     return metadata
-
-
-def sample_manifest_schema_payload() -> dict[str, Any]:
-    return {
-        "schema_version": BENCH_SCHEMA_VERSION,
-        "kind": "fast_sub_bench_sample_manifest_schema",
-        "matching_rule": (
-            "fast-sub bench matches the input media filename against samples[].prepared_media_path."
-        ),
-        "required_fields": list(SAMPLE_MANIFEST_REQUIRED_FIELDS),
-        "recommended_fields": list(SAMPLE_MANIFEST_RECOMMENDED_FIELDS),
-        "supported_languages": ["auto", "zh", "en", "ja", "ko"],
-        "notes": [
-            "assets[] is not required by fast-sub bench.",
-            "The bench CLI does not take --sample-id; use prepared_media_path to match samples.",
-            "reference_transcript_path enables WER/CER scoring.",
-            "Unsupported language metadata falls back to auto for transcription.",
-        ],
-        "example": SAMPLE_MANIFEST_EXAMPLE,
-    }
-
-
-def render_sample_manifest_schema() -> str:
-    payload = sample_manifest_schema_payload()
-    lines = [
-        "Fast Sub Bench Sample Manifest",
-        "",
-        "Matching:",
-        f"- {payload['matching_rule']}",
-        "",
-        "Required fields:",
-        *[f"- {field}" for field in payload["required_fields"]],
-        "",
-        "Recommended fields:",
-        *[f"- {field}" for field in payload["recommended_fields"]],
-        "",
-        "Supported language values:",
-        "- auto, zh, en, ja, ko",
-        "",
-        "Example:",
-        json.dumps(payload["example"], ensure_ascii=False, indent=2),
-    ]
-    return "\n".join(lines)
 
 
 def render_markdown_report(report: dict[str, Any]) -> str:

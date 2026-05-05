@@ -10,9 +10,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from fast_sub.benchmark.models import BenchTranslateOptions
 from fast_sub.benchmark.translation import (
     BenchTranslateError,
-    BenchTranslateOptions,
     _metric_info,
     run_bench_translate,
     score_translation_quality,

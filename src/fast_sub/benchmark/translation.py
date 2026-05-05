@@ -7,7 +7,6 @@ import re
 import statistics
 import time
 from collections.abc import Iterable
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -15,6 +14,11 @@ from typing import Any
 
 import pysubs2
 
+from fast_sub.benchmark.manifests import (
+    BENCH_TRANSLATE_MEASUREMENT_SCOPE,
+    BENCH_TRANSLATE_SCHEMA_VERSION,
+)
+from fast_sub.benchmark.models import BenchTranslateOptions
 from fast_sub.benchmark.text_metrics import (
     lightweight_bleu_corpus,
     lightweight_chrf_corpus,
@@ -31,122 +35,18 @@ from fast_sub.translation.service import (
     translate_srt,
 )
 
-BENCH_TRANSLATE_SCHEMA_VERSION = 1
-MEASUREMENT_SCOPE = "translate_srt_v1"
+MEASUREMENT_SCOPE = BENCH_TRANSLATE_MEASUREMENT_SCOPE
 NORMALIZATION_PROFILE = "translate_quality_basic_v1"
 LIGHTWEIGHT_METRIC_IMPLEMENTATION = "fast_sub_lightweight_v1"
 LIGHTWEIGHT_TOKENIZER = "char_cjk_or_whitespace_v1"
 REMOTE_WEB_PROVIDERS = {"web-bing", "web-google"}
 REMOTE_API_PROVIDERS = {"api-openai-chat"}
-TRANSLATE_SAMPLE_MANIFEST_EXAMPLE = {
-    "schema_version": 1,
-    "providers": [
-        {"id": "web-bing"},
-        {"id": "local-nllb-ct2", "model": "nllb-200-distilled-600m-ct2-int8"},
-    ],
-    "samples": [
-        {
-            "id": "en-podcast-1m-to-zh",
-            "source_subtitle_path": "local_tests/bench_translate/datasets/light/en-zh.source.srt",
-            "reference_translation_path": (
-                "local_tests/bench_translate/datasets/light/en-zh.reference.srt"
-            ),
-            "source_language": "en",
-            "target_language": "zh",
-            "domain": "podcast",
-            "source_dataset": "authorized local sample",
-            "license": "local-only",
-            "redistributable": False,
-            "target_metrics": ["bleu", "chrf", "exact_match_rate", "elapsed_sec"],
-        }
-    ],
-}
-TRANSLATE_SAMPLE_MANIFEST_REQUIRED_FIELDS = (
-    "providers",
-    "providers[].id",
-    "samples",
-    "samples[].id",
-    "samples[].source_subtitle_path",
-    "samples[].reference_translation_path",
-    "samples[].source_language",
-    "samples[].target_language",
-)
-
-
-@dataclass(frozen=True)
-class BenchTranslateOptions:
-    reference: Path
-    provider: str
-    source_language: str = "auto"
-    target_language: str = "zh"
-    output_dir: Path | None = None
-    markdown: bool = False
-    markdown_path: Path | None = None
-    repeat: int = 1
-    model: str | None = None
-    model_path: Path | None = None
-    batch_size: int = 8
-    timeout: float = 60.0
-    sleep_seconds: float = 0.0
-    api_key: str | None = None
-    base_url: str = "https://api.openai.com/v1"
-    command: list[str] | None = None
 
 
 class BenchTranslateError(SubGenError):
     def __init__(self, message: str, *, report: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.report = report
-
-
-def translate_sample_manifest_schema_payload() -> dict[str, Any]:
-    return {
-        "schema_version": BENCH_TRANSLATE_SCHEMA_VERSION,
-        "kind": "fast_sub_bench_translate_manifest_schema",
-        "measurement_scope": MEASUREMENT_SCOPE,
-        "required_fields": list(TRANSLATE_SAMPLE_MANIFEST_REQUIRED_FIELDS),
-        "provider_matrix": (
-            "Run each samples[] entry against each providers[] entry. CLI overrides should be "
-            "recorded in the report when manifest execution is implemented."
-        ),
-        "supported_languages": ["auto", "en", "zh", "ja", "ko"],
-        "reference_types": ["srt", "txt"],
-        "dataset_profiles": ["light", "standard"],
-        "core_directions": ["en-zh", "ja-zh", "ko-zh", "zh-en", "ja-en", "ko-en"],
-        "notes": [
-            "Dataset raw files are manually downloaded by the user.",
-            "Sampling scripts must read local_tests/bench_translate/raw/ only and avoid network.",
-            "Do not commit real source subtitles, references, model files, or reports.",
-            "Scores are per sample/reference and should not be aggregated as one quality truth.",
-        ],
-        "example": TRANSLATE_SAMPLE_MANIFEST_EXAMPLE,
-    }
-
-
-def render_translate_sample_manifest_schema() -> str:
-    payload = translate_sample_manifest_schema_payload()
-    lines = [
-        "Fast Sub Translation Benchmark Manifest",
-        "",
-        "Provider matrix:",
-        f"- {payload['provider_matrix']}",
-        "",
-        "Required fields:",
-        *[f"- {field}" for field in payload["required_fields"]],
-        "",
-        "Reference types:",
-        "- srt, txt",
-        "",
-        "Dataset profiles:",
-        "- light, standard",
-        "",
-        "Core directions:",
-        "- en-zh, ja-zh, ko-zh, zh-en, ja-en, ko-en",
-        "",
-        "Example:",
-        json.dumps(payload["example"], ensure_ascii=False, indent=2),
-    ]
-    return "\n".join(lines)
 
 
 def run_bench_translate(
