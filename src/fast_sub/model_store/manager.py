@@ -13,15 +13,12 @@ from fast_sub.clients.downloads import (
     download_aria2,
     download_httpx,
 )
+from fast_sub.model_store.errors import ModelManagerError as _ModelManagerError
 from fast_sub.model_store.manifest import ModelManifestEntry, ModelManifestFile
 from fast_sub.output.paths import model_cache_dir
 
 DownloadProgress = Callable[[str, int, int | None], None]
 MODEL_DOWNLOADERS = {"auto", "httpx", "aria2"}
-
-
-class ModelManagerError(RuntimeError):
-    """Raised when model installation or verification fails."""
 
 
 @dataclass(frozen=True)
@@ -126,7 +123,7 @@ def install_model(
     if existing.installed:
         return existing
     if existing.status == "hash_mismatch":
-        raise ModelManagerError(
+        raise _ModelManagerError(
             f"Refusing to overwrite existing model with mismatched sha256: {existing.path}"
         )
 
@@ -164,7 +161,7 @@ def install_model(
         return verify_model(model, cache_dir)
 
     assert last_error is not None
-    raise ModelManagerError(f"Failed to install {model.id}: {last_error}") from last_error
+    raise _ModelManagerError(f"Failed to install {model.id}: {last_error}") from last_error
 
 
 def sha256_file(path: Path) -> str:
@@ -300,11 +297,11 @@ def _install_manifest_file(
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         if not path.is_file():
-            raise ModelManagerError(f"Model path exists but is not a file: {path}")
+            raise _ModelManagerError(f"Model path exists but is not a file: {path}")
         actual_sha = sha256_file(path)
         if actual_sha == manifest_file.sha256:
             return
-        raise ModelManagerError(
+        raise _ModelManagerError(
             f"Refusing to overwrite existing model file with mismatched sha256: {path}"
         )
     last_error = _download_verified(
@@ -320,7 +317,7 @@ def _install_manifest_file(
         label=f"{model.id}/{manifest_file.path}",
     )
     if last_error is not None:
-        raise ModelManagerError(
+        raise _ModelManagerError(
             f"Failed to install {model.id} file {manifest_file.path}: {last_error}"
         ) from last_error
 
@@ -339,7 +336,7 @@ def _download_verified(
     label: str | None = None,
 ) -> Exception | None:
     if expected_sha256 is None:
-        raise ModelManagerError(f"Manifest entry for {model_id} is missing sha256.")
+        raise _ModelManagerError(f"Manifest entry for {model_id} is missing sha256.")
 
     part_path = path.with_suffix(path.suffix + ".part")
     last_error: Exception | None = None
@@ -360,13 +357,13 @@ def _download_verified(
             actual_sha = sha256_file(part_path)
             if actual_sha != expected_sha256:
                 _unlink_if_exists(part_path)
-                raise ModelManagerError(
+                raise _ModelManagerError(
                     f"Downloaded sha256 mismatch for {model_id}: "
                     f"expected {expected_sha256}, got {actual_sha}"
                 )
             part_path.replace(path)
             return None
-        except (DownloadClientError, OSError, ModelManagerError) as exc:
+        except (DownloadClientError, OSError, _ModelManagerError) as exc:
             last_error = exc
     return last_error
 
@@ -392,7 +389,7 @@ def _download(
                 split=aria2_split,
             )
         except DownloadClientError as exc:
-            raise ModelManagerError(str(exc)) from exc
+            raise _ModelManagerError(str(exc)) from exc
         if part_path.exists():
             size = part_path.stat().st_size
             _emit_download_progress(progress, label, size, size)
@@ -402,14 +399,14 @@ def _download(
 
 def _resolve_downloader(value: str) -> str:
     if value not in MODEL_DOWNLOADERS:
-        raise ModelManagerError(
+        raise _ModelManagerError(
             f"Unsupported model downloader: {value}. "
             f"Choose one of: {', '.join(sorted(MODEL_DOWNLOADERS))}."
         )
     if value == "auto":
         return "aria2" if _aria2_executable() else "httpx"
     if value == "aria2" and not _aria2_executable():
-        raise ModelManagerError("aria2c was requested but was not found on PATH.")
+        raise _ModelManagerError("aria2c was requested but was not found on PATH.")
     return value
 
 
@@ -472,7 +469,7 @@ def _ensure_disk_space(directory: Path, required_bytes: int) -> None:
     usage = shutil.disk_usage(directory)
     reserve = max(50 * 1024 * 1024, required_bytes // 20)
     if usage.free < required_bytes + reserve:
-        raise ModelManagerError(
+        raise _ModelManagerError(
             "Not enough free disk space for model download. "
             f"Need about {required_bytes + reserve} bytes, have {usage.free} bytes."
         )

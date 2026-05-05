@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fast_sub.subtitles.models import Segment
-from fast_sub.translation.models import TranslationProviderError
+from fast_sub.translation.errors import TranslationProviderError
 
 FLORES_CODES = {
     "en": "eng_Latn",

@@ -24,6 +24,7 @@ from fast_sub.managers.providers import resolve_stt_provider
 from fast_sub.media.service import analyze_media
 from fast_sub.models import Mode, Segment
 from fast_sub.output.paths import job_dir
+from fast_sub.stt.errors import TranscribeError as _TranscribeError
 from fast_sub.subtitles.srt import render_srt
 
 DEFAULT_PROVIDER = "local-faster-whisper"
@@ -63,59 +64,6 @@ class TranscribeOptions:
     output: Path | None = None
     keep_temp: bool = False
     worker_command: list[str | Path] | None = None
-
-
-@dataclass(frozen=True)
-class TranscribeFailure:
-    stage: str
-    code: str
-    message: str
-    action_hint: str | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "stage": self.stage,
-            "code": self.code,
-            "message": self.message,
-        }
-        if self.action_hint:
-            payload["action_hint"] = self.action_hint
-        return payload
-
-
-class TranscribeError(SubGenError):
-    """Structured transcribe failure suitable for CLI JSON and auto orchestration."""
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        stage: str,
-        code: str,
-        action_hint: str | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.failure = TranscribeFailure(
-            stage=stage,
-            code=code,
-            message=message,
-            action_hint=action_hint,
-        )
-
-    @property
-    def stage(self) -> str:
-        return self.failure.stage
-
-    @property
-    def code(self) -> str:
-        return self.failure.code
-
-    @property
-    def action_hint(self) -> str | None:
-        return self.failure.action_hint
-
-    def as_dict(self) -> dict[str, Any]:
-        return self.failure.as_dict()
 
 
 @dataclass(frozen=True)
@@ -247,7 +195,7 @@ def transcribe_media(
         if options.keep_temp:
             _write_metadata(metadata_path, {"ok": True, **result.as_dict()})
         return result
-    except TranscribeError as exc:
+    except _TranscribeError as exc:
         if options.keep_temp:
             elapsed_sec = round(time.perf_counter() - started, 3)
             _write_metadata(
@@ -309,7 +257,7 @@ def normalize_worker_segments(raw_segments: list[Any]) -> tuple[list[Segment], l
         previous_end = end
 
     if not normalized:
-        raise TranscribeError(
+        raise _TranscribeError(
             "Worker returned no usable subtitle segments.",
             stage="transcribe",
             code="EMPTY_SEGMENTS",
@@ -330,26 +278,26 @@ def _resolve_vad(input_file: Path, vad: str) -> tuple[str, list[str]]:
 def _resolve_model_path(provider_id: str, model_id: str) -> Path:
     resolution = resolve_stt_provider(provider_id, model_id)
     if resolution.provider_location == "api":
-        raise TranscribeError(
+        raise _TranscribeError(
             "transcribe v0 only supports local STT providers.",
             stage="provider",
             code="UNSUPPORTED_PROVIDER",
         )
     if provider_id != DEFAULT_PROVIDER:
-        raise TranscribeError(
+        raise _TranscribeError(
             f"Unsupported local STT provider for transcribe v0: {provider_id}",
             stage="provider",
             code="UNSUPPORTED_PROVIDER",
         )
     if resolution.status != "available":
-        raise TranscribeError(
+        raise _TranscribeError(
             _format_resolution_error(resolution),
             stage=_resolution_stage(resolution.status),
             code=_resolution_code(resolution.status),
             action_hint=resolution.action_hint,
         )
     if resolution.model_path is None:
-        raise TranscribeError(
+        raise _TranscribeError(
             f"Provider resolution did not return a local model path for {provider_id}.",
             stage="model",
             code="MODEL_NOT_FOUND",
@@ -402,7 +350,7 @@ def _resolve_batch_size(options: TranscribeOptions) -> int:
 def transcribe_error_payload(exc: SubGenError) -> dict[str, Any]:
     error = (
         exc
-        if isinstance(exc, TranscribeError)
+        if isinstance(exc, _TranscribeError)
         else _as_transcribe_error(
             exc,
             stage="transcribe",
@@ -442,7 +390,7 @@ def _write_metadata(path: Path, payload: dict[str, Any]) -> None:
 def _run_stage(stage: str, code: str, func: Any) -> Any:
     try:
         return func()
-    except TranscribeError:
+    except _TranscribeError:
         raise
     except SubGenError as exc:
         raise _as_transcribe_error(exc, stage=stage, code=code) from exc
@@ -451,7 +399,7 @@ def _run_stage(stage: str, code: str, func: Any) -> Any:
 def _run_worker_stage(func: Any) -> Any:
     try:
         return func()
-    except TranscribeError:
+    except _TranscribeError:
         raise
     except SubGenError as exc:
         raise _classify_worker_error(exc) from exc
@@ -462,9 +410,9 @@ def _as_transcribe_error(
     *,
     stage: str,
     code: str,
-) -> TranscribeError:
+) -> _TranscribeError:
     message = str(exc)
-    return TranscribeError(
+    return _TranscribeError(
         _clean_error_message(message),
         stage=stage,
         code=_classify_code(message, code),
@@ -472,10 +420,10 @@ def _as_transcribe_error(
     )
 
 
-def _classify_worker_error(exc: SubGenError) -> TranscribeError:
+def _classify_worker_error(exc: SubGenError) -> _TranscribeError:
     message = _clean_error_message(str(exc))
     code = _worker_error_code(message)
-    return TranscribeError(
+    return _TranscribeError(
         message,
         stage="transcribe",
         code=code,

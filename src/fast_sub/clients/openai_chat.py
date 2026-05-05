@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from fast_sub.clients.errors import OpenAIChatClientError
 from fast_sub.subtitles.models import Segment
 from fast_sub.translation.parsing import parse_chat_translations
 
@@ -27,22 +28,35 @@ class OpenAIChatClient:
     ) -> dict[int, str]:
         """Translate one subtitle batch through the chat completions API."""
         expected_ids = [segment.id for segment in batch]
-        response = self._post_chat_completion(
-            self._translation_payload(
-                batch,
-                source_lang=source_lang,
-                target_lang=target_lang,
+        try:
+            response = self._post_chat_completion(
+                self._translation_payload(
+                    batch,
+                    source_lang=source_lang,
+                    target_lang=target_lang,
+                )
             )
-        )
-        content = response["choices"][0]["message"]["content"]
-        return parse_chat_translations(content, expected_ids=expected_ids)
+            content = _message_content(response)
+            return parse_chat_translations(content, expected_ids=expected_ids)
+        except OpenAIChatClientError:
+            raise
+        except (KeyError, TypeError, ValueError) as exc:
+            raise OpenAIChatClientError(f"Invalid chat translation response: {exc}") from exc
 
     def _post_chat_completion(self, payload: dict[str, object]) -> dict[str, object]:
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.post(self._chat_completions_url, headers=headers, json=payload)
-            response.raise_for_status()
-        return response.json()
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(self._chat_completions_url, headers=headers, json=payload)
+                response.raise_for_status()
+            data = response.json()
+        except httpx.HTTPError as exc:
+            raise OpenAIChatClientError(f"Chat completion request failed: {exc}") from exc
+        except json.JSONDecodeError as exc:
+            raise OpenAIChatClientError(f"Chat completion returned invalid JSON: {exc}") from exc
+        if not isinstance(data, dict):
+            raise OpenAIChatClientError("Chat completion response must be a JSON object.")
+        return data
 
     def _translation_payload(
         self,
@@ -79,6 +93,22 @@ class OpenAIChatClient:
     @property
     def _chat_completions_url(self) -> str:
         return self.base_url.rstrip("/") + "/chat/completions"
+
+
+def _message_content(response: dict[str, object]) -> str:
+    choices = response["choices"]
+    if not isinstance(choices, list) or not choices:
+        raise OpenAIChatClientError("Chat completion response has no choices.")
+    first_choice = choices[0]
+    if not isinstance(first_choice, dict):
+        raise OpenAIChatClientError("Chat completion choice must be an object.")
+    message = first_choice["message"]
+    if not isinstance(message, dict):
+        raise OpenAIChatClientError("Chat completion message must be an object.")
+    content = message["content"]
+    if not isinstance(content, str):
+        raise OpenAIChatClientError("Chat completion message content must be text.")
+    return content
 
 
 __all__ = ["OpenAIChatClient"]

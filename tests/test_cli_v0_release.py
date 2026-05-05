@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 
 import fast_sub.cli.runtime as cli
 from fast_sub.pipeline.orchestrator import AutoOptions, AutoPipelineError, AutoResult, AutoStep
-from fast_sub.stt.service import TranscribeError
+from fast_sub.stt.errors import TranscribeError
 
 runner = CliRunner()
 

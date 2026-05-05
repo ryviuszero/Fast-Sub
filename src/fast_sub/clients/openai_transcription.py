@@ -6,9 +6,7 @@ from typing import Any
 
 import httpx
 
-
-class TranscriptionRequestError(RuntimeError):
-    """Raised when an OpenAI-compatible transcription request fails."""
+from fast_sub.clients.errors import TranscriptionRequestError
 
 
 @dataclass(frozen=True)
@@ -55,4 +53,4 @@ class OpenAITranscriptionClient:
         return f"{self.base_url.rstrip('/')}/audio/transcriptions"
 
 
-__all__ = ["OpenAITranscriptionClient", "TranscriptionRequestError"]
+__all__ = ["OpenAITranscriptionClient"]

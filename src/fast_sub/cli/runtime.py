@@ -86,9 +86,9 @@ from fast_sub.stt.service import (
     transcribe_media,
 )
 from fast_sub.subtitles.srt import RefineOptions, refine_srt_text, render_srt
+from fast_sub.translation.errors import TranslationProviderError
 from fast_sub.translation.service import (
     TranslateOptions,
-    TranslationProviderError,
     translate_segments,
     translate_srt,
 )

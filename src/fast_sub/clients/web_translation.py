@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import os
 
-
-class WebTranslationClientError(RuntimeError):
-    """Raised when a web translation request cannot be completed."""
+from fast_sub.clients.errors import WebTranslationClientError
 
 
 def translate_text(
@@ -33,4 +31,4 @@ def translate_text(
     )
 
 
-__all__ = ["WebTranslationClientError", "translate_text"]
+__all__ = ["translate_text"]

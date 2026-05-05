@@ -8,15 +8,9 @@ from pathlib import Path
 
 import httpx
 
+from fast_sub.clients.errors import DownloadClientError, HttpDownloadError
+
 DownloadProgress = Callable[[str, int, int | None], None]
-
-
-class DownloadClientError(RuntimeError):
-    """Raised when a network download client fails."""
-
-
-class HttpDownloadError(DownloadClientError):
-    """Raised when an HTTP model download fails."""
 
 
 def download_httpx(

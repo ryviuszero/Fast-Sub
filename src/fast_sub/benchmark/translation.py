@@ -18,11 +18,11 @@ import pysubs2
 
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.models import BilingualOrder, Mode
+from fast_sub.translation.errors import TranslationProviderError
 from fast_sub.translation.service import (
     TARGET_LANGUAGES,
     TRANSLATION_PROVIDERS,
     TranslateOptions,
-    TranslationProviderError,
     sha256_file,
     translate_srt,
 )

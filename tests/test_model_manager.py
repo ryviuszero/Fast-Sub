@@ -11,8 +11,8 @@ from typer.testing import CliRunner
 
 import fast_sub.cli.commands.models_cmd as models_cmd
 import fast_sub.cli.runtime as cli
+from fast_sub.model_store.errors import ModelManagerError
 from fast_sub.model_store.manager import (
-    ModelManagerError,
     ModelStatus,
     install_model,
     model_path,

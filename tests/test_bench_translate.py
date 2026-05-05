@@ -17,7 +17,8 @@ from fast_sub.benchmark.translation import (
     run_bench_translate,
     score_translation_quality,
 )
-from fast_sub.translation.service import TranslateSrtResult, TranslationProviderError
+from fast_sub.translation.errors import TranslationProviderError
+from fast_sub.translation.service import TranslateSrtResult
 
 
 @pytest.fixture

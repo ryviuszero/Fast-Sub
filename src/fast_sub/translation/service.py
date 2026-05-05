@@ -17,12 +17,12 @@ from fast_sub.model_store.manager import model_path, verify_model
 from fast_sub.model_store.manifest import get_model
 from fast_sub.subtitles.models import Mode, Segment
 from fast_sub.subtitles.srt import render_srt
+from fast_sub.translation.errors import TranslationProviderError as _TranslationProviderError
 from fast_sub.translation.language import detect_subtitle_language, flores_code
 from fast_sub.translation.models import (
     TranslateOptions,
     TranslateSrtResult,
     TranslationError,
-    TranslationProviderError,
     TranslationResult,
 )
 from fast_sub.translation.parsing import parse_chat_translations as parse_chat_translations
@@ -41,7 +41,7 @@ def translate_srt(input_file: Path, options: TranslateOptions) -> TranslateSrtRe
     """
     _validate_translate_options(options)
     if not input_file.exists() or not input_file.is_file():
-        raise TranslationProviderError("invalid_input", f"Input file does not exist: {input_file}")
+        raise _TranslationProviderError("invalid_input", f"Input file does not exist: {input_file}")
 
     output = options.output or input_file.with_name(
         f"{input_file.stem}.{options.target_language}.srt"
@@ -52,7 +52,7 @@ def translate_srt(input_file: Path, options: TranslateOptions) -> TranslateSrtRe
     if options.provider == "local-nllb-ct2" and options.source_language == "auto":
         detected_language = detect_subtitle_language(segments)
         if detected_language is None:
-            raise TranslationProviderError(
+            raise _TranslationProviderError(
                 "invalid_options",
                 (
                     "local-nllb-ct2 could not reliably detect the subtitle source "
@@ -126,7 +126,7 @@ def translate_srt(input_file: Path, options: TranslateOptions) -> TranslateSrtRe
                 )
             ]
             write_translation_errors(errors_path, provider=options.provider, errors=errors)
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "provider_failed",
             "All translation cues failed; no final SRT was written.",
             hint=f"See {errors_path} for per-cue errors.",
@@ -218,7 +218,7 @@ def translate_segments(
             explicit_model_path=model_path,
             batch_size=batch_size,
         )
-    raise TranslationProviderError(
+    raise _TranslationProviderError(
         "invalid_provider",
         f"Unknown translation provider: {resolved_provider}",
     )
@@ -277,12 +277,12 @@ def _translate_openai_chat_segments(
     timeout: float,
 ) -> TranslationResult:
     if not api_key:
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "missing_api_key",
             "api-openai-chat requires an explicit API key via --api-key or OPENAI_API_KEY.",
         )
     if not model:
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "invalid_options",
             "api-openai-chat requires an explicit --model; fast-sub does not hard-code one.",
         )
@@ -394,7 +394,7 @@ def _translate_nllb_segments(
     batch_size: int,
 ) -> TranslationResult:
     if source_lang == "auto":
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "invalid_options",
             "local-nllb-ct2 requires explicit --from en|zh|ja|ko; --from auto is not reliable.",
         )
@@ -406,7 +406,7 @@ def _translate_nllb_segments(
         import ctranslate2  # type: ignore[import-not-found]
         import sentencepiece as spm  # type: ignore[import-not-found]
     except ImportError as exc:
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "missing_dependency",
             (
                 "local-nllb-ct2 requires ctranslate2 and sentencepiece. "
@@ -463,11 +463,11 @@ def resolve_nllb_model_path(*, model: str | None, explicit_model_path: Path | No
             if explicit_model_path.exists() and explicit_model_path.is_dir():
                 return explicit_model_path
         except OSError as exc:
-            raise TranslationProviderError(
+            raise _TranslationProviderError(
                 "missing_model",
                 f"Model path is inaccessible: {explicit_model_path} ({exc})",
             ) from exc
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "missing_model",
             f"Model path does not exist: {explicit_model_path}",
         )
@@ -476,10 +476,10 @@ def resolve_nllb_model_path(*, model: str | None, explicit_model_path: Path | No
     try:
         manifest = get_model(model_id)
     except KeyError as exc:
-        raise TranslationProviderError("missing_model", str(exc)) from exc
+        raise _TranslationProviderError("missing_model", str(exc)) from exc
     status = verify_model(manifest)
     if not status.installed:
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "missing_model",
             f"missing_model: {status.message} Run `fast-sub models install {model_id}`.",
         )
@@ -518,21 +518,21 @@ def write_translation_errors(
 
 def _validate_translate_options(options: TranslateOptions) -> None:
     if options.provider not in TRANSLATION_PROVIDERS:
-        raise TranslationProviderError("invalid_provider", f"Unknown provider: {options.provider}")
+        raise _TranslationProviderError("invalid_provider", f"Unknown provider: {options.provider}")
     if options.source_language not in LANGUAGES:
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "invalid_options",
             f"Unsupported source language: {options.source_language}",
         )
     if options.target_language not in TARGET_LANGUAGES:
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "invalid_options",
             f"Unsupported target language: {options.target_language}",
         )
     if options.batch_size <= 0:
-        raise TranslationProviderError("invalid_options", "--batch-size must be greater than 0.")
+        raise _TranslationProviderError("invalid_options", "--batch-size must be greater than 0.")
     if options.mode not in {Mode.TRANSLATED, Mode.BILINGUAL}:
-        raise TranslationProviderError("invalid_options", "--mode must be replace or bilingual.")
+        raise _TranslationProviderError("invalid_options", "--mode must be replace or bilingual.")
 
 
 def _translate_text(
@@ -550,7 +550,7 @@ def _translate_text(
             to_language=to_language,
         )
     except WebTranslationClientError as exc:
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "missing_dependency",
             str(exc),
         ) from exc
@@ -636,7 +636,7 @@ def _find_sentencepiece_model(path: Path) -> Path:
         candidate = path / name
         if candidate.exists():
             return candidate
-    raise TranslationProviderError(
+    raise _TranslationProviderError(
         "missing_model",
         f"NLLB sentencepiece model is missing in {path}. "
         f"Run `fast-sub models install {DEFAULT_NLLB_MODEL_ID}`.",

@@ -9,13 +9,6 @@ from pydantic import BaseModel, Field
 from fast_sub.subtitles.models import BilingualOrder, Mode, Segment
 
 
-class TranslationProviderError(RuntimeError):
-    def __init__(self, code: str, message: str, *, hint: str | None = None) -> None:
-        super().__init__(message)
-        self.code = code
-        self.hint = hint
-
-
 @dataclass(frozen=True)
 class TranslateOptions:
     provider: str
@@ -80,6 +73,5 @@ __all__ = [
     "TranslateOptions",
     "TranslateSrtResult",
     "TranslationError",
-    "TranslationProviderError",
     "TranslationResult",
 ]
