@@ -1,9 +1,12 @@
+"""Data models for benchmark command options and profile selection."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from fast_sub.benchmark.constants import DEFAULT_PROFILE_SPECS
 from fast_sub.stt.constants import (
     DEFAULT_GPU_LOAD,
     DEFAULT_LANGUAGE,
@@ -12,11 +15,11 @@ from fast_sub.stt.constants import (
     DEFAULT_PROVIDER,
 )
 
-BENCH_PROFILE_CHOICES = {"all", "cpu-int8", "auto"}
-
 
 @dataclass(frozen=True)
 class BenchProfile:
+    """A device and compute-type combination to benchmark."""
+
     name: str
     device: str
     compute_type: str
@@ -24,6 +27,8 @@ class BenchProfile:
 
 @dataclass(frozen=True)
 class BenchOptions:
+    """Options for transcription benchmark runs."""
+
     provider: str = DEFAULT_PROVIDER
     model: str = DEFAULT_MODEL
     language: str = DEFAULT_LANGUAGE
@@ -40,13 +45,17 @@ class BenchOptions:
 
 
 DEFAULT_PROFILES = (
-    BenchProfile(name="cpu-int8", device="cpu", compute_type="int8"),
-    BenchProfile(name="auto", device="auto", compute_type="auto"),
+    *(
+        BenchProfile(name=name, device=device, compute_type=compute_type)
+        for name, device, compute_type in DEFAULT_PROFILE_SPECS
+    ),
 )
 
 
 @dataclass(frozen=True)
 class BenchTranslateOptions:
+    """Options for translation benchmark runs."""
+
     reference: Path
     provider: str
     source_language: str = "auto"
@@ -63,3 +72,6 @@ class BenchTranslateOptions:
     api_key: str | None = None
     base_url: str = "https://api.openai.com/v1"
     command: list[str] | None = None
+
+
+__all__ = ["BenchOptions", "BenchProfile", "BenchTranslateOptions", "DEFAULT_PROFILES"]

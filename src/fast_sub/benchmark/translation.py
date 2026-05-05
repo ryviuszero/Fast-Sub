@@ -1,3 +1,5 @@
+"""Translation benchmark execution, scoring, and report rendering."""
+
 from __future__ import annotations
 
 import hashlib
@@ -14,6 +16,17 @@ from typing import Any
 
 import pysubs2
 
+from fast_sub.benchmark.constants import (
+    BENCH_TRANSLATE_MARKDOWN_NAME,
+    BENCH_TRANSLATE_OUTPUT_DIR_PARTS,
+    BENCH_TRANSLATE_REPORT_NAME,
+    LIGHTWEIGHT_METRIC_IMPLEMENTATION,
+    LIGHTWEIGHT_TOKENIZER,
+    REMOTE_API_PROVIDERS,
+    REMOTE_WEB_PROVIDERS,
+    TRANSLATION_NORMALIZATION_PROFILE,
+)
+from fast_sub.benchmark.errors import BenchTranslateError
 from fast_sub.benchmark.manifests import (
     BENCH_TRANSLATE_MEASUREMENT_SCOPE,
     BENCH_TRANSLATE_SCHEMA_VERSION,
@@ -25,7 +38,6 @@ from fast_sub.benchmark.text_metrics import (
     normalize_quality_text,
     normalize_subtitle_text,
 )
-from fast_sub.contracts.errors import SubGenError
 from fast_sub.models import BilingualOrder, Mode
 from fast_sub.translation.constants import TARGET_LANGUAGES, TRANSLATION_PROVIDERS
 from fast_sub.translation.errors import TranslationProviderError
@@ -36,17 +48,7 @@ from fast_sub.translation.service import (
 )
 
 MEASUREMENT_SCOPE = BENCH_TRANSLATE_MEASUREMENT_SCOPE
-NORMALIZATION_PROFILE = "translate_quality_basic_v1"
-LIGHTWEIGHT_METRIC_IMPLEMENTATION = "fast_sub_lightweight_v1"
-LIGHTWEIGHT_TOKENIZER = "char_cjk_or_whitespace_v1"
-REMOTE_WEB_PROVIDERS = {"web-bing", "web-google"}
-REMOTE_API_PROVIDERS = {"api-openai-chat"}
-
-
-class BenchTranslateError(SubGenError):
-    def __init__(self, message: str, *, report: dict[str, Any] | None = None) -> None:
-        super().__init__(message)
-        self.report = report
+NORMALIZATION_PROFILE = TRANSLATION_NORMALIZATION_PROFILE
 
 
 def run_bench_translate(
@@ -55,6 +57,7 @@ def run_bench_translate(
     *,
     translator: Any | None = None,
 ) -> dict[str, Any]:
+    """Run translation benchmarks and return a redacted report payload."""
     _validate_options(input_file, options)
     run_translate = translator or translate_srt
     input_sha = sha256_file(input_file)
@@ -130,14 +133,14 @@ def run_bench_translate(
     )
     if failed_all and any(run.get("status") == "ok" for run in report["runs"]):
         report["summary"]["warnings"].append("At least one repeat failed.")
-    report_path = output_dir / "report.json"
+    report_path = output_dir / BENCH_TRANSLATE_REPORT_NAME
     report["report_path"] = report_path.name
     report_path.write_text(
         json.dumps(_redact_value(report), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     if options.markdown or options.markdown_path is not None:
-        markdown_path = options.markdown_path or (output_dir / "report.md")
+        markdown_path = options.markdown_path or (output_dir / BENCH_TRANSLATE_MARKDOWN_NAME)
         markdown_path.parent.mkdir(parents=True, exist_ok=True)
         markdown_path.write_text(render_markdown_report(report), encoding="utf-8")
         report["markdown_path"] = markdown_path.name
@@ -156,6 +159,7 @@ def summarize_translate_runs(
     sample: dict[str, Any],
     metric_info: dict[str, Any],
 ) -> dict[str, Any]:
+    """Summarize repeated translation benchmark runs."""
     ok_runs = [run for run in runs if run.get("status") == "ok"]
     first_quality: dict[str, Any] = {}
     for run in ok_runs:
@@ -194,6 +198,7 @@ def summarize_translate_runs(
 
 
 def render_markdown_report(report: dict[str, Any]) -> str:
+    """Render a Markdown report for a translation benchmark result."""
     summary = report.get("summary", {})
     quality_note = (
         "Scores are rough reference-based signals, not a human-quality guarantee. "
@@ -367,6 +372,7 @@ def score_translation_quality(
     source_cue_count: int,
     metric_info: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Score translated cue text against the reference payload."""
     metric_info = metric_info or _metric_info()
     del source_cue_count
     reference_texts = list(reference.get("texts") or [])
@@ -642,8 +648,7 @@ def _default_output_dir(
 ) -> Path:
     stamp = generated_at.replace(":", "").replace("-", "").replace(".", "").replace("Z", "z")
     return (
-        Path(".fast-sub")
-        / "bench-translate"
+        Path(*BENCH_TRANSLATE_OUTPUT_DIR_PARTS)
         / f"{input_file.stem}-{target_language}-{provider}-{stamp}-{config_hash[:8]}"
     )
 

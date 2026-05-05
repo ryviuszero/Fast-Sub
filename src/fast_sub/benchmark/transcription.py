@@ -1,3 +1,5 @@
+"""Transcription benchmark execution and report rendering."""
+
 from __future__ import annotations
 
 import json
@@ -12,12 +14,13 @@ from typing import Any
 
 import pysubs2
 
+from fast_sub.benchmark.constants import BENCH_OUTPUT_DIR_PARTS, BENCH_PROFILE_CHOICES
+from fast_sub.benchmark.errors import BenchError
 from fast_sub.benchmark.manifests import (
     BENCH_MEASUREMENT_SCOPE,
     BENCH_SCHEMA_VERSION,
 )
 from fast_sub.benchmark.models import (
-    BENCH_PROFILE_CHOICES,
     DEFAULT_PROFILES,
     BenchOptions,
     BenchProfile,
@@ -46,6 +49,7 @@ def run_bench(
     transcriber: Any | None = None,
     profiles: tuple[BenchProfile, ...] | None = None,
 ) -> dict[str, Any]:
+    """Run transcription benchmarks for selected local provider profiles."""
     options = options or BenchOptions()
     _validate_options(input_file, options)
     selected_profiles = profiles or _profiles_for_choice(options.profile)
@@ -107,13 +111,8 @@ def run_bench(
     return report
 
 
-class BenchError(SubGenError):
-    def __init__(self, message: str, *, report: dict[str, Any] | None = None) -> None:
-        super().__init__(message)
-        self.report = report
-
-
 def detect_hardware() -> dict[str, Any]:
+    """Return best-effort local CPU, memory, GPU, and CUDA metadata."""
     gpu_info = _detect_nvidia_gpu()
     cuda_count = _detect_cuda_device_count()
     memory_info = _detect_system_memory()
@@ -138,6 +137,7 @@ def load_sample_metadata(
     sample_id: str | None,
     input_file: Path,
 ) -> dict[str, Any]:
+    """Load sample metadata from a benchmark manifest, falling back to input metadata."""
     fallback = {"id": sample_id or input_file.stem}
     if manifest_path is None:
         return fallback
@@ -177,6 +177,7 @@ def load_sample_metadata(
 
 
 def render_markdown_report(report: dict[str, Any]) -> str:
+    """Render a full Markdown report for a transcription benchmark result."""
     sample = report.get("sample", {})
     hardware = report.get("hardware", {})
     fastest = _fastest_profile(report)
@@ -313,6 +314,7 @@ def render_markdown_report(report: dict[str, Any]) -> str:
 
 
 def render_brief_report(report: dict[str, Any]) -> str:
+    """Render a compact plain-text summary for CLI output."""
     sample = report.get("sample", {})
     hardware = report.get("hardware", {})
     has_quality = _report_has_quality(report)
@@ -441,6 +443,7 @@ def _run_once(
 
 
 def summarize_runs(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize repeated benchmark runs for one profile."""
     ok_runs = [run for run in runs if run.get("status") == "ok"]
     summary: dict[str, Any] = {
         "runs": len(runs),
@@ -947,7 +950,7 @@ def _redacted_command_string(command: list[str] | None, *, input_file: Path) -> 
 
 def _bench_output_dir(input_file: Path, generated_at: str) -> Path:
     safe_stamp = generated_at.replace(":", "").replace("-", "").replace(".", "").replace("Z", "z")
-    return Path(".fast-sub") / "bench" / f"{input_file.stem}-{safe_stamp}"
+    return Path(*BENCH_OUTPUT_DIR_PARTS) / f"{input_file.stem}-{safe_stamp}"
 
 
 def _rtfx(duration_sec: float | None, elapsed_sec: float | None) -> float | None:

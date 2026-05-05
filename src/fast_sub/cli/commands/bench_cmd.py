@@ -9,29 +9,25 @@ from typing import Annotated, Any
 
 import typer
 
+from fast_sub.benchmark.constants import BENCH_PROFILE_CHOICES
+from fast_sub.benchmark.errors import BenchError, BenchTranslateError
 from fast_sub.benchmark.manifests import (
     render_sample_manifest_schema,
     render_translate_sample_manifest_schema,
     sample_manifest_schema_payload,
     translate_sample_manifest_schema_payload,
 )
-from fast_sub.benchmark.models import (
-    BENCH_PROFILE_CHOICES,
-    BenchOptions,
-    BenchTranslateOptions,
-)
+from fast_sub.benchmark.models import BenchOptions, BenchTranslateOptions
 from fast_sub.benchmark.transcription import (
-    BenchError,
     load_sample_metadata,
     render_brief_report,
     run_bench,
 )
 from fast_sub.benchmark.translation import (
-    BenchTranslateError,
-    run_bench_translate,
+    render_markdown_report as render_translate_bench_markdown_report,
 )
 from fast_sub.benchmark.translation import (
-    render_markdown_report as render_translate_bench_markdown_report,
+    run_bench_translate,
 )
 from fast_sub.cli.constants import OPENAI_BASE_URL
 from fast_sub.cli.errors import error_payload
