@@ -18,7 +18,8 @@ from fast_sub.infrastructure.ffmpeg import (
 )
 from fast_sub.media.models import AnalysisResult
 from fast_sub.media.service import analyze_media
-from fast_sub.output.burn import BurnOptions, burn_subtitles
+from fast_sub.output.burn import burn_subtitles
+from fast_sub.output.models import BurnOptions
 from fast_sub.output.paths import job_dir
 
 

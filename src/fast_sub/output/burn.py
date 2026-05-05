@@ -1,33 +1,29 @@
+"""Burn subtitle files into video outputs with ffmpeg."""
+
 from __future__ import annotations
 
 import shutil
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.infrastructure.ffmpeg import process_message
 from fast_sub.media.constants import VIDEO_EXTENSIONS
+from fast_sub.output.constants import (
+    BURN_OUTPUT_SUFFIX,
+    BURN_WORK_DIR_NAME,
+    FFMPEG_BURN_PRESET_ARGS,
+    PREPARED_SUBTITLE_NAME,
+    SRT_EXTENSION,
+)
+from fast_sub.output.models import BurnOptions
 from fast_sub.output.paths import job_dir
-
-PRESET_ARGS: dict[str, tuple[str, str]] = {
-    "fast": ("veryfast", "26"),
-    "balanced": ("medium", "23"),
-    "quality": ("slow", "20"),
-}
-PREPARED_SUBTITLE_NAME = "subtitle.srt"
-
-
-@dataclass(frozen=True)
-class BurnOptions:
-    font: str | None = None
-    font_size: int | None = None
-    preset: str = "balanced"
 
 
 def default_burn_output_path(input_file: Path) -> Path:
+    """Return the default video path for a burned-subtitle output."""
     stem = input_file.with_suffix("")
-    return stem.with_name(f"{stem.name}.subtitled.mp4")
+    return stem.with_name(f"{stem.name}{BURN_OUTPUT_SUFFIX}")
 
 
 def burn_subtitles(
@@ -36,12 +32,13 @@ def burn_subtitles(
     output: Path | None = None,
     options: BurnOptions | None = None,
 ) -> Path:
+    """Burn an SRT subtitle file into a video and return the output path."""
     options = options or BurnOptions()
     _validate_burn_inputs(input_file, subtitle_file, options)
     output_path = output or default_burn_output_path(input_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    work_dir = job_dir(input_file) / "burn"
+    work_dir = job_dir(input_file) / BURN_WORK_DIR_NAME
     work_dir.mkdir(parents=True, exist_ok=True)
     prepared_subtitle = work_dir / PREPARED_SUBTITLE_NAME
     shutil.copyfile(subtitle_file, prepared_subtitle)
@@ -73,6 +70,7 @@ def build_ffmpeg_burn_command(
     prepared_subtitle_name: str = PREPARED_SUBTITLE_NAME,
     options: BurnOptions | None = None,
 ) -> list[str]:
+    """Build the ffmpeg command used to burn prepared subtitles into a video."""
     options = options or BurnOptions()
     encoder_preset, crf = _preset_args(options.preset)
     return [
@@ -111,9 +109,9 @@ def _validate_burn_inputs(input_file: Path, subtitle_file: Path, options: BurnOp
         raise SubGenError(f"Input subtitle does not exist: {subtitle_file}")
     if not subtitle_file.is_file():
         raise SubGenError(f"Input subtitle path is not a file: {subtitle_file}")
-    if subtitle_file.suffix.lower() != ".srt":
+    if subtitle_file.suffix.lower() != SRT_EXTENSION:
         raise SubGenError("burn currently supports .srt subtitles only.")
-    if options.preset not in PRESET_ARGS:
+    if options.preset not in FFMPEG_BURN_PRESET_ARGS:
         raise SubGenError("--preset must be one of: fast, balanced, quality.")
     if options.font_size is not None and options.font_size <= 0:
         raise SubGenError("--font-size must be greater than 0.")
@@ -123,7 +121,7 @@ def _validate_burn_inputs(input_file: Path, subtitle_file: Path, options: BurnOp
 
 def _preset_args(preset: str) -> tuple[str, str]:
     try:
-        return PRESET_ARGS[preset]
+        return FFMPEG_BURN_PRESET_ARGS[preset]
     except KeyError as exc:
         raise SubGenError("--preset must be one of: fast, balanced, quality.") from exc
 
