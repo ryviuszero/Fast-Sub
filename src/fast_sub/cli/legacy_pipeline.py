@@ -8,6 +8,7 @@ from typing import TypeVar
 
 import typer
 
+from fast_sub.cli.constants import OPENAI_BASE_URL
 from fast_sub.cli.context import console, err_console
 from fast_sub.cli.redaction import redact_secrets
 from fast_sub.config import AppConfig, load_config
@@ -36,7 +37,6 @@ from fast_sub.translation.service import translate_segments
 
 T = TypeVar("T")
 
-OPENAI_BASE_URL = "https://api.openai.com/v1"
 OPENAI_DEFAULT_STT_MODEL = "whisper-1"
 OPENAI_DEFAULT_MAX_AUDIO_MB = 25.0
 WHISPERX_DEFAULT_STT_MODEL = "small"

@@ -20,6 +20,7 @@ def run_json_command(
     error_code: str = "command_failed",
     success_indent: int | None = 2,
 ) -> Any:
+    """Run a CLI action and render either JSON output or a formatted error."""
     try:
         payload = action()
     except SubGenError as exc:

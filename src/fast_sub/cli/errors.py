@@ -24,6 +24,7 @@ def error_payload(
     action_hint: str | None = None,
     details: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Build the structured error payload emitted by JSON CLI commands."""
     payload: dict[str, Any] = {
         "ok": False,
         "error": {
@@ -40,6 +41,7 @@ def error_payload(
 
 
 def json_error_for_exception(exc: BaseException, *, stage: str, code: str) -> dict[str, Any]:
+    """Convert an exception into the standard JSON CLI error shape."""
     return error_payload(
         code=classify_error_code(str(exc), fallback=code),
         stage=stage,
@@ -49,6 +51,7 @@ def json_error_for_exception(exc: BaseException, *, stage: str, code: str) -> di
 
 
 def exit_code_for_payload(payload: dict[str, Any]) -> int:
+    """Map a structured error payload to a process exit code."""
     error = payload.get("error", {})
     code = str(error.get("code", "")).lower()
     stage = str(error.get("stage", "")).lower()
@@ -67,6 +70,7 @@ def exit_code_for_payload(payload: dict[str, Any]) -> int:
 
 
 def classify_error_code(message: str, *, fallback: str) -> str:
+    """Infer a stable CLI error code from a human-readable message."""
     lower = message.lower()
     if "input file does not exist" in lower or "unsupported input file type" in lower:
         return "invalid_input"
@@ -88,6 +92,7 @@ def classify_error_code(message: str, *, fallback: str) -> str:
 
 
 def action_hint_for_message(message: str) -> str | None:
+    """Return a remediation hint for common CLI error messages."""
     lower = message.lower()
     if "faster_whisper" in lower:
         return (

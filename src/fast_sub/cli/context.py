@@ -11,6 +11,8 @@ err_console = Console(stderr=True)
 
 @dataclass(frozen=True)
 class CliContext:
+    """Shared CLI rendering and workspace options."""
+
     json_output: bool = False
     workdir: Path | None = None
     verbose: bool = False

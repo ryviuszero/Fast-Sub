@@ -1,3 +1,5 @@
+"""Typer application entry point for the Fast Sub CLI."""
+
 from __future__ import annotations
 
 import sys
@@ -69,6 +71,7 @@ def root_callback(
 
 
 def main() -> None:
+    """Run the Fast Sub CLI."""
     load_dotenv()
     if _should_use_command_app(sys.argv[1:]):
         app()

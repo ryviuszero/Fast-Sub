@@ -6,6 +6,7 @@ from typing import Any
 
 
 def redact_value(value: Any) -> Any:
+    """Redact secrets recursively from strings, lists, and dictionaries."""
     if isinstance(value, str):
         return redact_secrets(value)
     if isinstance(value, list):
@@ -16,6 +17,7 @@ def redact_value(value: Any) -> Any:
 
 
 def redact_secrets(message: str) -> str:
+    """Replace API keys and token-like values in a CLI message."""
     redacted = message
     for key, value in os.environ.items():
         if not value:

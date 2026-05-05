@@ -24,6 +24,7 @@ from fast_sub.output.paths import job_dir
 
 
 def register_media_commands(app: typer.Typer) -> None:
+    """Register media inspection, extraction, analysis, and burn commands."""
     app.command("doctor")(doctor_command)
     app.command("probe")(probe_command)
     app.command("extract")(extract_command)
