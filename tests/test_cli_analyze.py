@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 import fast_sub.cli.commands.media_cmd as media_cmd
 import fast_sub.cli.runtime as cli
 from fast_sub.contracts.errors import SubGenError
-from fast_sub.media.service import AnalysisResult
+from fast_sub.media.models import AnalysisResult
 
 runner = CliRunner()
 

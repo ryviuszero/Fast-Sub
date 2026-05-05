@@ -10,7 +10,7 @@ import pytest
 
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.contracts.provider import SttProviderSegment
-from fast_sub.media.service import AnalysisResult
+from fast_sub.media.models import AnalysisResult
 from fast_sub.output.paths import job_dir
 from fast_sub.stt.errors import TranscribeError
 from fast_sub.stt.service import (

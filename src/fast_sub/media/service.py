@@ -3,9 +3,8 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.infrastructure.ffmpeg import (
@@ -14,84 +13,34 @@ from fast_sub.infrastructure.ffmpeg import (
     probe_media,
     process_message,
 )
-
-RecommendedVad = Literal["off", "normal", "aggressive"]
-RecommendedMode = Literal["fast", "balanced", "quality"]
-AnalysisWarning = Literal[
-    "LOW_VOLUME",
-    "CLIPPING_RISK",
-    "FRAGMENTED_SPEECH",
-    "HIGH_SILENCE_RATIO",
-    "UNKNOWN_DURATION",
-]
-
-LOW_VOLUME_WARNING: AnalysisWarning = "LOW_VOLUME"
-CLIPPING_RISK_WARNING: AnalysisWarning = "CLIPPING_RISK"
-FRAGMENTED_SPEECH_WARNING: AnalysisWarning = "FRAGMENTED_SPEECH"
-HIGH_SILENCE_RATIO_WARNING: AnalysisWarning = "HIGH_SILENCE_RATIO"
-UNKNOWN_DURATION_WARNING: AnalysisWarning = "UNKNOWN_DURATION"
-
-_SILENCE_START_RE = re.compile(r"silence_start:\s*(?P<value>-?\d+(?:\.\d+)?)")
-_SILENCE_END_RE = re.compile(
-    r"silence_end:\s*(?P<end>-?\d+(?:\.\d+)?)\s*\|\s*silence_duration:\s*"
-    r"(?P<duration>-?\d+(?:\.\d+)?)"
+from fast_sub.media.constants import (
+    AGGRESSIVE_VAD_SILENCE_RATIO,
+    CLIPPING_RISK_DB,
+    CLIPPING_RISK_WARNING,
+    DENSE_SEGMENTS_PER_MINUTE,
+    FRAGMENTED_SPEECH_WARNING,
+    HIGH_SILENCE_RATIO_WARNING,
+    LOW_VOLUME_DB,
+    LOW_VOLUME_WARNING,
+    MEAN_VOLUME_PATTERN,
+    MIN_FRAGMENTED_SEGMENTS,
+    NORMAL_VAD_SILENCE_RATIO,
+    PEAK_VOLUME_PATTERN,
+    SHORT_AVG_SEGMENT_SEC,
+    SHORT_MEDIA_DURATION_SEC,
+    SILENCE_END_PATTERN,
+    SILENCE_START_PATTERN,
+    UNKNOWN_DURATION_WARNING,
+    AnalysisWarning,
+    RecommendedMode,
+    RecommendedVad,
 )
-_MEAN_VOLUME_RE = re.compile(r"mean_volume:\s*(?P<value>-?\d+(?:\.\d+)?)\s*dB")
-_PEAK_VOLUME_RE = re.compile(r"max_volume:\s*(?P<value>-?\d+(?:\.\d+)?)\s*dB")
+from fast_sub.media.models import AnalysisResult, FfmpegAnalysis, TimeInterval
 
-
-@dataclass(frozen=True)
-class TimeInterval:
-    start_sec: float
-    end_sec: float
-
-    @property
-    def duration_sec(self) -> float:
-        return max(0.0, self.end_sec - self.start_sec)
-
-    def as_dict(self) -> dict[str, float]:
-        return {
-            "start_sec": round(self.start_sec, 3),
-            "end_sec": round(self.end_sec, 3),
-            "duration_sec": round(self.duration_sec, 3),
-        }
-
-
-@dataclass(frozen=True)
-class AnalysisResult:
-    duration_sec: float | None
-    speech_ratio: float
-    silence_ratio: float
-    mean_volume_db: float | None
-    peak_volume_db: float | None
-    estimated_segments: int
-    avg_segment_sec: float
-    recommended_vad: RecommendedVad
-    recommended_mode: RecommendedMode
-    warnings: list[AnalysisWarning] = field(default_factory=list)
-    silence_segments: list[TimeInterval] = field(default_factory=list)
-    speech_segments: list[TimeInterval] = field(default_factory=list)
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "duration_sec": self.duration_sec,
-            "speech_ratio": self.speech_ratio,
-            "silence_ratio": self.silence_ratio,
-            "mean_volume_db": self.mean_volume_db,
-            "peak_volume_db": self.peak_volume_db,
-            "estimated_segments": self.estimated_segments,
-            "avg_segment_sec": self.avg_segment_sec,
-            "recommended_vad": self.recommended_vad,
-            "recommended_mode": self.recommended_mode,
-            "warnings": list(self.warnings),
-        }
-
-
-@dataclass(frozen=True)
-class FfmpegAnalysis:
-    mean_volume_db: float | None
-    peak_volume_db: float | None
-    silence_segments: list[TimeInterval]
+_SILENCE_START_RE = re.compile(SILENCE_START_PATTERN)
+_SILENCE_END_RE = re.compile(SILENCE_END_PATTERN)
+_MEAN_VOLUME_RE = re.compile(MEAN_VOLUME_PATTERN)
+_PEAK_VOLUME_RE = re.compile(PEAK_VOLUME_PATTERN)
 
 
 def analyze_media(input_file: Path) -> AnalysisResult:
@@ -156,11 +105,11 @@ def build_analysis_result(
 
 
 def recommend_vad(duration_sec: float | None, silence_ratio: float) -> RecommendedVad:
-    if silence_ratio > 0.35:
+    if silence_ratio > AGGRESSIVE_VAD_SILENCE_RATIO:
         return "aggressive"
-    if silence_ratio > 0.15:
+    if silence_ratio > NORMAL_VAD_SILENCE_RATIO:
         return "normal"
-    if duration_sec is not None and duration_sec < 120:
+    if duration_sec is not None and duration_sec < SHORT_MEDIA_DURATION_SEC:
         return "off"
     return "normal"
 
@@ -176,7 +125,7 @@ def recommend_mode(
     }
     if any(warning in quality_warnings for warning in warnings):
         return "quality"
-    if duration_sec is not None and duration_sec < 120 and not warnings:
+    if duration_sec is not None and duration_sec < SHORT_MEDIA_DURATION_SEC and not warnings:
         return "fast"
     return "balanced"
 
@@ -265,15 +214,17 @@ def _analysis_warnings(
     warnings: list[AnalysisWarning] = []
     if duration_sec is None:
         warnings.append(UNKNOWN_DURATION_WARNING)
-    if mean_volume_db is not None and mean_volume_db < -35.0:
+    if mean_volume_db is not None and mean_volume_db < LOW_VOLUME_DB:
         warnings.append(LOW_VOLUME_WARNING)
-    if peak_volume_db is not None and peak_volume_db > -1.0:
+    if peak_volume_db is not None and peak_volume_db > CLIPPING_RISK_DB:
         warnings.append(CLIPPING_RISK_WARNING)
-    if silence_ratio > 0.35:
+    if silence_ratio > AGGRESSIVE_VAD_SILENCE_RATIO:
         warnings.append(HIGH_SILENCE_RATIO_WARNING)
-    very_short_segments = avg_segment_sec < 1.5
-    dense_segments = _segments_per_minute(duration_sec, estimated_segments) > 20
-    if estimated_segments >= 10 and (very_short_segments or dense_segments):
+    very_short_segments = avg_segment_sec < SHORT_AVG_SEGMENT_SEC
+    dense_segments = (
+        _segments_per_minute(duration_sec, estimated_segments) > DENSE_SEGMENTS_PER_MINUTE
+    )
+    if estimated_segments >= MIN_FRAGMENTED_SEGMENTS and (very_short_segments or dense_segments):
         warnings.append(FRAGMENTED_SPEECH_WARNING)
     return warnings
 

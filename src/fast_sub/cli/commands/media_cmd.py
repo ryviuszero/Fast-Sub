@@ -16,7 +16,8 @@ from fast_sub.infrastructure.ffmpeg import (
     prepare_audio,
     probe_media,
 )
-from fast_sub.media.service import AnalysisResult, analyze_media
+from fast_sub.media.models import AnalysisResult
+from fast_sub.media.service import analyze_media
 from fast_sub.output.burn import BurnOptions, burn_subtitles
 from fast_sub.output.paths import job_dir
 

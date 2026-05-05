@@ -5,12 +5,14 @@ from pathlib import Path
 import pytest
 
 from fast_sub.contracts.errors import SubGenError
-from fast_sub.media.service import (
+from fast_sub.media.constants import (
     CLIPPING_RISK_WARNING,
     FRAGMENTED_SPEECH_WARNING,
     HIGH_SILENCE_RATIO_WARNING,
     LOW_VOLUME_WARNING,
-    TimeInterval,
+)
+from fast_sub.media.models import TimeInterval
+from fast_sub.media.service import (
     analyze_media,
     build_analysis_result,
     parse_ffmpeg_analysis,
