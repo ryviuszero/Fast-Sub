@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.infrastructure.ffmpeg import (
@@ -337,6 +337,6 @@ def _positive_float(value: object) -> float | None:
 
 def _float(value: object) -> float | None:
     try:
-        return None if value is None else float(value)
+        return None if value is None else float(cast(Any, value))
     except (TypeError, ValueError):
         return None

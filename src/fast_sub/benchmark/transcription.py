@@ -6,6 +6,7 @@ import re
 import statistics
 import subprocess
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -574,36 +575,25 @@ def summarize_runs(runs: list[dict[str, Any]]) -> dict[str, Any]:
     if not ok_runs:
         return summary
 
-    elapsed = [_number(run.get("elapsed_sec")) for run in ok_runs]
-    elapsed = [value for value in elapsed if value is not None]
-    rtfx_e2e = [_number(run.get("rtfx_e2e")) for run in ok_runs]
-    rtfx_e2e = [value for value in rtfx_e2e if value is not None]
-    worker_rtfx = [_number(run.get("worker_rtfx")) for run in ok_runs]
-    worker_rtfx = [value for value in worker_rtfx if value is not None]
-    worker_elapsed = [_number(run.get("worker_elapsed_sec")) for run in ok_runs]
-    worker_elapsed = [value for value in worker_elapsed if value is not None]
-    overhead = [_number(run.get("overhead_sec")) for run in ok_runs]
-    overhead = [value for value in overhead if value is not None]
-    steady_elapsed = [_number(run.get("elapsed_sec")) for run in ok_runs[1:]]
-    steady_elapsed = [value for value in steady_elapsed if value is not None]
-    invalid_segments = [_number(run.get("invalid_segments_count")) for run in ok_runs]
-    invalid_segments = [value for value in invalid_segments if value is not None]
-    prediction_chars = [_number(run.get("prediction_chars")) for run in ok_runs]
-    prediction_chars = [value for value in prediction_chars if value is not None]
-    reference_chars = [_number(run.get("reference_chars")) for run in ok_runs]
-    reference_chars = [value for value in reference_chars if value is not None]
-    cer_values = [
-        _number((run.get("quality") or {}).get("cer"))
+    elapsed = _numbers(run.get("elapsed_sec") for run in ok_runs)
+    rtfx_e2e = _numbers(run.get("rtfx_e2e") for run in ok_runs)
+    worker_rtfx = _numbers(run.get("worker_rtfx") for run in ok_runs)
+    worker_elapsed = _numbers(run.get("worker_elapsed_sec") for run in ok_runs)
+    overhead = _numbers(run.get("overhead_sec") for run in ok_runs)
+    steady_elapsed = _numbers(run.get("elapsed_sec") for run in ok_runs[1:])
+    invalid_segments = _numbers(run.get("invalid_segments_count") for run in ok_runs)
+    prediction_chars = _numbers(run.get("prediction_chars") for run in ok_runs)
+    reference_chars = _numbers(run.get("reference_chars") for run in ok_runs)
+    cer_values = _numbers(
+        (run.get("quality") or {}).get("cer")
         for run in ok_runs
         if isinstance(run.get("quality"), dict)
-    ]
-    cer_values = [value for value in cer_values if value is not None]
-    wer_values = [
-        _number((run.get("quality") or {}).get("wer"))
+    )
+    wer_values = _numbers(
+        (run.get("quality") or {}).get("wer")
         for run in ok_runs
         if isinstance(run.get("quality"), dict)
-    ]
-    wer_values = [value for value in wer_values if value is not None]
+    )
 
     summary.update(
         {
@@ -944,11 +934,10 @@ def _format_memory_pair(hardware: dict[str, Any]) -> str:
 
 
 def _rtfx_interpretation(report: dict[str, Any]) -> str:
-    values = [
-        _number((profile.get("summary") or {}).get("rtfx_e2e_avg"))
+    values = _numbers(
+        (profile.get("summary") or {}).get("rtfx_e2e_avg")
         for profile in report.get("profiles", [])
-    ]
-    values = [value for value in values if value is not None]
+    )
     if not values:
         return "RTFx: higher is faster. 1.0 is roughly real time."
     best = max(values)
@@ -1130,7 +1119,11 @@ def _number(value: Any) -> float | None:
         return None
 
 
-def _optional_int(value: object) -> int | None:
+def _numbers(values: Iterable[Any]) -> list[float]:
+    return [number for value in values if (number := _number(value)) is not None]
+
+
+def _optional_int(value: Any) -> int | None:
     try:
         return None if value is None else int(value)
     except (TypeError, ValueError):

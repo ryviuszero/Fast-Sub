@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 import typer
 from rich.progress import (
@@ -182,7 +182,7 @@ def _model_download_progress():  # noqa: ANN202
 
 
 def _format_bytes(value: object) -> str:
-    size = float(value)
+    size = float(cast(Any, value))
     units = ["B", "KB", "MB", "GB", "TB"]
     for unit in units:
         if size < 1024 or unit == units[-1]:

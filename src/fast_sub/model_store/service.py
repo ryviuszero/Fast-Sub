@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
 
 def list_model_rows(
     *,
-    list_models_func: Callable[[], list[Any]],
+    list_models_func: Callable[[], Iterable[Any]],
     verify_model_func: Callable[[Any], Any],
     model_path_func: Callable[[Any], Path],
 ) -> list[dict[str, Any]]:

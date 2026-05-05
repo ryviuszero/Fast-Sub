@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.contracts.worker import SttWorkerRequest
@@ -251,7 +251,7 @@ def _resolve_vad(input_file: Path, vad: str) -> tuple[str, list[str]]:
         analysis = analyze_media(input_file)
     except SubGenError as exc:
         return "normal", [f"VAD auto analysis failed; using normal: {exc}"]
-    return analysis.recommended_vad, analysis.warnings
+    return str(analysis.recommended_vad), list(analysis.warnings)
 
 
 def _resolve_model_path(provider_id: str, model_id: str) -> Path:
@@ -296,7 +296,7 @@ def _resolve_worker_command(options: TranscribeOptions) -> list[str | Path]:
         return options.worker_command
     env_command = os.getenv(stt_constants.WORKER_COMMAND_ENV)
     if env_command:
-        return shlex.split(env_command)
+        return list(shlex.split(env_command))
     return [sys.executable, "-m", "fast_sub_workers.faster_whisper"]
 
 
@@ -483,7 +483,7 @@ def _require_choice(value: str, valid: set[str], option: str) -> None:
 
 def _optional_float(value: object) -> float | None:
     try:
-        return None if value is None else float(value)
+        return None if value is None else float(cast(Any, value))
     except (TypeError, ValueError):
         return None
 

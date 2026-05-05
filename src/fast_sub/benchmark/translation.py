@@ -8,6 +8,7 @@ import re
 import statistics
 import time
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
@@ -252,10 +253,12 @@ def summarize_translate_runs(
     metric_info: dict[str, Any],
 ) -> dict[str, Any]:
     ok_runs = [run for run in runs if run.get("status") == "ok"]
-    first_quality = next(
-        (run.get("quality") for run in ok_runs if isinstance(run.get("quality"), dict)),
-        {},
-    )
+    first_quality: dict[str, Any] = {}
+    for run in ok_runs:
+        quality = run.get("quality")
+        if isinstance(quality, dict):
+            first_quality = quality
+            break
     summary: dict[str, Any] = {
         "runs": len(runs),
         "ok_runs": len(ok_runs),
@@ -277,12 +280,11 @@ def summarize_translate_runs(
     for key in ("elapsed_sec", "chars_per_sec", "cues_per_sec", "failed_count"):
         summary.update(_stats_for(key, ok_runs))
     for key in ("bleu", "chrf", "exact_match_rate"):
-        values = [
-            _number((run.get("quality") or {}).get(key))
+        values = _numbers(
+            (run.get("quality") or {}).get(key)
             for run in ok_runs
             if isinstance(run.get("quality"), dict)
-        ]
-        values = [value for value in values if value is not None]
+        )
         summary.update(_stats_values(key, values))
     return summary
 
@@ -951,8 +953,7 @@ def _collect_messages(report: dict[str, Any]) -> list[str]:
 
 
 def _stats_for(key: str, runs: list[dict[str, Any]]) -> dict[str, Any]:
-    values = [_number(run.get(key)) for run in runs]
-    return _stats_values(key, [value for value in values if value is not None])
+    return _stats_values(key, _numbers(run.get(key) for run in runs))
 
 
 def _stats_values(key: str, values: list[float]) -> dict[str, Any]:
@@ -989,6 +990,10 @@ def _number(value: Any) -> float | None:
         return None if value is None else float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _numbers(values: Iterable[Any]) -> list[float]:
+    return [number for value in values if (number := _number(value)) is not None]
 
 
 def _format_number(value: Any) -> str:

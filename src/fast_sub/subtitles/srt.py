@@ -254,7 +254,7 @@ def _split_chunk(text: str, max_chars: int) -> list[str]:
 
 
 def _wrap_subtitle_text(text: str, max_chars: int) -> str:
-    lines = []
+    lines: list[str] = []
     for chunk in _split_chunk(_normalize_text(text).replace("\n", " "), max_chars):
         if not lines or _plain_len(lines[-1]) + 1 + _plain_len(chunk) > max_chars:
             lines.append(chunk)

@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fast_sub.contracts.errors import SubGenError
 
@@ -226,14 +226,14 @@ def _stream_language(stream: dict[str, Any]) -> str | None:
 
 def _optional_float(value: object) -> float | None:
     try:
-        return None if value is None else float(value)
+        return None if value is None else float(cast(Any, value))
     except (TypeError, ValueError):
         return None
 
 
 def _optional_int(value: object) -> int | None:
     try:
-        return None if value is None else int(value)
+        return None if value is None else int(cast(Any, value))
     except (TypeError, ValueError):
         return None
 

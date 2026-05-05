@@ -620,7 +620,7 @@ def _chunks(items: list[Segment], size: int) -> list[list[Segment]]:
 
 
 def _legacy_translator_to_provider(translator: str | None) -> str:
-    if translator in {"bing", "web-bing", None}:
+    if translator is None or translator in {"bing", "web-bing"}:
         return "web-bing"
     if translator in {"google", "web-google"}:
         return "web-google"
