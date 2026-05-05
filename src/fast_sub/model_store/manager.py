@@ -103,23 +103,66 @@ def install_model(
             f"Refusing to overwrite existing model with mismatched sha256: {existing.path}"
         )
 
-    path = model_path(model, cache_dir)
     if model.files:
-        path.mkdir(parents=True, exist_ok=True)
-        _ensure_disk_space(path, model.size_bytes)
-        for manifest_file in model.files:
-            _install_manifest_file(
-                model,
-                manifest_file,
-                path,
-                timeout=timeout,
-                downloader=downloader,
-                aria2_connections=aria2_connections,
-                aria2_split=aria2_split,
-                progress=progress,
-            )
+        _install_directory_model(
+            model,
+            model_path(model, cache_dir),
+            timeout=timeout,
+            downloader=downloader,
+            aria2_connections=aria2_connections,
+            aria2_split=aria2_split,
+            progress=progress,
+        )
         return verify_model(model, cache_dir)
 
+    path = model_path(model, cache_dir)
+    _install_single_file_model(
+        model,
+        path,
+        timeout=timeout,
+        downloader=downloader,
+        aria2_connections=aria2_connections,
+        aria2_split=aria2_split,
+        progress=progress,
+    )
+    return verify_model(model, cache_dir)
+
+
+def _install_directory_model(
+    model: ModelManifestEntry,
+    path: Path,
+    *,
+    timeout: float,
+    downloader: str,
+    aria2_connections: int,
+    aria2_split: int,
+    progress: DownloadProgress | None,
+) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    _ensure_disk_space(path, model.size_bytes)
+    for manifest_file in model.files:
+        _install_manifest_file(
+            model,
+            manifest_file,
+            path,
+            timeout=timeout,
+            downloader=downloader,
+            aria2_connections=aria2_connections,
+            aria2_split=aria2_split,
+            progress=progress,
+        )
+
+
+def _install_single_file_model(
+    model: ModelManifestEntry,
+    path: Path,
+    *,
+    timeout: float,
+    downloader: str,
+    aria2_connections: int,
+    aria2_split: int,
+    progress: DownloadProgress | None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     _ensure_disk_space(path.parent, model.size_bytes)
     last_error = _download_verified(
@@ -134,7 +177,7 @@ def install_model(
         progress=progress,
     )
     if last_error is None:
-        return verify_model(model, cache_dir)
+        return
 
     assert last_error is not None
     raise _ModelManagerError(f"Failed to install {model.id}: {last_error}") from last_error
@@ -183,51 +226,17 @@ def _verify_directory_model(model: ModelManifestEntry, path: Path) -> ModelStatu
     except OSError as exc:
         return _inaccessible_status(model, path, exc)
 
+    return _verify_directory_files(model, path)
+
+
+def _verify_directory_files(model: ModelManifestEntry, path: Path) -> ModelStatus:
     total_size = 0
     for index, manifest_file in enumerate(model.files):
         file_path = path / manifest_file.path
-        try:
-            if not file_path.exists():
-                return ModelStatus(
-                    id=model.id,
-                    path=file_path,
-                    installed=False,
-                    status="missing",
-                    message=f"Required model file is missing: {manifest_file.path}",
-                    checked_files=index,
-                    manifest_type=model.manifest_type,
-                )
-            if not file_path.is_file():
-                return ModelStatus(
-                    id=model.id,
-                    path=file_path,
-                    installed=False,
-                    status="invalid_path",
-                    message=f"Required model path is not a file: {manifest_file.path}",
-                    checked_files=index,
-                    manifest_type=model.manifest_type,
-                )
-            actual_size = file_path.stat().st_size
-            actual_sha = sha256_file(file_path)
-        except OSError as exc:
-            return _inaccessible_status(model, file_path, exc, checked_files=index)
-
-        total_size += actual_size
-        if actual_sha != manifest_file.sha256:
-            return ModelStatus(
-                id=model.id,
-                path=file_path,
-                installed=False,
-                status="hash_mismatch",
-                message=(
-                    "Required model file exists, but sha256 does not match the manifest: "
-                    f"{manifest_file.path}"
-                ),
-                sha256=actual_sha,
-                size_bytes=actual_size,
-                checked_files=index,
-                manifest_type=model.manifest_type,
-            )
+        verified = _verify_directory_file(model, manifest_file, file_path, checked_files=index)
+        if not verified.installed:
+            return verified
+        total_size += verified.size_bytes or 0
 
     return ModelStatus(
         id=model.id,
@@ -237,6 +246,67 @@ def _verify_directory_model(model: ModelManifestEntry, path: Path) -> ModelStatu
         message=f"Model directory is installed and verified ({len(model.files)} files).",
         size_bytes=total_size,
         checked_files=len(model.files),
+        manifest_type=model.manifest_type,
+    )
+
+
+def _verify_directory_file(
+    model: ModelManifestEntry,
+    manifest_file: ModelManifestFile,
+    file_path: Path,
+    *,
+    checked_files: int,
+) -> ModelStatus:
+    try:
+        if not file_path.exists():
+            return ModelStatus(
+                id=model.id,
+                path=file_path,
+                installed=False,
+                status="missing",
+                message=f"Required model file is missing: {manifest_file.path}",
+                checked_files=checked_files,
+                manifest_type=model.manifest_type,
+            )
+        if not file_path.is_file():
+            return ModelStatus(
+                id=model.id,
+                path=file_path,
+                installed=False,
+                status="invalid_path",
+                message=f"Required model path is not a file: {manifest_file.path}",
+                checked_files=checked_files,
+                manifest_type=model.manifest_type,
+            )
+        actual_size = file_path.stat().st_size
+        actual_sha = sha256_file(file_path)
+    except OSError as exc:
+        return _inaccessible_status(model, file_path, exc, checked_files=checked_files)
+
+    if actual_sha != manifest_file.sha256:
+        return ModelStatus(
+            id=model.id,
+            path=file_path,
+            installed=False,
+            status="hash_mismatch",
+            message=(
+                "Required model file exists, but sha256 does not match the manifest: "
+                f"{manifest_file.path}"
+            ),
+            sha256=actual_sha,
+            size_bytes=actual_size,
+            checked_files=checked_files,
+            manifest_type=model.manifest_type,
+        )
+    return ModelStatus(
+        id=model.id,
+        path=file_path,
+        installed=True,
+        status="installed",
+        message=f"Required model file is installed and verified: {manifest_file.path}",
+        sha256=actual_sha,
+        size_bytes=actual_size,
+        checked_files=checked_files + 1,
         manifest_type=model.manifest_type,
     )
 

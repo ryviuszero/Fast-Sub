@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -56,105 +57,175 @@ def resolve_stt_provider(
     if definition is None:
         return _unknown_provider(provider_id, model_id)
 
-    metadata = definition.metadata
-    if metadata.type is not ProviderType.STT:
-        return ProviderResolution(
-            provider_id=provider_id,
-            model_id=model_id,
-            model_path=None,
-            provider_type=metadata.type.value,
-            provider_location=metadata.location.value,
-            model_backend=None,
-            model_installed=False,
-            status="incompatible_provider",
-            message=(
-                f"Provider '{provider_id}' is a {metadata.type.value} provider, "
-                "not an STT provider."
-            ),
-            local=metadata.location is ProviderLocation.LOCAL,
-            privacy_note=metadata.privacy_note,
-            action_hint="Choose an STT provider from `fast-sub providers list`.",
-        )
-
-    if metadata.location is ProviderLocation.API:
+    if definition.metadata.type is not ProviderType.STT:
+        return _incompatible_provider(definition, model_id)
+    if definition.metadata.location is ProviderLocation.API:
         return _resolve_api_stt_provider(registry, definition, model_id)
 
-    model = _find_model(model_id, models if models is not None else list_models())
+    return _resolve_local_stt_provider(
+        provider_id,
+        model_id,
+        definition=definition,
+        cache_dir=cache_dir,
+        models=models if models is not None else list_models(),
+        registry=registry,
+    )
+
+
+def _resolve_local_stt_provider(
+    provider_id: str,
+    model_id: str,
+    *,
+    definition: ProviderDefinition,
+    cache_dir: Path | None,
+    models: Iterable[ModelManifestEntry],
+    registry: ProviderRegistry,
+) -> ProviderResolution:
+    model = _find_model(model_id, models)
     if model is None:
-        return ProviderResolution(
-            provider_id=provider_id,
-            model_id=model_id,
-            model_path=None,
-            provider_type=metadata.type.value,
-            provider_location=metadata.location.value,
-            model_backend=None,
-            model_installed=False,
-            status="unknown_model",
-            message=f"Unknown model id: {model_id}.",
-            local=True,
-            privacy_note=metadata.privacy_note,
-            action_hint="Run `fast-sub models list` to see available models.",
-        )
+        return _unknown_model(definition, model_id)
 
     path = model_path(model, cache_dir)
+    incompatible = _model_compatibility_error(definition, model, path)
+    if incompatible is not None:
+        return incompatible
+
+    model_status = verify_model(model, cache_dir)
+    if not model_status.installed:
+        return _missing_model(definition, model, path, model_status.message)
+
+    provider_status = registry.inspect(provider_id).status
+    if provider_status.status is not ProviderStatusCode.AVAILABLE:
+        return _unavailable_provider(definition, model, path, provider_status)
+
+    return _available_provider(definition, model, path)
+
+
+def _incompatible_provider(
+    definition: ProviderDefinition,
+    model_id: str,
+) -> ProviderResolution:
+    metadata = definition.metadata
+    return ProviderResolution(
+        provider_id=metadata.id,
+        model_id=model_id,
+        model_path=None,
+        provider_type=metadata.type.value,
+        provider_location=metadata.location.value,
+        model_backend=None,
+        model_installed=False,
+        status="incompatible_provider",
+        message=(
+            f"Provider '{metadata.id}' is a {metadata.type.value} provider, not an STT provider."
+        ),
+        local=metadata.location is ProviderLocation.LOCAL,
+        privacy_note=metadata.privacy_note,
+        action_hint="Choose an STT provider from `fast-sub providers list`.",
+    )
+
+
+def _unknown_model(definition: ProviderDefinition, model_id: str) -> ProviderResolution:
+    metadata = definition.metadata
+    return ProviderResolution(
+        provider_id=metadata.id,
+        model_id=model_id,
+        model_path=None,
+        provider_type=metadata.type.value,
+        provider_location=metadata.location.value,
+        model_backend=None,
+        model_installed=False,
+        status="unknown_model",
+        message=f"Unknown model id: {model_id}.",
+        local=True,
+        privacy_note=metadata.privacy_note,
+        action_hint="Run `fast-sub models list` to see available models.",
+    )
+
+
+def _model_compatibility_error(
+    definition: ProviderDefinition,
+    model: ModelManifestEntry,
+    path: Path,
+) -> ProviderResolution | None:
     if model.type != "asr":
         return _incompatible_model(
             definition,
             model,
             path,
-            f"Model '{model_id}' has type '{model.type}', but STT requires type 'asr'.",
+            f"Model '{model.id}' has type '{model.type}', but STT requires type 'asr'.",
         )
 
-    compatible_backends = _COMPATIBLE_STT_MODEL_BACKENDS.get(provider_id)
-    if compatible_backends is not None and model.backend not in compatible_backends:
-        expected = ", ".join(sorted(compatible_backends))
-        return _incompatible_model(
-            definition,
-            model,
-            path,
-            (
-                f"Model '{model_id}' uses backend '{model.backend}', but provider "
-                f"'{provider_id}' requires backend: {expected}."
-            ),
-        )
+    compatible_backends = _COMPATIBLE_STT_MODEL_BACKENDS.get(definition.metadata.id)
+    if compatible_backends is None or model.backend in compatible_backends:
+        return None
 
-    model_status = verify_model(model, cache_dir)
-    if not model_status.installed:
-        return ProviderResolution(
-            provider_id=provider_id,
-            model_id=model_id,
-            model_path=path,
-            provider_type=metadata.type.value,
-            provider_location=metadata.location.value,
-            model_backend=model.backend,
-            model_installed=False,
-            status=ProviderStatusCode.MISSING_MODEL.value,
-            message=model_status.message,
-            local=True,
-            privacy_note=metadata.privacy_note,
-            action_hint=f"Run `fast-sub models install {model_id}`.",
-        )
+    expected = ", ".join(sorted(compatible_backends))
+    return _incompatible_model(
+        definition,
+        model,
+        path,
+        (
+            f"Model '{model.id}' uses backend '{model.backend}', but provider "
+            f"'{definition.metadata.id}' requires backend: {expected}."
+        ),
+    )
 
-    provider_status = registry.inspect(provider_id).status
-    if provider_status.status is not ProviderStatusCode.AVAILABLE:
-        return ProviderResolution(
-            provider_id=provider_id,
-            model_id=model_id,
-            model_path=path,
-            provider_type=metadata.type.value,
-            provider_location=metadata.location.value,
-            model_backend=model.backend,
-            model_installed=True,
-            status=provider_status.status.value,
-            message=provider_status.message,
-            local=True,
-            privacy_note=metadata.privacy_note,
-            action_hint=_provider_action_hint(definition),
-        )
 
+def _missing_model(
+    definition: ProviderDefinition,
+    model: ModelManifestEntry,
+    path: Path,
+    message: str,
+) -> ProviderResolution:
+    metadata = definition.metadata
     return ProviderResolution(
-        provider_id=provider_id,
-        model_id=model_id,
+        provider_id=metadata.id,
+        model_id=model.id,
+        model_path=path,
+        provider_type=metadata.type.value,
+        provider_location=metadata.location.value,
+        model_backend=model.backend,
+        model_installed=False,
+        status=ProviderStatusCode.MISSING_MODEL.value,
+        message=message,
+        local=True,
+        privacy_note=metadata.privacy_note,
+        action_hint=f"Run `fast-sub models install {model.id}`.",
+    )
+
+
+def _unavailable_provider(
+    definition: ProviderDefinition,
+    model: ModelManifestEntry,
+    path: Path,
+    provider_status: Any,
+) -> ProviderResolution:
+    metadata = definition.metadata
+    return ProviderResolution(
+        provider_id=metadata.id,
+        model_id=model.id,
+        model_path=path,
+        provider_type=metadata.type.value,
+        provider_location=metadata.location.value,
+        model_backend=model.backend,
+        model_installed=True,
+        status=provider_status.status.value,
+        message=provider_status.message,
+        local=True,
+        privacy_note=metadata.privacy_note,
+        action_hint=_provider_action_hint(definition),
+    )
+
+
+def _available_provider(
+    definition: ProviderDefinition,
+    model: ModelManifestEntry,
+    path: Path,
+) -> ProviderResolution:
+    metadata = definition.metadata
+    return ProviderResolution(
+        provider_id=metadata.id,
+        model_id=model.id,
         model_path=path,
         provider_type=metadata.type.value,
         provider_location=metadata.location.value,

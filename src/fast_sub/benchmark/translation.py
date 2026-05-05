@@ -199,6 +199,13 @@ def summarize_translate_runs(
 
 def render_markdown_report(report: dict[str, Any]) -> str:
     """Render a Markdown report for a translation benchmark result."""
+    lines = _render_translation_report_overview(report)
+    lines.extend(_render_translation_run_details(report))
+    lines.extend(_render_translation_messages(report))
+    return "\n".join(lines) + "\n"
+
+
+def _render_translation_report_overview(report: dict[str, Any]) -> list[str]:
     summary = report.get("summary", {})
     quality_note = (
         "Scores are rough reference-based signals, not a human-quality guarantee. "
@@ -248,6 +255,12 @@ def render_markdown_report(report: dict[str, Any]) -> str:
         f"- chars/sec avg/min/max/stddev: `{_summary_quad(summary, 'chars_per_sec')}`",
         f"- cues/sec avg/min/max/stddev: `{_summary_quad(summary, 'cues_per_sec')}`",
         "",
+    ]
+    return lines
+
+
+def _render_translation_run_details(report: dict[str, Any]) -> list[str]:
+    lines = [
         "## Run Details",
         "",
         "| run | status | elapsed | chars/sec | cues/sec | BLEU | chrF | exact | failed |",
@@ -272,13 +285,17 @@ def render_markdown_report(report: dict[str, Any]) -> str:
             )
             + " |"
         )
-    lines.extend(["", "## Warnings And Errors", ""])
+    return lines
+
+
+def _render_translation_messages(report: dict[str, Any]) -> list[str]:
+    lines = ["", "## Warnings And Errors", ""]
     messages = _collect_messages(report)
     if not messages:
         lines.append("- None.")
     else:
         lines.extend(f"- {message}" for message in messages)
-    return "\n".join(lines) + "\n"
+    return lines
 
 
 def _run_once(

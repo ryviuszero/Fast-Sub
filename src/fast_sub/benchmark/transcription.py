@@ -178,6 +178,15 @@ def load_sample_metadata(
 
 def render_markdown_report(report: dict[str, Any]) -> str:
     """Render a full Markdown report for a transcription benchmark result."""
+    lines = _render_report_overview(report)
+    lines.extend(_render_metric_guide())
+    lines.extend(_render_run_details(report))
+    lines.extend(_render_warnings_and_errors(report))
+    lines.extend(_render_follow_up())
+    return "\n".join(lines)
+
+
+def _render_report_overview(report: dict[str, Any]) -> list[str]:
     sample = report.get("sample", {})
     hardware = report.get("hardware", {})
     fastest = _fastest_profile(report)
@@ -225,40 +234,46 @@ def render_markdown_report(report: dict[str, Any]) -> str:
         "",
     ]
     lines.extend(_render_profile_table(report, include_requested=True))
-    lines.extend(
-        [
-            "",
-            "## Metric Guide",
-            "",
-            (
-                "- RTFx: higher is faster. `1.0` is roughly real time; `10.0` "
-                "means about 10 minutes of audio per minute of processing."
-            ),
-            (
-                "- CER: character error rate. Lower is better, and it is usually "
-                "more useful for Chinese and Japanese samples."
-            ),
-            (
-                "- WER: word error rate. Lower is better, and it is usually more "
-                "useful for English and Korean samples."
-            ),
-            (
-                "- CER/WER rough guide: `< 0.05` excellent, `0.05-0.10` good, "
-                "`0.10-0.20` usable with review, `> 0.20` higher quality risk."
-            ),
-            (
-                "- CER/WER thresholds depend on language, noise, accents, "
-                "segmentation, and reference transcript quality."
-            ),
-            "- End-to-end elapsed includes audio preparation and worker orchestration.",
-            (
-                "- Worker elapsed is measured inside the transcription worker; "
-                "the difference is a rough proxy for preparation, process startup, "
-                "model load, and dispatch overhead."
-            ),
-        ]
-    )
-    lines.extend(["", "## Run Details", ""])
+    return lines
+
+
+def _render_metric_guide() -> list[str]:
+    return [
+        "",
+        "## Metric Guide",
+        "",
+        (
+            "- RTFx: higher is faster. `1.0` is roughly real time; `10.0` "
+            "means about 10 minutes of audio per minute of processing."
+        ),
+        (
+            "- CER: character error rate. Lower is better, and it is usually "
+            "more useful for Chinese and Japanese samples."
+        ),
+        (
+            "- WER: word error rate. Lower is better, and it is usually more "
+            "useful for English and Korean samples."
+        ),
+        (
+            "- CER/WER rough guide: `< 0.05` excellent, `0.05-0.10` good, "
+            "`0.10-0.20` usable with review, `> 0.20` higher quality risk."
+        ),
+        (
+            "- CER/WER thresholds depend on language, noise, accents, "
+            "segmentation, and reference transcript quality."
+        ),
+        "- End-to-end elapsed includes audio preparation and worker orchestration.",
+        (
+            "- Worker elapsed is measured inside the transcription worker; "
+            "the difference is a rough proxy for preparation, process startup, "
+            "model load, and dispatch overhead."
+        ),
+    ]
+
+
+def _render_run_details(report: dict[str, Any]) -> list[str]:
+    lines = ["", "## Run Details", ""]
+    has_quality = _report_has_quality(report)
     for profile in report.get("profiles", []):
         lines.append(f"### {profile.get('name', 'unknown')}")
         lines.append("")
@@ -290,27 +305,31 @@ def render_markdown_report(report: dict[str, Any]) -> str:
             )
             lines.append("| " + " | ".join(row) + " |")
         lines.append("")
+    return lines
 
+
+def _render_warnings_and_errors(report: dict[str, Any]) -> list[str]:
     warnings = _collect_profile_messages(report, "warnings")
     errors = _collect_profile_messages(report, "error")
-    lines.extend(["", "## Warnings And Errors", ""])
+    lines = ["", "## Warnings And Errors", ""]
     if not warnings and not errors:
         lines.append("- None.")
     for warning in warnings:
         lines.append(f"- warning: {warning}")
     for error in errors:
         lines.append(f"- error: {error}")
-    lines.extend(
-        [
-            "",
-            "## Follow-up",
-            "",
-            "- TODO: add RTX 3060 and additional machine baselines before release.",
-            "- TODO: expand fixed samples as local licensed media becomes available.",
-            "",
-        ]
-    )
-    return "\n".join(lines)
+    return lines
+
+
+def _render_follow_up() -> list[str]:
+    return [
+        "",
+        "## Follow-up",
+        "",
+        "- TODO: add RTX 3060 and additional machine baselines before release.",
+        "- TODO: expand fixed samples as local licensed media becomes available.",
+        "",
+    ]
 
 
 def render_brief_report(report: dict[str, Any]) -> str:
