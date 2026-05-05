@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.contracts.worker import SttWorkerRequest
@@ -20,102 +20,29 @@ from fast_sub.infrastructure.ffmpeg import (
     probe_media,
 )
 from fast_sub.infrastructure.workers import run_stt_worker
-from fast_sub.managers.providers import resolve_stt_provider
 from fast_sub.media.service import analyze_media
 from fast_sub.models import Mode, Segment
 from fast_sub.output.paths import job_dir
+from fast_sub.providers.resolution import resolve_stt_provider
+from fast_sub.stt import constants as stt_constants
+from fast_sub.stt.errors import TranscribeError as _TranscribeError
 from fast_sub.subtitles.srt import render_srt
-
-DEFAULT_PROVIDER = "local-faster-whisper"
-DEFAULT_MODEL = "whisper-small"
-DEFAULT_LANGUAGE = "auto"
-DEFAULT_DEVICE = "auto"
-DEFAULT_COMPUTE_TYPE = "auto"
-DEFAULT_BATCH_SIZE = 4
-DEFAULT_GPU_LOAD = "balanced"
-DEFAULT_VAD = "auto"
-DEFAULT_MODE = "balanced"
-GPU_LOAD_BATCH_SIZES = {
-    "low": 2,
-    "balanced": DEFAULT_BATCH_SIZE,
-    "max": 8,
-}
-VALID_LANGUAGES = {"auto", "zh", "en", "ja", "ko"}
-VALID_DEVICES = {"auto", "cuda", "cpu"}
-VALID_COMPUTE_TYPES = {"auto", "float16", "int8_float16", "int8"}
-VALID_VAD = {"auto", "off", "normal", "aggressive"}
-VALID_MODES = {"fast", "balanced", "quality"}
-VALID_GPU_LOADS = set(GPU_LOAD_BATCH_SIZES)
-WORKER_COMMAND_ENV = "FAST_SUB_STT_WORKER_COMMAND"
 
 
 @dataclass(frozen=True)
 class TranscribeOptions:
-    provider: str = DEFAULT_PROVIDER
-    model: str = DEFAULT_MODEL
-    language: str = DEFAULT_LANGUAGE
-    device: str = DEFAULT_DEVICE
-    compute_type: str = DEFAULT_COMPUTE_TYPE
+    provider: str = stt_constants.DEFAULT_PROVIDER
+    model: str = stt_constants.DEFAULT_MODEL
+    language: str = stt_constants.DEFAULT_LANGUAGE
+    device: str = stt_constants.DEFAULT_DEVICE
+    compute_type: str = stt_constants.DEFAULT_COMPUTE_TYPE
     batch_size: int | None = None
-    gpu_load: str = DEFAULT_GPU_LOAD
-    vad: str = DEFAULT_VAD
-    mode: str = DEFAULT_MODE
+    gpu_load: str = stt_constants.DEFAULT_GPU_LOAD
+    vad: str = stt_constants.DEFAULT_VAD
+    mode: str = stt_constants.DEFAULT_MODE
     output: Path | None = None
     keep_temp: bool = False
     worker_command: list[str | Path] | None = None
-
-
-@dataclass(frozen=True)
-class TranscribeFailure:
-    stage: str
-    code: str
-    message: str
-    action_hint: str | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "stage": self.stage,
-            "code": self.code,
-            "message": self.message,
-        }
-        if self.action_hint:
-            payload["action_hint"] = self.action_hint
-        return payload
-
-
-class TranscribeError(SubGenError):
-    """Structured transcribe failure suitable for CLI JSON and auto orchestration."""
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        stage: str,
-        code: str,
-        action_hint: str | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.failure = TranscribeFailure(
-            stage=stage,
-            code=code,
-            message=message,
-            action_hint=action_hint,
-        )
-
-    @property
-    def stage(self) -> str:
-        return self.failure.stage
-
-    @property
-    def code(self) -> str:
-        return self.failure.code
-
-    @property
-    def action_hint(self) -> str | None:
-        return self.failure.action_hint
-
-    def as_dict(self) -> dict[str, Any]:
-        return self.failure.as_dict()
 
 
 @dataclass(frozen=True)
@@ -163,6 +90,16 @@ class TranscribeResult:
         }
 
 
+@dataclass(frozen=True)
+class _TranscribePaths:
+    work_dir: Path
+    audio: Path
+    request_copy: Path
+    response_copy: Path
+    metadata: Path
+    output: Path
+
+
 def transcribe_media(
     input_file: Path,
     options: TranscribeOptions | None = None,
@@ -170,115 +107,189 @@ def transcribe_media(
     options = options or TranscribeOptions()
     started = time.perf_counter()
     metadata_context = _metadata_context(input_file, options)
-    work_dir = _transcribe_work_dir(input_file)
-    audio_path = work_dir / "audio.16k.mono.wav"
-    request_copy_path = work_dir / "worker.request.json"
-    response_copy_path = work_dir / "worker.response.json"
-    metadata_path = work_dir / "metadata.json"
+    paths = _transcribe_paths(input_file, options)
 
     try:
-        _run_stage("options", "INVALID_OPTIONS", lambda: _validate_options(options))
-        _run_stage("input", "INVALID_INPUT", lambda: _validate_input_file(input_file))
-        _run_stage("doctor", "MISSING_DEPENDENCY", ensure_media_tools)
-
-        info = _run_stage("probe", "FFPROBE_FAILED", lambda: probe_media(input_file))
-        duration_sec = _optional_float(info.get("duration_sec"))
-        metadata_context["duration_sec"] = duration_sec
-        metadata_context["duration"] = duration_sec
-        out_path = options.output or input_file.with_suffix(".srt")
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-
-        work_dir.mkdir(parents=True, exist_ok=True)
-        _run_stage("prepare", "FFMPEG_FAILED", lambda: prepare_audio(input_file, audio_path))
-        resolved_vad, analysis_warnings = _resolve_vad(input_file, options.vad)
-        model_dir = _resolve_model_path(options.provider, options.model)
-        batch_size = _resolve_batch_size(options)
-        metadata_context["batch_size"] = batch_size
-        request = SttWorkerRequest(
-            job_id=work_dir.name,
-            audio_path=audio_path,
-            language=options.language,
-            model_path=model_dir,
-            device=options.device,
-            compute_type=options.compute_type,
-            batch_size=batch_size,
-            vad=resolved_vad,
-            mode=options.mode,
-        )
-
-        response = _run_worker_stage(
-            lambda: run_stt_worker(
-                _resolve_worker_command(options),
-                request,
-                workdir=work_dir if options.keep_temp else None,
-                request_path=request_copy_path if options.keep_temp else None,
-                response_path=response_copy_path if options.keep_temp else None,
-            )
-        )
-        segments, validation_warnings = _run_stage(
-            "transcribe",
-            "TRANSCRIBE_FAILED",
-            lambda: normalize_worker_segments(response.segments),
-        )
-        warnings = [*analysis_warnings, *response.warnings, *validation_warnings]
-
-        out_path.write_text(render_srt(segments, mode=Mode.ORIGINAL), encoding="utf-8")
-        elapsed_sec = time.perf_counter() - started
-        result = TranscribeResult(
-            srt_path=out_path,
-            provider=response.provider or options.provider,
-            model=options.model,
-            device=options.device,
-            compute_type=options.compute_type,
-            actual_device=response.actual_device,
-            actual_compute_type=response.actual_compute_type,
-            language_detected=response.language,
-            duration_sec=duration_sec,
-            elapsed_sec=round(elapsed_sec, 3),
-            worker_elapsed_sec=response.elapsed_sec,
-            rtfx=_rtfx(duration_sec, elapsed_sec),
-            segments_count=len(segments),
-            gpu_load=options.gpu_load,
-            batch_size=batch_size,
-            warnings=warnings,
-            metadata_path=metadata_path if options.keep_temp else None,
-            work_dir=work_dir if options.keep_temp else None,
-        )
+        result = _run_transcribe_job(input_file, options, paths, metadata_context, started)
         if options.keep_temp:
-            _write_metadata(metadata_path, {"ok": True, **result.as_dict()})
+            _write_metadata(paths.metadata, {"ok": True, **result.as_dict()})
         return result
-    except TranscribeError as exc:
-        if options.keep_temp:
-            elapsed_sec = round(time.perf_counter() - started, 3)
-            _write_metadata(
-                metadata_path,
-                {
-                    "ok": False,
-                    **metadata_context,
-                    "elapsed_sec": elapsed_sec,
-                    "elapsed": elapsed_sec,
-                    "error": exc.as_dict(),
-                },
-            )
+    except _TranscribeError as exc:
+        _write_failure_metadata(options, paths, metadata_context, started, exc)
         raise
     except SubGenError as exc:
         transcribe_error = _as_transcribe_error(exc, stage="transcribe", code="TRANSCRIBE_FAILED")
-        if options.keep_temp:
-            elapsed_sec = round(time.perf_counter() - started, 3)
-            _write_metadata(
-                metadata_path,
-                {
-                    "ok": False,
-                    **metadata_context,
-                    "elapsed_sec": elapsed_sec,
-                    "elapsed": elapsed_sec,
-                    "error": transcribe_error.as_dict(),
-                },
-            )
+        _write_failure_metadata(options, paths, metadata_context, started, transcribe_error)
         raise transcribe_error from exc
     finally:
-        if not options.keep_temp and work_dir.exists():
-            shutil.rmtree(work_dir, ignore_errors=True)
+        if not options.keep_temp and paths.work_dir.exists():
+            shutil.rmtree(paths.work_dir, ignore_errors=True)
+
+
+def _run_transcribe_job(
+    input_file: Path,
+    options: TranscribeOptions,
+    paths: _TranscribePaths,
+    metadata_context: dict[str, Any],
+    started: float,
+) -> TranscribeResult:
+    duration_sec = _run_transcribe_preflight(input_file, options, paths, metadata_context)
+    resolved_vad, analysis_warnings = _resolve_vad(input_file, options.vad)
+    model_dir = _resolve_model_path(options.provider, options.model)
+    batch_size = _resolve_batch_size(options)
+    metadata_context["batch_size"] = batch_size
+    request = _worker_request(
+        paths,
+        options,
+        model_dir=model_dir,
+        batch_size=batch_size,
+        vad=resolved_vad,
+    )
+    response = _run_transcribe_worker(options, paths, request)
+    segments, validation_warnings = _run_stage(
+        "transcribe",
+        "TRANSCRIBE_FAILED",
+        lambda: normalize_worker_segments(response.segments),
+    )
+    warnings = [*analysis_warnings, *response.warnings, *validation_warnings]
+
+    paths.output.write_text(render_srt(segments, mode=Mode.ORIGINAL), encoding="utf-8")
+    elapsed_sec = time.perf_counter() - started
+    return _transcribe_result(
+        options,
+        paths,
+        response=response,
+        duration_sec=duration_sec,
+        elapsed_sec=elapsed_sec,
+        segments_count=len(segments),
+        batch_size=batch_size,
+        warnings=warnings,
+    )
+
+
+def _transcribe_paths(input_file: Path, options: TranscribeOptions) -> _TranscribePaths:
+    work_dir = _transcribe_work_dir(input_file)
+    return _TranscribePaths(
+        work_dir=work_dir,
+        audio=work_dir / "audio.16k.mono.wav",
+        request_copy=work_dir / "worker.request.json",
+        response_copy=work_dir / "worker.response.json",
+        metadata=work_dir / "metadata.json",
+        output=options.output or input_file.with_suffix(".srt"),
+    )
+
+
+def _run_transcribe_preflight(
+    input_file: Path,
+    options: TranscribeOptions,
+    paths: _TranscribePaths,
+    metadata_context: dict[str, Any],
+) -> float | None:
+    _run_stage("options", "INVALID_OPTIONS", lambda: _validate_options(options))
+    _run_stage("input", "INVALID_INPUT", lambda: _validate_input_file(input_file))
+    _run_stage("doctor", "MISSING_DEPENDENCY", ensure_media_tools)
+
+    info = _run_stage("probe", "FFPROBE_FAILED", lambda: probe_media(input_file))
+    duration_sec = _optional_float(info.get("duration_sec"))
+    metadata_context["duration_sec"] = duration_sec
+    metadata_context["duration"] = duration_sec
+    paths.output.parent.mkdir(parents=True, exist_ok=True)
+
+    paths.work_dir.mkdir(parents=True, exist_ok=True)
+    _run_stage("prepare", "FFMPEG_FAILED", lambda: prepare_audio(input_file, paths.audio))
+    return duration_sec
+
+
+def _worker_request(
+    paths: _TranscribePaths,
+    options: TranscribeOptions,
+    *,
+    model_dir: Path,
+    batch_size: int,
+    vad: str,
+) -> SttWorkerRequest:
+    return SttWorkerRequest(
+        job_id=paths.work_dir.name,
+        audio_path=paths.audio,
+        language=options.language,
+        model_path=model_dir,
+        device=options.device,
+        compute_type=options.compute_type,
+        batch_size=batch_size,
+        vad=vad,
+        mode=options.mode,
+    )
+
+
+def _run_transcribe_worker(
+    options: TranscribeOptions,
+    paths: _TranscribePaths,
+    request: SttWorkerRequest,
+) -> Any:
+    return _run_worker_stage(
+        lambda: run_stt_worker(
+            _resolve_worker_command(options),
+            request,
+            workdir=paths.work_dir if options.keep_temp else None,
+            request_path=paths.request_copy if options.keep_temp else None,
+            response_path=paths.response_copy if options.keep_temp else None,
+        )
+    )
+
+
+def _transcribe_result(
+    options: TranscribeOptions,
+    paths: _TranscribePaths,
+    *,
+    response: Any,
+    duration_sec: float | None,
+    elapsed_sec: float,
+    segments_count: int,
+    batch_size: int,
+    warnings: list[str],
+) -> TranscribeResult:
+    return TranscribeResult(
+        srt_path=paths.output,
+        provider=response.provider or options.provider,
+        model=options.model,
+        device=options.device,
+        compute_type=options.compute_type,
+        actual_device=response.actual_device,
+        actual_compute_type=response.actual_compute_type,
+        language_detected=response.language,
+        duration_sec=duration_sec,
+        elapsed_sec=round(elapsed_sec, 3),
+        worker_elapsed_sec=response.elapsed_sec,
+        rtfx=_rtfx(duration_sec, elapsed_sec),
+        segments_count=segments_count,
+        gpu_load=options.gpu_load,
+        batch_size=batch_size,
+        warnings=warnings,
+        metadata_path=paths.metadata if options.keep_temp else None,
+        work_dir=paths.work_dir if options.keep_temp else None,
+    )
+
+
+def _write_failure_metadata(
+    options: TranscribeOptions,
+    paths: _TranscribePaths,
+    metadata_context: dict[str, Any],
+    started: float,
+    error: _TranscribeError,
+) -> None:
+    if not options.keep_temp:
+        return
+    elapsed_sec = round(time.perf_counter() - started, 3)
+    _write_metadata(
+        paths.metadata,
+        {
+            "ok": False,
+            **metadata_context,
+            "elapsed_sec": elapsed_sec,
+            "elapsed": elapsed_sec,
+            "error": error.as_dict(),
+        },
+    )
 
 
 def normalize_worker_segments(raw_segments: list[Any]) -> tuple[list[Segment], list[str]]:
@@ -309,7 +320,7 @@ def normalize_worker_segments(raw_segments: list[Any]) -> tuple[list[Segment], l
         previous_end = end
 
     if not normalized:
-        raise TranscribeError(
+        raise _TranscribeError(
             "Worker returned no usable subtitle segments.",
             stage="transcribe",
             code="EMPTY_SEGMENTS",
@@ -324,32 +335,32 @@ def _resolve_vad(input_file: Path, vad: str) -> tuple[str, list[str]]:
         analysis = analyze_media(input_file)
     except SubGenError as exc:
         return "normal", [f"VAD auto analysis failed; using normal: {exc}"]
-    return analysis.recommended_vad, analysis.warnings
+    return str(analysis.recommended_vad), list(analysis.warnings)
 
 
 def _resolve_model_path(provider_id: str, model_id: str) -> Path:
     resolution = resolve_stt_provider(provider_id, model_id)
     if resolution.provider_location == "api":
-        raise TranscribeError(
+        raise _TranscribeError(
             "transcribe v0 only supports local STT providers.",
             stage="provider",
             code="UNSUPPORTED_PROVIDER",
         )
-    if provider_id != DEFAULT_PROVIDER:
-        raise TranscribeError(
+    if provider_id != stt_constants.DEFAULT_PROVIDER:
+        raise _TranscribeError(
             f"Unsupported local STT provider for transcribe v0: {provider_id}",
             stage="provider",
             code="UNSUPPORTED_PROVIDER",
         )
     if resolution.status != "available":
-        raise TranscribeError(
+        raise _TranscribeError(
             _format_resolution_error(resolution),
             stage=_resolution_stage(resolution.status),
             code=_resolution_code(resolution.status),
             action_hint=resolution.action_hint,
         )
     if resolution.model_path is None:
-        raise TranscribeError(
+        raise _TranscribeError(
             f"Provider resolution did not return a local model path for {provider_id}.",
             stage="model",
             code="MODEL_NOT_FOUND",
@@ -367,9 +378,9 @@ def _format_resolution_error(resolution: Any) -> str:
 def _resolve_worker_command(options: TranscribeOptions) -> list[str | Path]:
     if options.worker_command:
         return options.worker_command
-    env_command = os.getenv(WORKER_COMMAND_ENV)
+    env_command = os.getenv(stt_constants.WORKER_COMMAND_ENV)
     if env_command:
-        return shlex.split(env_command)
+        return list(shlex.split(env_command))
     return [sys.executable, "-m", "fast_sub_workers.faster_whisper"]
 
 
@@ -383,12 +394,12 @@ def _validate_input_file(input_file: Path) -> None:
 
 
 def _validate_options(options: TranscribeOptions) -> None:
-    _require_choice(options.language, VALID_LANGUAGES, "--language")
-    _require_choice(options.device, VALID_DEVICES, "--device")
-    _require_choice(options.compute_type, VALID_COMPUTE_TYPES, "--compute")
-    _require_choice(options.vad, VALID_VAD, "--vad")
-    _require_choice(options.mode, VALID_MODES, "--mode")
-    _require_choice(options.gpu_load, VALID_GPU_LOADS, "--gpu-load")
+    _require_choice(options.language, stt_constants.VALID_LANGUAGES, "--language")
+    _require_choice(options.device, stt_constants.VALID_DEVICES, "--device")
+    _require_choice(options.compute_type, stt_constants.VALID_COMPUTE_TYPES, "--compute")
+    _require_choice(options.vad, stt_constants.VALID_VAD, "--vad")
+    _require_choice(options.mode, stt_constants.VALID_MODES, "--mode")
+    _require_choice(options.gpu_load, stt_constants.VALID_GPU_LOADS, "--gpu-load")
     if options.batch_size is not None and options.batch_size <= 0:
         raise SubGenError("--batch-size must be greater than 0.")
 
@@ -396,13 +407,13 @@ def _validate_options(options: TranscribeOptions) -> None:
 def _resolve_batch_size(options: TranscribeOptions) -> int:
     if options.batch_size is not None:
         return options.batch_size
-    return GPU_LOAD_BATCH_SIZES[options.gpu_load]
+    return stt_constants.GPU_LOAD_BATCH_SIZES[options.gpu_load]
 
 
 def transcribe_error_payload(exc: SubGenError) -> dict[str, Any]:
     error = (
         exc
-        if isinstance(exc, TranscribeError)
+        if isinstance(exc, _TranscribeError)
         else _as_transcribe_error(
             exc,
             stage="transcribe",
@@ -413,7 +424,7 @@ def transcribe_error_payload(exc: SubGenError) -> dict[str, Any]:
 
 
 def _metadata_context(input_file: Path, options: TranscribeOptions) -> dict[str, Any]:
-    batch_size = options.batch_size or GPU_LOAD_BATCH_SIZES.get(options.gpu_load)
+    batch_size = options.batch_size or stt_constants.GPU_LOAD_BATCH_SIZES.get(options.gpu_load)
     return {
         "input": str(input_file),
         "provider": options.provider,
@@ -442,7 +453,7 @@ def _write_metadata(path: Path, payload: dict[str, Any]) -> None:
 def _run_stage(stage: str, code: str, func: Any) -> Any:
     try:
         return func()
-    except TranscribeError:
+    except _TranscribeError:
         raise
     except SubGenError as exc:
         raise _as_transcribe_error(exc, stage=stage, code=code) from exc
@@ -451,7 +462,7 @@ def _run_stage(stage: str, code: str, func: Any) -> Any:
 def _run_worker_stage(func: Any) -> Any:
     try:
         return func()
-    except TranscribeError:
+    except _TranscribeError:
         raise
     except SubGenError as exc:
         raise _classify_worker_error(exc) from exc
@@ -462,9 +473,9 @@ def _as_transcribe_error(
     *,
     stage: str,
     code: str,
-) -> TranscribeError:
+) -> _TranscribeError:
     message = str(exc)
-    return TranscribeError(
+    return _TranscribeError(
         _clean_error_message(message),
         stage=stage,
         code=_classify_code(message, code),
@@ -472,10 +483,10 @@ def _as_transcribe_error(
     )
 
 
-def _classify_worker_error(exc: SubGenError) -> TranscribeError:
+def _classify_worker_error(exc: SubGenError) -> _TranscribeError:
     message = _clean_error_message(str(exc))
     code = _worker_error_code(message)
-    return TranscribeError(
+    return _TranscribeError(
         message,
         stage="transcribe",
         code=code,
@@ -556,7 +567,7 @@ def _require_choice(value: str, valid: set[str], option: str) -> None:
 
 def _optional_float(value: object) -> float | None:
     try:
-        return None if value is None else float(value)
+        return None if value is None else float(cast(Any, value))
     except (TypeError, ValueError):
         return None
 

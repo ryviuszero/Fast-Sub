@@ -10,14 +10,15 @@ from types import SimpleNamespace
 
 import pytest
 
+from fast_sub.benchmark.errors import BenchTranslateError
+from fast_sub.benchmark.models import BenchTranslateOptions
 from fast_sub.benchmark.translation import (
-    BenchTranslateError,
-    BenchTranslateOptions,
     _metric_info,
     run_bench_translate,
     score_translation_quality,
 )
-from fast_sub.translation.service import TranslateSrtResult, TranslationProviderError
+from fast_sub.translation.errors import TranslationProviderError
+from fast_sub.translation.service import TranslateSrtResult
 
 
 @pytest.fixture

@@ -1,14 +1,14 @@
+"""Translation benchmark execution, scoring, and report rendering."""
+
 from __future__ import annotations
 
 import hashlib
 import json
-import math
 import os
 import re
 import statistics
 import time
-from collections import Counter
-from dataclasses import dataclass
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -16,133 +16,39 @@ from typing import Any
 
 import pysubs2
 
-from fast_sub.contracts.errors import SubGenError
+from fast_sub.benchmark.constants import (
+    BENCH_TRANSLATE_MARKDOWN_NAME,
+    BENCH_TRANSLATE_OUTPUT_DIR_PARTS,
+    BENCH_TRANSLATE_REPORT_NAME,
+    LIGHTWEIGHT_METRIC_IMPLEMENTATION,
+    LIGHTWEIGHT_TOKENIZER,
+    REMOTE_API_PROVIDERS,
+    REMOTE_WEB_PROVIDERS,
+    TRANSLATION_NORMALIZATION_PROFILE,
+)
+from fast_sub.benchmark.errors import BenchTranslateError
+from fast_sub.benchmark.manifests import (
+    BENCH_TRANSLATE_MEASUREMENT_SCOPE,
+    BENCH_TRANSLATE_SCHEMA_VERSION,
+)
+from fast_sub.benchmark.models import BenchTranslateOptions
+from fast_sub.benchmark.text_metrics import (
+    lightweight_bleu_corpus,
+    lightweight_chrf_corpus,
+    normalize_quality_text,
+    normalize_subtitle_text,
+)
 from fast_sub.models import BilingualOrder, Mode
+from fast_sub.translation.constants import TARGET_LANGUAGES, TRANSLATION_PROVIDERS
+from fast_sub.translation.errors import TranslationProviderError
 from fast_sub.translation.service import (
-    TARGET_LANGUAGES,
-    TRANSLATION_PROVIDERS,
     TranslateOptions,
-    TranslationProviderError,
     sha256_file,
     translate_srt,
 )
 
-BENCH_TRANSLATE_SCHEMA_VERSION = 1
-MEASUREMENT_SCOPE = "translate_srt_v1"
-NORMALIZATION_PROFILE = "translate_quality_basic_v1"
-LIGHTWEIGHT_METRIC_IMPLEMENTATION = "fast_sub_lightweight_v1"
-LIGHTWEIGHT_TOKENIZER = "char_cjk_or_whitespace_v1"
-REMOTE_WEB_PROVIDERS = {"web-bing", "web-google"}
-REMOTE_API_PROVIDERS = {"api-openai-chat"}
-TRANSLATE_SAMPLE_MANIFEST_EXAMPLE = {
-    "schema_version": 1,
-    "providers": [
-        {"id": "web-bing"},
-        {"id": "local-nllb-ct2", "model": "nllb-200-distilled-600m-ct2-int8"},
-    ],
-    "samples": [
-        {
-            "id": "en-podcast-1m-to-zh",
-            "source_subtitle_path": "local_tests/bench_translate/datasets/light/en-zh.source.srt",
-            "reference_translation_path": (
-                "local_tests/bench_translate/datasets/light/en-zh.reference.srt"
-            ),
-            "source_language": "en",
-            "target_language": "zh",
-            "domain": "podcast",
-            "source_dataset": "authorized local sample",
-            "license": "local-only",
-            "redistributable": False,
-            "target_metrics": ["bleu", "chrf", "exact_match_rate", "elapsed_sec"],
-        }
-    ],
-}
-TRANSLATE_SAMPLE_MANIFEST_REQUIRED_FIELDS = (
-    "providers",
-    "providers[].id",
-    "samples",
-    "samples[].id",
-    "samples[].source_subtitle_path",
-    "samples[].reference_translation_path",
-    "samples[].source_language",
-    "samples[].target_language",
-)
-
-
-@dataclass(frozen=True)
-class BenchTranslateOptions:
-    reference: Path
-    provider: str
-    source_language: str = "auto"
-    target_language: str = "zh"
-    output_dir: Path | None = None
-    markdown: bool = False
-    markdown_path: Path | None = None
-    repeat: int = 1
-    model: str | None = None
-    model_path: Path | None = None
-    batch_size: int = 8
-    timeout: float = 60.0
-    sleep_seconds: float = 0.0
-    api_key: str | None = None
-    base_url: str = "https://api.openai.com/v1"
-    command: list[str] | None = None
-
-
-class BenchTranslateError(SubGenError):
-    def __init__(self, message: str, *, report: dict[str, Any] | None = None) -> None:
-        super().__init__(message)
-        self.report = report
-
-
-def translate_sample_manifest_schema_payload() -> dict[str, Any]:
-    return {
-        "schema_version": BENCH_TRANSLATE_SCHEMA_VERSION,
-        "kind": "fast_sub_bench_translate_manifest_schema",
-        "measurement_scope": MEASUREMENT_SCOPE,
-        "required_fields": list(TRANSLATE_SAMPLE_MANIFEST_REQUIRED_FIELDS),
-        "provider_matrix": (
-            "Run each samples[] entry against each providers[] entry. CLI overrides should be "
-            "recorded in the report when manifest execution is implemented."
-        ),
-        "supported_languages": ["auto", "en", "zh", "ja", "ko"],
-        "reference_types": ["srt", "txt"],
-        "dataset_profiles": ["light", "standard"],
-        "core_directions": ["en-zh", "ja-zh", "ko-zh", "zh-en", "ja-en", "ko-en"],
-        "notes": [
-            "Dataset raw files are manually downloaded by the user.",
-            "Sampling scripts must read local_tests/bench_translate/raw/ only and avoid network.",
-            "Do not commit real source subtitles, references, model files, or reports.",
-            "Scores are per sample/reference and should not be aggregated as one quality truth.",
-        ],
-        "example": TRANSLATE_SAMPLE_MANIFEST_EXAMPLE,
-    }
-
-
-def render_translate_sample_manifest_schema() -> str:
-    payload = translate_sample_manifest_schema_payload()
-    lines = [
-        "Fast Sub Translation Benchmark Manifest",
-        "",
-        "Provider matrix:",
-        f"- {payload['provider_matrix']}",
-        "",
-        "Required fields:",
-        *[f"- {field}" for field in payload["required_fields"]],
-        "",
-        "Reference types:",
-        "- srt, txt",
-        "",
-        "Dataset profiles:",
-        "- light, standard",
-        "",
-        "Core directions:",
-        "- en-zh, ja-zh, ko-zh, zh-en, ja-en, ko-en",
-        "",
-        "Example:",
-        json.dumps(payload["example"], ensure_ascii=False, indent=2),
-    ]
-    return "\n".join(lines)
+MEASUREMENT_SCOPE = BENCH_TRANSLATE_MEASUREMENT_SCOPE
+NORMALIZATION_PROFILE = TRANSLATION_NORMALIZATION_PROFILE
 
 
 def run_bench_translate(
@@ -151,6 +57,7 @@ def run_bench_translate(
     *,
     translator: Any | None = None,
 ) -> dict[str, Any]:
+    """Run translation benchmarks and return a redacted report payload."""
     _validate_options(input_file, options)
     run_translate = translator or translate_srt
     input_sha = sha256_file(input_file)
@@ -226,14 +133,14 @@ def run_bench_translate(
     )
     if failed_all and any(run.get("status") == "ok" for run in report["runs"]):
         report["summary"]["warnings"].append("At least one repeat failed.")
-    report_path = output_dir / "report.json"
+    report_path = output_dir / BENCH_TRANSLATE_REPORT_NAME
     report["report_path"] = report_path.name
     report_path.write_text(
         json.dumps(_redact_value(report), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     if options.markdown or options.markdown_path is not None:
-        markdown_path = options.markdown_path or (output_dir / "report.md")
+        markdown_path = options.markdown_path or (output_dir / BENCH_TRANSLATE_MARKDOWN_NAME)
         markdown_path.parent.mkdir(parents=True, exist_ok=True)
         markdown_path.write_text(render_markdown_report(report), encoding="utf-8")
         report["markdown_path"] = markdown_path.name
@@ -252,11 +159,14 @@ def summarize_translate_runs(
     sample: dict[str, Any],
     metric_info: dict[str, Any],
 ) -> dict[str, Any]:
+    """Summarize repeated translation benchmark runs."""
     ok_runs = [run for run in runs if run.get("status") == "ok"]
-    first_quality = next(
-        (run.get("quality") for run in ok_runs if isinstance(run.get("quality"), dict)),
-        {},
-    )
+    first_quality: dict[str, Any] = {}
+    for run in ok_runs:
+        quality = run.get("quality")
+        if isinstance(quality, dict):
+            first_quality = quality
+            break
     summary: dict[str, Any] = {
         "runs": len(runs),
         "ok_runs": len(ok_runs),
@@ -278,17 +188,24 @@ def summarize_translate_runs(
     for key in ("elapsed_sec", "chars_per_sec", "cues_per_sec", "failed_count"):
         summary.update(_stats_for(key, ok_runs))
     for key in ("bleu", "chrf", "exact_match_rate"):
-        values = [
-            _number((run.get("quality") or {}).get(key))
+        values = _numbers(
+            (run.get("quality") or {}).get(key)
             for run in ok_runs
             if isinstance(run.get("quality"), dict)
-        ]
-        values = [value for value in values if value is not None]
+        )
         summary.update(_stats_values(key, values))
     return summary
 
 
 def render_markdown_report(report: dict[str, Any]) -> str:
+    """Render a Markdown report for a translation benchmark result."""
+    lines = _render_translation_report_overview(report)
+    lines.extend(_render_translation_run_details(report))
+    lines.extend(_render_translation_messages(report))
+    return "\n".join(lines) + "\n"
+
+
+def _render_translation_report_overview(report: dict[str, Any]) -> list[str]:
     summary = report.get("summary", {})
     quality_note = (
         "Scores are rough reference-based signals, not a human-quality guarantee. "
@@ -338,6 +255,12 @@ def render_markdown_report(report: dict[str, Any]) -> str:
         f"- chars/sec avg/min/max/stddev: `{_summary_quad(summary, 'chars_per_sec')}`",
         f"- cues/sec avg/min/max/stddev: `{_summary_quad(summary, 'cues_per_sec')}`",
         "",
+    ]
+    return lines
+
+
+def _render_translation_run_details(report: dict[str, Any]) -> list[str]:
+    lines = [
         "## Run Details",
         "",
         "| run | status | elapsed | chars/sec | cues/sec | BLEU | chrF | exact | failed |",
@@ -362,13 +285,17 @@ def render_markdown_report(report: dict[str, Any]) -> str:
             )
             + " |"
         )
-    lines.extend(["", "## Warnings And Errors", ""])
+    return lines
+
+
+def _render_translation_messages(report: dict[str, Any]) -> list[str]:
+    lines = ["", "## Warnings And Errors", ""]
     messages = _collect_messages(report)
     if not messages:
         lines.append("- None.")
     else:
         lines.extend(f"- {message}" for message in messages)
-    return "\n".join(lines) + "\n"
+    return lines
 
 
 def _run_once(
@@ -462,6 +389,7 @@ def score_translation_quality(
     source_cue_count: int,
     metric_info: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Score translated cue text against the reference payload."""
     metric_info = metric_info or _metric_info()
     del source_cue_count
     reference_texts = list(reference.get("texts") or [])
@@ -475,8 +403,8 @@ def score_translation_quality(
     if metric_info["metric_implementation"] == "sacrebleu":
         bleu, chrf, raw = _score_sacrebleu(metric_predictions, metric_references, metric_info)
     else:
-        bleu = _lightweight_bleu_corpus(metric_predictions, metric_references)
-        chrf = _lightweight_chrf_corpus(metric_predictions, metric_references)
+        bleu = lightweight_bleu_corpus(metric_predictions, metric_references)
+        chrf = lightweight_chrf_corpus(metric_predictions, metric_references)
         raw = {
             "bleu_raw_score": bleu,
             "bleu_raw_scale": "0-1",
@@ -485,8 +413,8 @@ def score_translation_quality(
         }
     exact = None
     if alignment == "aligned":
-        normalized_predictions = [_normalize_quality_text(text) for text in prediction_texts]
-        normalized_references = [_normalize_quality_text(text) for text in reference_texts]
+        normalized_predictions = [normalize_quality_text(text) for text in prediction_texts]
+        normalized_references = [normalize_quality_text(text) for text in reference_texts]
         matches = sum(
             1
             for prediction, ref in zip(normalized_predictions, normalized_references, strict=True)
@@ -526,13 +454,13 @@ def _load_reference(path: Path) -> dict[str, Any]:
 
 def _load_srt_texts(path: Path) -> list[str]:
     subs = pysubs2.load(str(path), encoding="utf-8", format_="srt")
-    texts = [_normalize_subtitle_text(event.text) for event in subs.events]
+    texts = [normalize_subtitle_text(event.text) for event in subs.events]
     return [text for text in texts if text]
 
 
 def _load_txt_lines(path: Path) -> list[str]:
     raw_lines = path.read_text(encoding="utf-8").splitlines()
-    lines = [_normalize_subtitle_text(line) for line in raw_lines]
+    lines = [normalize_subtitle_text(line) for line in raw_lines]
     return [line for line in lines if line]
 
 
@@ -680,95 +608,6 @@ def _metric_corpus_sequences(
     return ["\n".join(predictions)], ["\n".join(references)]
 
 
-def _lightweight_bleu_corpus(predictions: list[str], references: list[str]) -> float | None:
-    return _lightweight_bleu("\n".join(predictions), "\n".join(references))
-
-
-def _lightweight_chrf_corpus(predictions: list[str], references: list[str]) -> float | None:
-    return _lightweight_chrf("\n".join(predictions), "\n".join(references))
-
-
-def _lightweight_bleu(prediction: str, reference: str) -> float | None:
-    pred_tokens = _quality_tokens(prediction)
-    ref_tokens = _quality_tokens(reference)
-    if not ref_tokens:
-        return None
-    if not pred_tokens:
-        return 0.0
-    precisions: list[float] = []
-    for n in range(1, 5):
-        pred_counts = _ngram_counts(pred_tokens, n)
-        ref_counts = _ngram_counts(ref_tokens, n)
-        if not pred_counts:
-            precisions.append(0.0)
-            continue
-        clipped = sum(min(count, ref_counts.get(ngram, 0)) for ngram, count in pred_counts.items())
-        precisions.append(clipped / sum(pred_counts.values()))
-    smooth = 1e-9
-    log_precision = sum(math.log(max(value, smooth)) for value in precisions) / 4
-    if len(pred_tokens) > len(ref_tokens):
-        bp = 1.0
-    else:
-        bp = math.exp(1 - len(ref_tokens) / len(pred_tokens))
-    return _round(bp * math.exp(log_precision))
-
-
-def _lightweight_chrf(
-    prediction: str,
-    reference: str,
-    *,
-    n: int = 6,
-    beta: float = 2.0,
-) -> float | None:
-    pred = _normalize_quality_text(prediction).replace(" ", "")
-    ref = _normalize_quality_text(reference).replace(" ", "")
-    if not ref:
-        return None
-    if not pred:
-        return 0.0
-    scores = []
-    for size in range(1, n + 1):
-        pred_counts = _ngram_counts(list(pred), size)
-        ref_counts = _ngram_counts(list(ref), size)
-        if not pred_counts or not ref_counts:
-            continue
-        overlap = sum(min(count, ref_counts.get(ngram, 0)) for ngram, count in pred_counts.items())
-        precision = overlap / sum(pred_counts.values())
-        recall = overlap / sum(ref_counts.values())
-        denom = beta * beta * precision + recall
-        scores.append(((1 + beta * beta) * precision * recall / denom) if denom else 0.0)
-    return _round(statistics.fmean(scores)) if scores else 0.0
-
-
-def _quality_tokens(text: str) -> list[str]:
-    normalized = _normalize_quality_text(text)
-    if any(_is_cjk(char) for char in normalized):
-        return [char for char in normalized if not char.isspace()]
-    return normalized.split()
-
-
-def _normalize_quality_text(text: str) -> str:
-    normalized = _normalize_subtitle_text(text).casefold()
-    normalized = re.sub(r"\s+", " ", normalized).strip()
-    return normalized
-
-
-def _normalize_subtitle_text(text: str) -> str:
-    normalized = text.replace("\\N", "\n").replace("\r\n", "\n").replace("\r", "\n")
-    normalized = re.sub(r"<[^>]+>", "", normalized)
-    return "\n".join(line.strip() for line in normalized.splitlines() if line.strip())
-
-
-def _ngram_counts(tokens: list[str], n: int) -> Counter[tuple[str, ...]]:
-    return Counter(tuple(tokens[index : index + n]) for index in range(0, len(tokens) - n + 1))
-
-
-def _is_cjk(char: str) -> bool:
-    return (
-        "\u4e00" <= char <= "\u9fff" or "\u3040" <= char <= "\u30ff" or "\uac00" <= char <= "\ud7af"
-    )
-
-
 def _null_quality(reference: dict[str, Any], metric_info: dict[str, Any]) -> dict[str, Any]:
     return {
         "reference_available": True,
@@ -826,8 +665,7 @@ def _default_output_dir(
 ) -> Path:
     stamp = generated_at.replace(":", "").replace("-", "").replace(".", "").replace("Z", "z")
     return (
-        Path(".fast-sub")
-        / "bench-translate"
+        Path(*BENCH_TRANSLATE_OUTPUT_DIR_PARTS)
         / f"{input_file.stem}-{target_language}-{provider}-{stamp}-{config_hash[:8]}"
     )
 
@@ -952,8 +790,7 @@ def _collect_messages(report: dict[str, Any]) -> list[str]:
 
 
 def _stats_for(key: str, runs: list[dict[str, Any]]) -> dict[str, Any]:
-    values = [_number(run.get(key)) for run in runs]
-    return _stats_values(key, [value for value in values if value is not None])
+    return _stats_values(key, _numbers(run.get(key) for run in runs))
 
 
 def _stats_values(key: str, values: list[float]) -> dict[str, Any]:
@@ -990,6 +827,10 @@ def _number(value: Any) -> float | None:
         return None if value is None else float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _numbers(values: Iterable[Any]) -> list[float]:
+    return [number for value in values if (number := _number(value)) is not None]
 
 
 def _format_number(value: Any) -> str:

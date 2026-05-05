@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import pytest
 
 from fast_sub.models import Segment
+from fast_sub.translation.errors import TranslationProviderError
 from fast_sub.translation.service import (
-    TranslationProviderError,
     detect_subtitle_language,
     flores_code,
     parse_chat_translations,

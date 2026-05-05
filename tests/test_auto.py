@@ -6,8 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from fast_sub.model_store.manager import ModelStatus
-from fast_sub.pipeline.orchestrator import AutoOptions, AutoPipelineError, auto_media
+from fast_sub.model_store.models import ModelStatus
+from fast_sub.pipeline.errors import AutoPipelineError
+from fast_sub.pipeline.models import AutoOptions
+from fast_sub.pipeline.orchestrator import auto_media
 from fast_sub.stt.service import TranscribeResult
 
 

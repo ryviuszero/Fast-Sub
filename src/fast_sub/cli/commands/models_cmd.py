@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import json
-from typing import Annotated
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from typing import Annotated, Any, cast
 
 import typer
 from rich.progress import (
@@ -14,12 +15,11 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 
-from fast_sub.cli.context import console, err_console
 from fast_sub.cli.errors import error_payload
-from fast_sub.cli.redaction import redact_secrets
+from fast_sub.cli.helpers import console, echo_json, err_console, redact_secrets
+from fast_sub.model_store.constants import MODEL_DOWNLOADERS
+from fast_sub.model_store.errors import ModelManagerError
 from fast_sub.model_store.manager import (
-    MODEL_DOWNLOADERS,
-    ModelManagerError,
     install_model,
     model_path,
     verify_model,
@@ -48,7 +48,7 @@ def models_list_command(
         model_path_func=model_path,
     )
     if json_output:
-        typer.echo(json.dumps(rows, ensure_ascii=False, indent=2))
+        echo_json(rows, pretty=True)
         return
 
     for row in rows:
@@ -82,13 +82,13 @@ def models_verify_command(
             action_hint="Run `fast-sub models list` to see available models.",
         )
         if json_output:
-            typer.echo(json.dumps(payload, ensure_ascii=False))
+            echo_json(payload)
         else:
             err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
         raise typer.Exit(2) from exc
 
     if json_output:
-        typer.echo(json.dumps(status.as_dict(), ensure_ascii=False, indent=2))
+        echo_json(status.as_dict(), pretty=True)
     else:
         color = "green" if status.installed else "yellow"
         console.print(f"[{color}]{status.status}:[/{color}] {status.message} {status.path}")
@@ -145,7 +145,8 @@ def _validate_model_downloader(value: str) -> None:
         )
 
 
-def _model_download_progress():  # noqa: ANN202
+@contextmanager
+def _model_download_progress() -> Iterator[Callable[[str, int, int | None], None]]:
     progress = Progress(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
@@ -169,20 +170,15 @@ def _model_download_progress():  # noqa: ANN202
             progress.update(task_id, total=total)
         progress.update(task_id, completed=downloaded)
 
-    class ProgressContext:
-        def __enter__(self):  # noqa: ANN204
-            progress.start()
-            return update
-
-        def __exit__(self, exc_type, exc, tb):  # noqa: ANN001, ANN204
-            progress.stop()
-            return False
-
-    return ProgressContext()
+    progress.start()
+    try:
+        yield update
+    finally:
+        progress.stop()
 
 
 def _format_bytes(value: object) -> str:
-    size = float(value)
+    size = float(cast(Any, value))
     units = ["B", "KB", "MB", "GB", "TB"]
     for unit in units:
         if size < 1024 or unit == units[-1]:

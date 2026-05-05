@@ -1,31 +1,93 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import pysubs2
 
-from fast_sub.models import BilingualOrder, Mode, Segment
-
-CJK_DEFAULT_LINE_CHARS = 22
-EN_DEFAULT_LINE_CHARS = 42
-DEFAULT_MIN_DURATION_SEC = 1.0
-DEFAULT_MAX_DURATION_SEC = 6.0
-MIN_SPLIT_DURATION_SEC = 0.5
+from fast_sub.subtitles import constants as subtitle_constants
+from fast_sub.subtitles.models import BilingualOrder, Mode, RefineOptions, Segment, SubtitleCue
 
 
-@dataclass(frozen=True)
-class RefineOptions:
-    lang: str = "auto"
-    max_chars: int | None = None
-    min_duration: float = DEFAULT_MIN_DURATION_SEC
-    max_duration: float = DEFAULT_MAX_DURATION_SEC
+def render_srt(
+    segments: list[Segment],
+    mode: Mode,
+    bilingual_order: BilingualOrder = BilingualOrder.ORIGINAL_FIRST,
+    max_line_chars: int | None = None,
+) -> str:
+    """Render subtitle segments as SRT text.
+
+    The selected mode controls whether each cue contains original text,
+    translated text, or both in the requested bilingual order.
+    """
+    subs = pysubs2.SSAFile()
+    for segment in segments:
+        text = _event_text(segment, mode, bilingual_order, max_line_chars)
+        if not text:
+            continue
+        subs.events.append(
+            pysubs2.SSAEvent(
+                start=_seconds_to_ms(segment.start),
+                end=_seconds_to_ms(segment.end),
+                text=text,
+            )
+        )
+    return subs.to_string("srt")
 
 
-@dataclass
-class SubtitleCue:
-    start: int
-    end: int
-    text: str
+def refine_srt_text(srt_text: str, options: RefineOptions | None = None) -> str:
+    """Clean and normalize an SRT document.
+
+    This parses SRT text into cues, repairs timing problems, drops blank cues,
+    wraps long text, and returns a new SRT document.
+    """
+    options = options or RefineOptions()
+    subs = pysubs2.SSAFile.from_string(srt_text, format_="srt")
+    cues = [
+        SubtitleCue(event.start, event.end, _normalize_text(event.text)) for event in subs.events
+    ]
+    refined = refine_cues(cues, options)
+    output = pysubs2.SSAFile()
+    for cue in refined:
+        output.events.append(
+            pysubs2.SSAEvent(
+                start=cue.start,
+                end=cue.end,
+                text=cue.text,
+            )
+        )
+    return output.to_string("srt")
+
+
+def refine_cues(cues: list[SubtitleCue], options: RefineOptions) -> list[SubtitleCue]:
+    """Refine parsed subtitle cues without performing SRT I/O.
+
+    The cue pipeline removes empty entries, repairs timeline ordering, merges
+    short cues, splits long cues, and performs a final timeline repair pass.
+    """
+    cleaned = _drop_blank_cues(cues)
+    if not cleaned:
+        return []
+
+    max_chars = _resolve_max_chars(cleaned, options)
+    repaired = _repair_timeline(cleaned, options)
+    merged = _merge_short_cues(repaired, options, max_chars)
+    split = _split_long_cues(merged, options, max_chars)
+    return _repair_timeline(split, options)
+
+
+def _event_text(
+    segment: Segment,
+    mode: Mode,
+    bilingual_order: BilingualOrder,
+    max_line_chars: int | None,
+) -> str:
+    original = _wrap_soft(segment.text.strip(), max_line_chars)
+    translated = _wrap_soft((segment.translation or "").strip(), max_line_chars)
+    if mode is Mode.ORIGINAL:
+        return original
+    if mode is Mode.TRANSLATED:
+        return translated
+    if bilingual_order is BilingualOrder.TRANSLATED_FIRST:
+        return "\n".join(part for part in (translated, original) if part)
+    return "\n".join(part for part in (original, translated) if part)
 
 
 def _seconds_to_ms(seconds: float) -> int:
@@ -52,86 +114,18 @@ def _wrap_soft(text: str, max_chars: int | None) -> str:
     return "\n".join(lines)
 
 
-def render_srt(
-    segments: list[Segment],
-    mode: Mode,
-    bilingual_order: BilingualOrder = BilingualOrder.ORIGINAL_FIRST,
-    max_line_chars: int | None = None,
-) -> str:
-    subs = pysubs2.SSAFile()
-    for segment in segments:
-        text = _event_text(segment, mode, bilingual_order, max_line_chars)
-        if not text:
-            continue
-        subs.events.append(
-            pysubs2.SSAEvent(
-                start=_seconds_to_ms(segment.start),
-                end=_seconds_to_ms(segment.end),
-                text=text,
-            )
-        )
-    return subs.to_string("srt")
-
-
-def _event_text(
-    segment: Segment,
-    mode: Mode,
-    bilingual_order: BilingualOrder,
-    max_line_chars: int | None,
-) -> str:
-    original = _wrap_soft(segment.text.strip(), max_line_chars)
-    translated = _wrap_soft((segment.translation or "").strip(), max_line_chars)
-    if mode is Mode.ORIGINAL:
-        return original
-    if mode is Mode.TRANSLATED:
-        return translated
-    if bilingual_order is BilingualOrder.TRANSLATED_FIRST:
-        return "\n".join(part for part in (translated, original) if part)
-    return "\n".join(part for part in (original, translated) if part)
-
-
-def refine_srt_text(srt_text: str, options: RefineOptions | None = None) -> str:
-    options = options or RefineOptions()
-    subs = pysubs2.SSAFile.from_string(srt_text, format_="srt")
-    cues = [
-        SubtitleCue(event.start, event.end, _normalize_text(event.text)) for event in subs.events
-    ]
-    refined = refine_cues(cues, options)
-    output = pysubs2.SSAFile()
-    for cue in refined:
-        output.events.append(
-            pysubs2.SSAEvent(
-                start=cue.start,
-                end=cue.end,
-                text=cue.text,
-            )
-        )
-    return output.to_string("srt")
-
-
-def refine_cues(cues: list[SubtitleCue], options: RefineOptions) -> list[SubtitleCue]:
-    cleaned = _drop_blank_cues(cues)
-    if not cleaned:
-        return []
-
-    max_chars = _resolve_max_chars(cleaned, options)
-    repaired = _repair_timeline(cleaned, options)
-    merged = _merge_short_cues(repaired, options, max_chars)
-    split = _split_long_cues(merged, options, max_chars)
-    return _repair_timeline(split, options)
-
-
 def _normalize_text(text: str) -> str:
     lines = text.replace("\\N", "\n").replace("\r\n", "\n").replace("\r", "\n").split("\n")
     return "\n".join(line.strip() for line in lines if line.strip())
 
 
 def _drop_blank_cues(cues: list[SubtitleCue]) -> list[SubtitleCue]:
-    return [
-        SubtitleCue(max(0, cue.start), max(0, cue.end), _normalize_text(cue.text))
-        for cue in cues
-        if _normalize_text(cue.text)
-    ]
+    cleaned: list[SubtitleCue] = []
+    for cue in cues:
+        text = _normalize_text(cue.text)
+        if text:
+            cleaned.append(SubtitleCue(max(0, cue.start), max(0, cue.end), text))
+    return cleaned
 
 
 def _repair_timeline(cues: list[SubtitleCue], options: RefineOptions) -> list[SubtitleCue]:
@@ -163,28 +157,33 @@ def _merge_short_cues(
     while index < len(cues):
         cue = cues[index]
         duration = cue.end - cue.start
-        if duration < min_duration_ms and index + 1 < len(cues):
+
+        if duration >= min_duration_ms:
+            merged.append(cue)
+            index += 1
+            continue
+
+        if index + 1 < len(cues):
             following = cues[index + 1]
             combined_text = _join_text(cue.text, following.text)
-            combined_duration = following.end - cue.start
-            if combined_duration <= max_duration_ms and _plain_len(combined_text) <= max_chars * 2:
+            if (
+                following.end - cue.start <= max_duration_ms
+                and _plain_len(combined_text) <= max_chars * 2
+            ):
                 cues[index + 1] = SubtitleCue(cue.start, following.end, combined_text)
                 index += 1
                 continue
-        if (
-            duration < min_duration_ms
-            and merged
-            and cue.end - merged[-1].start <= max_duration_ms
-            and _plain_len(_join_text(merged[-1].text, cue.text)) <= max_chars * 2
-        ):
+
+        if merged and cue.end - merged[-1].start <= max_duration_ms:
             previous = merged[-1]
-            merged[-1] = SubtitleCue(
-                previous.start,
-                cue.end,
-                _join_text(previous.text, cue.text),
-            )
+            combined_text = _join_text(previous.text, cue.text)
+            if _plain_len(combined_text) <= max_chars * 2:
+                merged[-1] = SubtitleCue(previous.start, cue.end, combined_text)
+            else:
+                merged.append(cue)
         else:
             merged.append(cue)
+
         index += 1
     return merged
 
@@ -196,7 +195,7 @@ def _split_long_cues(
 ) -> list[SubtitleCue]:
     split: list[SubtitleCue] = []
     max_duration_ms = _seconds_to_ms(options.max_duration)
-    min_split_ms = _seconds_to_ms(MIN_SPLIT_DURATION_SEC)
+    min_split_ms = _seconds_to_ms(subtitle_constants.MIN_SPLIT_DURATION_SEC)
 
     for cue in cues:
         chunks = _text_chunks(cue.text, max_chars)
@@ -255,7 +254,7 @@ def _split_chunk(text: str, max_chars: int) -> list[str]:
 
 
 def _wrap_subtitle_text(text: str, max_chars: int) -> str:
-    lines = []
+    lines: list[str] = []
     for chunk in _split_chunk(_normalize_text(text).replace("\n", " "), max_chars):
         if not lines or _plain_len(lines[-1]) + 1 + _plain_len(chunk) > max_chars:
             lines.append(chunk)
@@ -269,8 +268,8 @@ def _resolve_max_chars(cues: list[SubtitleCue], options: RefineOptions) -> int:
         return options.max_chars
     lang = options.lang.lower()
     if lang in {"zh", "ja", "ko"} or (lang == "auto" and _contains_cjk(cues)):
-        return CJK_DEFAULT_LINE_CHARS
-    return EN_DEFAULT_LINE_CHARS
+        return subtitle_constants.CJK_DEFAULT_LINE_CHARS
+    return subtitle_constants.EN_DEFAULT_LINE_CHARS
 
 
 def _contains_cjk(cues: list[SubtitleCue]) -> bool:

@@ -9,200 +9,273 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-import httpx
 import pysubs2
 
+from fast_sub.clients.openai_chat import OpenAIChatClient
+from fast_sub.clients.web_translation import WebTranslationClientError, translate_text
 from fast_sub.model_store.manager import model_path, verify_model
 from fast_sub.model_store.manifest import get_model
-from fast_sub.models import BilingualOrder, Mode, Segment, TranslationError, TranslationResult
+from fast_sub.subtitles.models import Mode, Segment
 from fast_sub.subtitles.srt import render_srt
-
-DEFAULT_NLLB_MODEL_ID = "nllb-200-distilled-600m-ct2-int8"
-TRANSLATION_PROVIDERS = {"web-bing", "web-google", "api-openai-chat", "local-nllb-ct2"}
-LANGUAGES = {"auto", "en", "zh", "ja", "ko"}
-TARGET_LANGUAGES = {"en", "zh", "ja", "ko"}
-FLORES_CODES = {
-    "en": "eng_Latn",
-    "zh": "zho_Hans",
-    "ja": "jpn_Jpan",
-    "ko": "kor_Hang",
-}
-
-
-class TranslationProviderError(RuntimeError):
-    def __init__(self, code: str, message: str, *, hint: str | None = None) -> None:
-        super().__init__(message)
-        self.code = code
-        self.hint = hint
+from fast_sub.translation import constants as translation_constants
+from fast_sub.translation.errors import TranslationProviderError as _TranslationProviderError
+from fast_sub.translation.language import detect_subtitle_language, flores_code
+from fast_sub.translation.models import (
+    TranslateOptions,
+    TranslateSrtResult,
+    TranslationError,
+    TranslationResult,
+)
+from fast_sub.translation.parsing import parse_chat_translations as parse_chat_translations
 
 
 @dataclass(frozen=True)
-class TranslateOptions:
-    provider: str
-    source_language: str
-    target_language: str
-    mode: Mode = Mode.TRANSLATED
-    bilingual_order: BilingualOrder = BilingualOrder.ORIGINAL_FIRST
-    output: Path | None = None
-    model: str | None = None
-    model_path: Path | None = None
-    batch_size: int = 8
-    timeout: float = 60.0
-    sleep_seconds: float = 0.0
-    resume: bool = True
-    api_key: str | None = None
-    base_url: str = "https://api.openai.com/v1"
-
-
-@dataclass(frozen=True)
-class TranslateSrtResult:
-    srt_path: Path
-    provider: str
-    source_language: str
-    target_language: str
-    mode: str
-    cues_count: int
-    translated_count: int
-    failed_count: int
-    errors_path: Path | None = None
-    checkpoint_path: Path | None = None
-    warnings: list[str] | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "srt_path": str(self.srt_path),
-            "provider": self.provider,
-            "source_language": self.source_language,
-            "target_language": self.target_language,
-            "mode": self.mode,
-            "cues_count": self.cues_count,
-            "translated_count": self.translated_count,
-            "failed_count": self.failed_count,
-            "errors_path": str(self.errors_path) if self.errors_path else None,
-            "checkpoint_path": str(self.checkpoint_path) if self.checkpoint_path else None,
-            "warnings": self.warnings or [],
-        }
+class _TranslatePaths:
+    output: Path
+    progress: Path
+    errors: Path
 
 
 def translate_srt(input_file: Path, options: TranslateOptions) -> TranslateSrtResult:
+    """Translate an SRT file and write the translated subtitle output.
+
+    The workflow validates options, loads cues, resumes checkpointed
+    translations, calls the configured provider, and renders the final SRT file.
+    """
     _validate_translate_options(options)
     if not input_file.exists() or not input_file.is_file():
-        raise TranslationProviderError("invalid_input", f"Input file does not exist: {input_file}")
+        raise _TranslationProviderError("invalid_input", f"Input file does not exist: {input_file}")
 
+    paths = _translate_paths(input_file, options)
+    segments = read_srt_segments(input_file)
+    options = _resolve_local_source_language(options, segments)
+    input_hash = sha256_file(input_file)
+    fingerprint = _checkpoint_fingerprint(input_file, input_hash, options)
+    translated_by_id = _checkpoint_translations(paths.progress, fingerprint, resume=options.resume)
+    errors: list[TranslationError] = []
+    warnings: list[str] = []
+
+    _translate_missing_segments(
+        segments,
+        options,
+        translated_by_id=translated_by_id,
+        errors=errors,
+        warnings=warnings,
+        progress_path=paths.progress,
+        fingerprint=fingerprint,
+    )
+
+    return _finish_translate_srt(
+        segments,
+        options,
+        paths,
+        translated_by_id=translated_by_id,
+        errors=errors,
+        warnings=warnings,
+    )
+
+
+def _translate_paths(input_file: Path, options: TranslateOptions) -> _TranslatePaths:
     output = options.output or input_file.with_name(
         f"{input_file.stem}.{options.target_language}.srt"
     )
-    progress_path = Path(str(output) + ".translate-progress.json")
-    errors_path = output.with_suffix(".errors.json")
-    segments = read_srt_segments(input_file)
-    if options.provider == "local-nllb-ct2" and options.source_language == "auto":
-        detected_language = detect_subtitle_language(segments)
-        if detected_language is None:
-            raise TranslationProviderError(
-                "invalid_options",
-                (
-                    "local-nllb-ct2 could not reliably detect the subtitle source "
-                    "language; pass --from en|zh|ja|ko."
-                ),
-            )
-        options = replace(options, source_language=detected_language)
-    input_hash = sha256_file(input_file)
-    fingerprint = _checkpoint_fingerprint(input_file, input_hash, options)
-    checkpoint = _load_checkpoint(progress_path, fingerprint) if options.resume else {}
+    return _TranslatePaths(
+        output=output,
+        progress=Path(str(output) + ".translate-progress.json"),
+        errors=output.with_suffix(".errors.json"),
+    )
 
-    translated_by_id: dict[int, str] = {
+
+def _resolve_local_source_language(
+    options: TranslateOptions,
+    segments: list[Segment],
+) -> TranslateOptions:
+    if options.provider != "local-nllb-ct2" or options.source_language != "auto":
+        return options
+
+    detected_language = detect_subtitle_language(segments)
+    if detected_language is None:
+        raise _TranslationProviderError(
+            "invalid_options",
+            (
+                "local-nllb-ct2 could not reliably detect the subtitle source "
+                "language; pass --from en|zh|ja|ko."
+            ),
+        )
+    return replace(options, source_language=detected_language)
+
+
+def _checkpoint_translations(
+    progress_path: Path,
+    fingerprint: dict[str, Any],
+    *,
+    resume: bool,
+) -> dict[int, str]:
+    checkpoint = _load_checkpoint(progress_path, fingerprint) if resume else {}
+    return {
         int(key): str(value)
         for key, value in checkpoint.get("translations", {}).items()
         if str(key).isdigit()
     }
-    errors: list[TranslationError] = []
-    warnings: list[str] = []
 
+
+def _translate_missing_segments(
+    segments: list[Segment],
+    options: TranslateOptions,
+    *,
+    translated_by_id: dict[int, str],
+    errors: list[TranslationError],
+    warnings: list[str],
+    progress_path: Path,
+    fingerprint: dict[str, Any],
+) -> None:
     to_translate = [segment for segment in segments if segment.id not in translated_by_id]
-    if to_translate:
-        result = translate_segments(
-            segments=to_translate,
-            provider=options.provider,
-            source_lang=options.source_language,
-            target_lang=options.target_language,
-            model=options.model,
-            model_path=options.model_path,
-            batch_size=options.batch_size,
-            timeout=options.timeout,
-            sleep_seconds=options.sleep_seconds,
-            api_key=options.api_key,
-            base_url=options.base_url,
-        )
-        warnings.extend(getattr(result, "warnings", []))
-        errors.extend(result.errors)
-        for segment in result.segments:
-            if segment.translation:
-                translated_by_id[segment.id] = segment.translation
-                _write_checkpoint(progress_path, fingerprint, translated_by_id, errors)
-    else:
+    if not to_translate:
         warnings.append("Reused all cue translations from checkpoint.")
+        return
 
-    final_segments: list[Segment] = []
-    for segment in segments:
-        copy = segment.model_copy()
-        copy.translation = translated_by_id.get(segment.id)
-        if copy.translation is None and any(
-            error.batch_start_id <= segment.id <= error.batch_end_id for error in errors
-        ):
-            copy.translation = copy.text
-        final_segments.append(copy)
+    result = translate_segments(
+        segments=to_translate,
+        provider=options.provider,
+        source_lang=options.source_language,
+        target_lang=options.target_language,
+        model=options.model,
+        model_path=options.model_path,
+        batch_size=options.batch_size,
+        timeout=options.timeout,
+        sleep_seconds=options.sleep_seconds,
+        api_key=options.api_key,
+        base_url=options.base_url,
+    )
+    warnings.extend(getattr(result, "warnings", []))
+    errors.extend(result.errors)
+    for segment in result.segments:
+        if segment.translation:
+            translated_by_id[segment.id] = segment.translation
+            _write_checkpoint(progress_path, fingerprint, translated_by_id, errors)
 
+
+def _finish_translate_srt(
+    segments: list[Segment],
+    options: TranslateOptions,
+    paths: _TranslatePaths,
+    *,
+    translated_by_id: dict[int, str],
+    errors: list[TranslationError],
+    warnings: list[str],
+) -> TranslateSrtResult:
+    final_segments = _final_segments(segments, translated_by_id, errors)
     failed_count = sum(1 for segment in final_segments if segment.id not in translated_by_id)
     translated_count = len(translated_by_id)
     if errors:
         write_translation_errors(
-            errors_path,
+            paths.errors,
             provider=options.provider,
             errors=errors,
             warnings=warnings,
         )
-    if segments and translated_count == 0:
-        if not errors:
-            errors = [
-                TranslationError(
-                    batch_start_id=segments[0].id,
-                    batch_end_id=segments[-1].id,
-                    message="No cue was translated.",
-                    raw_response=None,
-                )
-            ]
-            write_translation_errors(errors_path, provider=options.provider, errors=errors)
-        raise TranslationProviderError(
-            "provider_failed",
-            "All translation cues failed; no final SRT was written.",
-            hint=f"See {errors_path} for per-cue errors.",
-        )
+    _raise_if_no_translation(segments, translated_count, errors, options, paths.errors)
+    _write_translated_srt(paths.output, final_segments, options)
+    return _translate_srt_result(
+        paths,
+        options,
+        cues_count=len(segments),
+        translated_count=translated_count,
+        failed_count=failed_count,
+        has_errors=bool(errors),
+        warnings=warnings,
+    )
 
+
+def _final_segments(
+    segments: list[Segment],
+    translated_by_id: dict[int, str],
+    errors: list[TranslationError],
+) -> list[Segment]:
+    final_segments: list[Segment] = []
+    for segment in segments:
+        copy = segment.model_copy()
+        copy.translation = translated_by_id.get(segment.id)
+        if copy.translation is None and _segment_has_error(segment.id, errors):
+            copy.translation = copy.text
+        final_segments.append(copy)
+    return final_segments
+
+
+def _segment_has_error(segment_id: int, errors: list[TranslationError]) -> bool:
+    return any(error.batch_start_id <= segment_id <= error.batch_end_id for error in errors)
+
+
+def _raise_if_no_translation(
+    segments: list[Segment],
+    translated_count: int,
+    errors: list[TranslationError],
+    options: TranslateOptions,
+    errors_path: Path,
+) -> None:
+    if not segments or translated_count > 0:
+        return
+
+    if not errors:
+        errors.append(
+            TranslationError(
+                batch_start_id=segments[0].id,
+                batch_end_id=segments[-1].id,
+                message="No cue was translated.",
+                raw_response=None,
+            )
+        )
+        write_translation_errors(errors_path, provider=options.provider, errors=errors)
+    raise _TranslationProviderError(
+        "provider_failed",
+        "All translation cues failed; no final SRT was written.",
+        hint=f"See {errors_path} for per-cue errors.",
+    )
+
+
+def _write_translated_srt(
+    output: Path,
+    segments: list[Segment],
+    options: TranslateOptions,
+) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         render_srt(
-            final_segments,
+            segments,
             mode=options.mode,
             bilingual_order=options.bilingual_order,
         ),
         encoding="utf-8",
     )
+
+
+def _translate_srt_result(
+    paths: _TranslatePaths,
+    options: TranslateOptions,
+    *,
+    cues_count: int,
+    translated_count: int,
+    failed_count: int,
+    has_errors: bool,
+    warnings: list[str],
+) -> TranslateSrtResult:
     return TranslateSrtResult(
-        srt_path=output,
+        srt_path=paths.output,
         provider=options.provider,
         source_language=options.source_language,
         target_language=options.target_language,
         mode=options.mode.value,
-        cues_count=len(segments),
+        cues_count=cues_count,
         translated_count=translated_count,
         failed_count=failed_count,
-        errors_path=errors_path if errors else None,
-        checkpoint_path=progress_path,
+        errors_path=paths.errors if has_errors else None,
+        checkpoint_path=paths.progress,
         warnings=warnings,
     )
 
 
 def read_srt_segments(path: Path) -> list[Segment]:
+    """Read an SRT file into normalized subtitle segments."""
     subs = pysubs2.load(str(path), encoding="utf-8", format_="srt")
     return [
         Segment(
@@ -214,32 +287,6 @@ def read_srt_segments(path: Path) -> list[Segment]:
         for index, event in enumerate(subs.events, start=1)
         if _normalize_text(event.text)
     ]
-
-
-def detect_subtitle_language(segments: list[Segment]) -> str | None:
-    text = "\n".join(segment.text for segment in segments).strip()
-    if not text:
-        return None
-    simplified_zh_markers = set("这们吗么为还说话过没见听欢气个")
-    counts = {
-        "ja_kana": sum(1 for char in text if "\u3040" <= char <= "\u30ff"),
-        "ko": sum(1 for char in text if "\uac00" <= char <= "\ud7af"),
-        "han": sum(1 for char in text if "\u4e00" <= char <= "\u9fff"),
-        "latin": sum(1 for char in text if "A" <= char <= "Z" or "a" <= char <= "z"),
-        "zh_marker": sum(1 for char in text if char in simplified_zh_markers),
-    }
-    signal_total = counts["ja_kana"] + counts["ko"] + counts["han"] + counts["latin"]
-    if signal_total == 0:
-        return None
-    if counts["ko"] >= 4 and counts["ko"] / signal_total >= 0.4:
-        return "ko"
-    if counts["ja_kana"] >= 4 and counts["ja_kana"] / signal_total >= 0.2:
-        return "ja"
-    if counts["zh_marker"] >= 1 and counts["han"] >= 4 and counts["han"] / signal_total >= 0.4:
-        return "zh"
-    if counts["latin"] >= 8 and counts["latin"] / signal_total >= 0.8:
-        return "en"
-    return None
 
 
 def translate_segments(
@@ -258,6 +305,7 @@ def translate_segments(
     api_key: str | None = None,
     base_url: str = "https://api.openai.com/v1",
 ) -> TranslationResult:
+    """Translate subtitle segments with the selected translation provider."""
     resolved_provider = provider or _legacy_translator_to_provider(translator)
     if resolved_provider in {"web-bing", "web-google"}:
         return _translate_web_segments(
@@ -288,7 +336,7 @@ def translate_segments(
             explicit_model_path=model_path,
             batch_size=batch_size,
         )
-    raise TranslationProviderError(
+    raise _TranslationProviderError(
         "invalid_provider",
         f"Unknown translation provider: {resolved_provider}",
     )
@@ -347,12 +395,12 @@ def _translate_openai_chat_segments(
     timeout: float,
 ) -> TranslationResult:
     if not api_key:
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "missing_api_key",
             "api-openai-chat requires an explicit API key via --api-key or OPENAI_API_KEY.",
         )
     if not model:
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "invalid_options",
             "api-openai-chat requires an explicit --model; fast-sub does not hard-code one.",
         )
@@ -445,68 +493,13 @@ def _request_openai_chat_translation(
     base_url: str,
     timeout: float,
 ) -> dict[int, str]:
-    expected_ids = [segment.id for segment in batch]
-    payload = {
-        "model": model,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Translate subtitle cues. Return JSON only: "
-                    '{"translations":[{"id":1,"text":"..."}]}. Preserve ids and count.'
-                ),
-            },
-            {
-                "role": "user",
-                "content": json.dumps(
-                    {
-                        "source_language": source_lang,
-                        "target_language": target_lang,
-                        "cues": [{"id": item.id, "text": item.text} for item in batch],
-                    },
-                    ensure_ascii=False,
-                ),
-            },
-        ],
-        "temperature": 0,
-    }
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    url = base_url.rstrip("/") + "/chat/completions"
-    with httpx.Client(timeout=timeout) as client:
-        response = client.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-    data = response.json()
-    content = data["choices"][0]["message"]["content"]
-    return parse_chat_translations(content, expected_ids=expected_ids)
-
-
-def parse_chat_translations(content: str, *, expected_ids: list[int]) -> dict[int, str]:
-    cleaned = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE)
-    fenced = re.search(r"```(?:json)?\s*(.*?)```", cleaned, flags=re.DOTALL | re.IGNORECASE)
-    if fenced:
-        cleaned = fenced.group(1)
-    else:
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if start >= 0 and end > start:
-            cleaned = cleaned[start : end + 1]
-    try:
-        payload = json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        raise ValueError("Could not parse provider JSON response.") from exc
-    items = payload.get("translations")
-    if not isinstance(items, list):
-        raise ValueError("Provider JSON response is missing translations list.")
-    translations: dict[int, str] = {}
-    for item in items:
-        if not isinstance(item, dict) or "id" not in item or "text" not in item:
-            raise ValueError("Provider JSON response contains malformed translation item.")
-        translations[int(item["id"])] = str(item["text"]).strip()
-    if set(translations) != set(expected_ids) or len(translations) != len(expected_ids):
-        raise ValueError("Provider response id/count mismatch.")
-    if any(not text for text in translations.values()):
-        raise ValueError("Provider response contains empty translation text.")
-    return translations
+    client = OpenAIChatClient(
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        timeout=timeout,
+    )
+    return client.translate_batch(batch, source_lang=source_lang, target_lang=target_lang)
 
 
 def _translate_nllb_segments(
@@ -519,7 +512,7 @@ def _translate_nllb_segments(
     batch_size: int,
 ) -> TranslationResult:
     if source_lang == "auto":
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "invalid_options",
             "local-nllb-ct2 requires explicit --from en|zh|ja|ko; --from auto is not reliable.",
         )
@@ -531,7 +524,7 @@ def _translate_nllb_segments(
         import ctranslate2  # type: ignore[import-not-found]
         import sentencepiece as spm  # type: ignore[import-not-found]
     except ImportError as exc:
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "missing_dependency",
             (
                 "local-nllb-ct2 requires ctranslate2 and sentencepiece. "
@@ -582,42 +575,33 @@ def _translate_nllb_segments(
 
 
 def resolve_nllb_model_path(*, model: str | None, explicit_model_path: Path | None) -> Path:
+    """Resolve the local NLLB model directory or raise a provider error."""
     if explicit_model_path is not None:
         try:
             if explicit_model_path.exists() and explicit_model_path.is_dir():
                 return explicit_model_path
         except OSError as exc:
-            raise TranslationProviderError(
+            raise _TranslationProviderError(
                 "missing_model",
                 f"Model path is inaccessible: {explicit_model_path} ({exc})",
             ) from exc
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "missing_model",
             f"Model path does not exist: {explicit_model_path}",
         )
 
-    model_id = model or DEFAULT_NLLB_MODEL_ID
+    model_id = model or translation_constants.DEFAULT_NLLB_MODEL_ID
     try:
         manifest = get_model(model_id)
     except KeyError as exc:
-        raise TranslationProviderError("missing_model", str(exc)) from exc
+        raise _TranslationProviderError("missing_model", str(exc)) from exc
     status = verify_model(manifest)
     if not status.installed:
-        raise TranslationProviderError(
+        raise _TranslationProviderError(
             "missing_model",
             f"missing_model: {status.message} Run `fast-sub models install {model_id}`.",
         )
     return model_path(manifest)
-
-
-def flores_code(language: str) -> str:
-    try:
-        return FLORES_CODES[language]
-    except KeyError as exc:
-        raise TranslationProviderError(
-            "invalid_options",
-            f"Unsupported NLLB language: {language}",
-        ) from exc
 
 
 def write_translation_errors(
@@ -627,6 +611,7 @@ def write_translation_errors(
     errors: list[TranslationError],
     warnings: list[str] | None = None,
 ) -> None:
+    """Write sanitized per-batch translation errors as JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(
@@ -650,22 +635,22 @@ def write_translation_errors(
 
 
 def _validate_translate_options(options: TranslateOptions) -> None:
-    if options.provider not in TRANSLATION_PROVIDERS:
-        raise TranslationProviderError("invalid_provider", f"Unknown provider: {options.provider}")
-    if options.source_language not in LANGUAGES:
-        raise TranslationProviderError(
+    if options.provider not in translation_constants.TRANSLATION_PROVIDERS:
+        raise _TranslationProviderError("invalid_provider", f"Unknown provider: {options.provider}")
+    if options.source_language not in translation_constants.LANGUAGES:
+        raise _TranslationProviderError(
             "invalid_options",
             f"Unsupported source language: {options.source_language}",
         )
-    if options.target_language not in TARGET_LANGUAGES:
-        raise TranslationProviderError(
+    if options.target_language not in translation_constants.TARGET_LANGUAGES:
+        raise _TranslationProviderError(
             "invalid_options",
             f"Unsupported target language: {options.target_language}",
         )
     if options.batch_size <= 0:
-        raise TranslationProviderError("invalid_options", "--batch-size must be greater than 0.")
+        raise _TranslationProviderError("invalid_options", "--batch-size must be greater than 0.")
     if options.mode not in {Mode.TRANSLATED, Mode.BILINGUAL}:
-        raise TranslationProviderError("invalid_options", "--mode must be replace or bilingual.")
+        raise _TranslationProviderError("invalid_options", "--mode must be replace or bilingual.")
 
 
 def _translate_text(
@@ -675,23 +660,18 @@ def _translate_text(
     from_language: str,
     to_language: str,
 ) -> str:
-    os.environ.setdefault("translators_default_region", "EN")
     try:
-        import translators as ts  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise TranslationProviderError(
-            "missing_dependency",
-            "Web translation requires the GPL-3.0 `translators` package. "
-            "Install with `uv sync --extra web-translate` or accept the default dependency.",
-        ) from exc
-    return str(
-        ts.translate_text(
-            text,
+        return translate_text(
+            text=text,
             translator=translator,
             from_language=from_language,
             to_language=to_language,
         )
-    )
+    except WebTranslationClientError as exc:
+        raise _TranslationProviderError(
+            "missing_dependency",
+            str(exc),
+        ) from exc
 
 
 def _checkpoint_fingerprint(
@@ -749,6 +729,7 @@ def _write_checkpoint(
 
 
 def sha256_file(path: Path) -> str:
+    """Return the SHA-256 hex digest for a file."""
     digest = hashlib.sha256()
     with path.open("rb") as file:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
@@ -761,7 +742,7 @@ def _chunks(items: list[Segment], size: int) -> list[list[Segment]]:
 
 
 def _legacy_translator_to_provider(translator: str | None) -> str:
-    if translator in {"bing", "web-bing", None}:
+    if translator is None or translator in {"bing", "web-bing"}:
         return "web-bing"
     if translator in {"google", "web-google"}:
         return "web-google"
@@ -773,10 +754,10 @@ def _find_sentencepiece_model(path: Path) -> Path:
         candidate = path / name
         if candidate.exists():
             return candidate
-    raise TranslationProviderError(
+    raise _TranslationProviderError(
         "missing_model",
         f"NLLB sentencepiece model is missing in {path}. "
-        f"Run `fast-sub models install {DEFAULT_NLLB_MODEL_ID}`.",
+        f"Run `fast-sub models install {translation_constants.DEFAULT_NLLB_MODEL_ID}`.",
     )
 
 

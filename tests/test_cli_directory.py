@@ -5,12 +5,13 @@ from pathlib import Path
 
 import pytest
 
-import fast_sub.cli.runtime as cli
+from fast_sub.cli import legacy_pipeline
+from fast_sub.config import AppConfig
 from fast_sub.contracts.errors import SubGenError
 
 
 def _options():
-    return cli._resolve_options(
+    return legacy_pipeline.resolve_legacy_options(
         config_path=None,
         mode=None,
         original_only=False,
@@ -52,14 +53,14 @@ def test_run_directory_processes_supported_media_files(
         def fake_run_pipeline(
             input_file: Path,
             output: Path | None,
-            options: cli.AppConfig,
+            options: AppConfig,
             keep_temp: bool,
         ) -> None:
             calls.append((input_file, output, keep_temp))
 
-        monkeypatch.setattr(cli, "_run_pipeline", fake_run_pipeline)
+        monkeypatch.setattr(legacy_pipeline, "_run_pipeline", fake_run_pipeline)
 
-        cli._run_directory(input_dir, output_dir, _options(), keep_temp=False)
+        legacy_pipeline._run_directory(input_dir, output_dir, _options(), keep_temp=False)
 
         assert calls == [
             (video, output_dir / "a.auto.srt", False),
@@ -81,7 +82,7 @@ def test_run_directory_rejects_file_output_path() -> None:
         output_file.write_text("", encoding="utf-8")
 
         with pytest.raises(SubGenError, match="--output must be a directory"):
-            cli._run_directory(input_dir, output_file, _options(), keep_temp=False)
+            legacy_pipeline._run_directory(input_dir, output_file, _options(), keep_temp=False)
     finally:
         shutil.rmtree(work_dir)
 
@@ -89,7 +90,9 @@ def test_run_directory_rejects_file_output_path() -> None:
 def test_directory_progress_path_supports_windows_unc_path() -> None:
     input_dir = Path(r"\\NAS\data\others\资料\others\sample-user\1")
 
-    assert cli._directory_progress_path(input_dir, None) == (input_dir / ".fast-sub-progress.json")
+    assert legacy_pipeline._directory_progress_path(input_dir, None) == (
+        input_dir / ".fast-sub-progress.json"
+    )
 
 
 def test_run_directory_skips_completed_files(
@@ -109,22 +112,22 @@ def test_run_directory_skips_completed_files(
         completed_output.write_text("existing", encoding="utf-8")
 
         progress = {"version": 1, "completed": {}}
-        cli._mark_directory_item_complete(completed, completed_output, progress)
-        cli._write_directory_progress(output_dir / ".fast-sub-progress.json", progress)
+        legacy_pipeline._mark_directory_item_complete(completed, completed_output, progress)
+        legacy_pipeline._write_directory_progress(output_dir / ".fast-sub-progress.json", progress)
 
         calls: list[Path] = []
 
         def fake_run_pipeline(
             input_file: Path,
             output: Path | None,
-            options: cli.AppConfig,
+            options: AppConfig,
             keep_temp: bool,
         ) -> None:
             calls.append(input_file)
 
-        monkeypatch.setattr(cli, "_run_pipeline", fake_run_pipeline)
+        monkeypatch.setattr(legacy_pipeline, "_run_pipeline", fake_run_pipeline)
 
-        cli._run_directory(input_dir, output_dir, _options(), keep_temp=False)
+        legacy_pipeline._run_directory(input_dir, output_dir, _options(), keep_temp=False)
 
         assert calls == [pending]
     finally:

@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import json
 from typing import Annotated
 
 import typer
 
-from fast_sub.cli.context import console, err_console
 from fast_sub.cli.errors import error_payload
-from fast_sub.cli.redaction import redact_secrets
-from fast_sub.providers import default_registry
+from fast_sub.cli.helpers import console, echo_json, err_console, redact_secrets
+from fast_sub.providers.registry import default_registry
 
 providers_app = typer.Typer(help="Inspect provider contracts.", no_args_is_help=True)
 
@@ -52,7 +50,7 @@ def providers_test_command(
             action_hint="Run `fast-sub providers list` to see available providers.",
         )
         if json_output:
-            typer.echo(json.dumps(payload, ensure_ascii=False))
+            echo_json(payload)
         else:
             err_console.print(f"[red]Unknown provider:[/red] {redact_secrets(provider_id)}")
         raise typer.Exit(2)

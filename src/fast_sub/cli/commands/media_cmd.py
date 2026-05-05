@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
 
-from fast_sub.cli.context import console, err_console
 from fast_sub.cli.errors import exit_code_for_payload, json_error_for_exception
-from fast_sub.cli.redaction import redact_secrets
+from fast_sub.cli.helpers import console, echo_json, err_console, redact_secrets
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.infrastructure.ffmpeg import (
     doctor_ok,
@@ -18,12 +16,15 @@ from fast_sub.infrastructure.ffmpeg import (
     prepare_audio,
     probe_media,
 )
-from fast_sub.media.service import AnalysisResult, analyze_media
-from fast_sub.output.burn import BurnOptions, burn_subtitles
+from fast_sub.media.models import AnalysisResult
+from fast_sub.media.service import analyze_media
+from fast_sub.output.burn import burn_subtitles
+from fast_sub.output.models import BurnOptions
 from fast_sub.output.paths import job_dir
 
 
 def register_media_commands(app: typer.Typer) -> None:
+    """Register media inspection, extraction, analysis, and burn commands."""
     app.command("doctor")(doctor_command)
     app.command("probe")(probe_command)
     app.command("extract")(extract_command)
@@ -40,7 +41,7 @@ def doctor_command(
     """Check local dependencies and runtime readiness."""
     status = doctor_status()
     if json_output:
-        typer.echo(json.dumps(status, ensure_ascii=False, indent=2))
+        echo_json(status, pretty=True)
     else:
         _print_doctor_status(status)
     if not doctor_ok(status):
@@ -59,17 +60,12 @@ def probe_command(
         info = probe_media(input_file)
     except SubGenError as exc:
         if json_output:
-            typer.echo(
-                json.dumps(
-                    json_error_for_exception(exc, stage="input", code="invalid_input"),
-                    ensure_ascii=False,
-                )
-            )
+            echo_json(json_error_for_exception(exc, stage="input", code="invalid_input"))
         else:
             err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
         raise typer.Exit(2) from exc
     if json_output:
-        typer.echo(json.dumps(info, ensure_ascii=False, indent=2))
+        echo_json(info, pretty=True)
         return
     _print_probe_info(info)
 
@@ -110,13 +106,13 @@ def analyze_command(
     except SubGenError as exc:
         payload = json_error_for_exception(exc, stage="analyze", code="command_failed")
         if json_output:
-            typer.echo(json.dumps(payload, ensure_ascii=False))
+            echo_json(payload)
         else:
             err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
         raise typer.Exit(exit_code_for_payload(payload)) from exc
 
     if json_output:
-        typer.echo(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
+        echo_json(result.as_dict(), pretty=True)
         return
     _print_analysis_result(result)
 

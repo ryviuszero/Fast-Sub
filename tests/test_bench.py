@@ -6,10 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from fast_sub.benchmark.errors import BenchError
+from fast_sub.benchmark.models import BenchOptions, BenchProfile
 from fast_sub.benchmark.transcription import (
-    BenchError,
-    BenchOptions,
-    BenchProfile,
     detect_hardware,
     load_sample_metadata,
     render_markdown_report,

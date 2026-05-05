@@ -13,11 +13,8 @@ pytest-local-tmp/
 __pycache__/
 *.py[cod]
 local_tests/*
-!local_tests/bench_translate/
-local_tests/bench_translate/*
-!local_tests/bench_translate/test.md
 scripts/*
-!scripts/bench_translate_assets.py
+scripts/bench_translate_assets.py
 tests/test_bench_assets.py
 *.wav
 *.mp3

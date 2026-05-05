@@ -7,7 +7,7 @@ import pytest
 
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.infrastructure.ffmpeg import (
-    _decode_process_output,
+    decode_process_output,
     doctor_ok,
     doctor_status,
     is_audio_file,
@@ -61,7 +61,7 @@ def test_list_media_files_filters_unsupported_files() -> None:
 
 
 def test_decode_process_output_tolerates_invalid_utf8_bytes() -> None:
-    assert "abc" in _decode_process_output(b"abc\xba")
+    assert "abc" in decode_process_output(b"abc\xba")
 
 
 def test_doctor_status_reports_missing_tools_without_crashing(

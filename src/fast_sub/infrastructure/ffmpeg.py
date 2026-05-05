@@ -6,41 +6,20 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fast_sub.contracts.errors import SubGenError
-
-AUDIO_EXTENSIONS = {
-    ".aac",
-    ".aiff",
-    ".flac",
-    ".m4a",
-    ".mp3",
-    ".ogg",
-    ".opus",
-    ".wav",
-    ".webm",
-    ".wma",
-}
-VIDEO_EXTENSIONS = {
-    ".avi",
-    ".flv",
-    ".m4v",
-    ".mkv",
-    ".mov",
-    ".mp4",
-    ".mpeg",
-    ".mpg",
-    ".webm",
-    ".wmv",
-}
-MEDIA_EXTENSIONS = AUDIO_EXTENSIONS | VIDEO_EXTENSIONS
-NORMALIZED_AUDIO_RATE = 16000
-NORMALIZED_AUDIO_CHANNELS = 1
-NORMALIZED_AUDIO_CODEC = "pcm_s16le"
+from fast_sub.media.constants import (
+    AUDIO_EXTENSIONS,
+    MEDIA_EXTENSIONS,
+    NORMALIZED_AUDIO_CHANNELS,
+    NORMALIZED_AUDIO_CODEC,
+    NORMALIZED_AUDIO_RATE,
+)
 
 
 def ensure_media_tools() -> None:
+    """Ensure ffmpeg and ffprobe are available on the system PATH."""
     missing = [tool for tool in ("ffmpeg", "ffprobe") if shutil.which(tool) is None]
     if missing:
         joined = ", ".join(missing)
@@ -48,6 +27,7 @@ def ensure_media_tools() -> None:
 
 
 def doctor_status(cache_dir: Path | None = None, jobs_dir: Path | None = None) -> dict[str, Any]:
+    """Return diagnostic status for media tools, Python, and writable directories."""
     cache_path = cache_dir or Path(".fast-sub")
     jobs_path = jobs_dir or cache_path / "jobs"
     return {
@@ -64,6 +44,7 @@ def doctor_status(cache_dir: Path | None = None, jobs_dir: Path | None = None) -
 
 
 def doctor_ok(status: dict[str, Any]) -> bool:
+    """Return whether a doctor status payload satisfies all required checks."""
     return all(
         (
             status["ffmpeg"]["available"],
@@ -76,18 +57,22 @@ def doctor_ok(status: dict[str, Any]) -> bool:
 
 
 def is_audio_file(path: Path) -> bool:
+    """Return whether a path has a supported audio file extension."""
     return path.suffix.lower() in AUDIO_EXTENSIONS
 
 
 def is_media_file(path: Path) -> bool:
+    """Return whether a path is a supported audio or video file."""
     return path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS
 
 
 def list_media_files(directory: Path) -> list[Path]:
+    """List supported media files directly inside a directory."""
     return sorted(path for path in directory.iterdir() if is_media_file(path))
 
 
 def probe_media(input_file: Path) -> dict[str, Any]:
+    """Probe a media file with ffprobe and return normalized stream metadata."""
     if not input_file.exists():
         raise SubGenError(f"Input file does not exist: {input_file}")
     if not input_file.is_file():
@@ -107,10 +92,10 @@ def probe_media(input_file: Path) -> dict[str, Any]:
     ]
     completed = subprocess.run(command, capture_output=True, check=False)
     if completed.returncode != 0:
-        raise SubGenError(f"ffprobe failed: {_process_message(completed)}")
+        raise SubGenError(f"ffprobe failed: {process_message(completed)}")
 
     try:
-        raw = json.loads(_decode_process_output(completed.stdout))
+        raw = json.loads(decode_process_output(completed.stdout))
     except json.JSONDecodeError as exc:
         raise SubGenError("ffprobe returned invalid JSON.") from exc
 
@@ -141,6 +126,7 @@ def probe_media(input_file: Path) -> dict[str, Any]:
 
 
 def prepare_audio(input_file: Path, output: Path, audio_stream: int | None = None) -> None:
+    """Convert a media file audio stream into normalized WAV output."""
     _convert_to_wav(input_file, output, audio_stream=audio_stream)
 
 
@@ -166,7 +152,7 @@ def _convert_to_wav(input_file: Path, output: Path, audio_stream: int | None = N
     ]
     completed = subprocess.run(command, capture_output=True, check=False)
     if completed.returncode != 0:
-        raise SubGenError(f"ffmpeg failed to prepare audio: {_process_message(completed)}")
+        raise SubGenError(f"ffmpeg failed to prepare audio: {process_message(completed)}")
 
 
 def _tool_status(name: str) -> dict[str, Any]:
@@ -176,7 +162,7 @@ def _tool_status(name: str) -> dict[str, Any]:
         return status
     completed = subprocess.run([name, "-version"], capture_output=True, check=False)
     if completed.returncode == 0:
-        lines = _decode_process_output(completed.stdout).splitlines()
+        lines = decode_process_output(completed.stdout).splitlines()
         status["version"] = lines[0] if lines else None
     return status
 
@@ -218,27 +204,29 @@ def _stream_language(stream: dict[str, Any]) -> str | None:
 
 def _optional_float(value: object) -> float | None:
     try:
-        return None if value is None else float(value)
+        return None if value is None else float(cast(Any, value))
     except (TypeError, ValueError):
         return None
 
 
 def _optional_int(value: object) -> int | None:
     try:
-        return None if value is None else int(value)
+        return None if value is None else int(cast(Any, value))
     except (TypeError, ValueError):
         return None
 
 
-def _process_message(completed: subprocess.CompletedProcess[bytes]) -> str:
+def process_message(completed: subprocess.CompletedProcess[bytes]) -> str:
+    """Return the most useful stderr/stdout text for a completed process."""
     message = (
-        _decode_process_output(completed.stderr).strip()
-        or _decode_process_output(completed.stdout).strip()
+        decode_process_output(completed.stderr).strip()
+        or decode_process_output(completed.stdout).strip()
     )
     return message or f"process exited with code {completed.returncode}"
 
 
-def _decode_process_output(output: bytes) -> str:
+def decode_process_output(output: bytes) -> str:
+    """Decode process output using common local encodings."""
     encodings = ("utf-8", locale.getpreferredencoding(False), "gbk")
     for encoding in encodings:
         try:

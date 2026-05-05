@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from fast_sub.cli.runtime import _resolve_options, _should_use_command_app, _validate_input
+from fast_sub.cli.legacy_pipeline import _validate_input, resolve_legacy_options
+from fast_sub.cli.runtime import _should_use_command_app
 from fast_sub.config import load_dotenv
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.models import Mode, SttProvider, SubtitleFormat
@@ -43,7 +44,7 @@ def _resolve_minimal(**overrides):
         "bilingual_order": None,
     }
     params.update(overrides)
-    return _resolve_options(**params)
+    return resolve_legacy_options(**params)
 
 
 def test_cli_values_override_config() -> None:

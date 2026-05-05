@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 
 from fast_sub.contracts.provider import ProviderLocation, ProviderMetadata, ProviderType
-from fast_sub.managers.providers import resolve_stt_provider
 from fast_sub.model_store.manifest import ModelManifestEntry
-from fast_sub.providers import ProviderDefinition, ProviderRegistry
+from fast_sub.providers.models import ProviderDefinition, ProviderRegistry
+from fast_sub.providers.resolution import resolve_stt_provider
 
 
 @pytest.fixture

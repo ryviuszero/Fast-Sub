@@ -1,97 +1,44 @@
+"""Transcription benchmark execution and report rendering."""
+
 from __future__ import annotations
 
 import json
 import platform
-import re
 import statistics
 import subprocess
 import sys
-from dataclasses import dataclass
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pysubs2
 
+from fast_sub.benchmark.constants import BENCH_OUTPUT_DIR_PARTS, BENCH_PROFILE_CHOICES
+from fast_sub.benchmark.errors import BenchError
+from fast_sub.benchmark.manifests import (
+    BENCH_MEASUREMENT_SCOPE,
+    BENCH_SCHEMA_VERSION,
+)
+from fast_sub.benchmark.models import (
+    DEFAULT_PROFILES,
+    BenchOptions,
+    BenchProfile,
+)
+from fast_sub.benchmark.text_metrics import (
+    error_rate,
+    normalize_for_cer,
+    normalize_for_wer,
+    normalize_subtitle_text,
+)
 from fast_sub.contracts.errors import SubGenError
+from fast_sub.stt.constants import DEFAULT_MODE, DEFAULT_MODEL, DEFAULT_PROVIDER
 from fast_sub.stt.service import (
-    DEFAULT_GPU_LOAD,
-    DEFAULT_LANGUAGE,
-    DEFAULT_MODE,
-    DEFAULT_MODEL,
-    DEFAULT_PROVIDER,
     TranscribeOptions,
     transcribe_media,
 )
 
-BENCH_SCHEMA_VERSION = 1
-MEASUREMENT_SCOPE = "transcribe_media_v1"
-BENCH_PROFILE_CHOICES = {"all", "cpu-int8", "auto"}
-SAMPLE_MANIFEST_EXAMPLE = {
-    "schema_version": 1,
-    "samples": [
-        {
-            "id": "zh-interview-1m",
-            "kind": "sample",
-            "prepared_media_path": "local_tests/media/light/zh-interview-1m.wav",
-            "prepared_media_checksum_sha256": "<sha256>",
-            "reference_transcript_path": "local_tests/references/light/zh-interview-1m.txt",
-            "reference_transcript_checksum_sha256": "<sha256>",
-            "language": "zh",
-            "source_dataset": "AISHELL-1",
-            "source_url": "https://openslr.org/33/",
-            "license": "Apache-2.0",
-            "redistributable": True,
-            "target_metrics": ["rtfx", "cer", "segments_count", "invalid_segments_count"],
-        }
-    ],
-}
-SAMPLE_MANIFEST_REQUIRED_FIELDS = (
-    "samples",
-    "samples[].id",
-    "samples[].prepared_media_path",
-)
-SAMPLE_MANIFEST_RECOMMENDED_FIELDS = (
-    "samples[].prepared_media_checksum_sha256",
-    "samples[].reference_transcript_path",
-    "samples[].reference_transcript_checksum_sha256",
-    "samples[].language",
-    "samples[].source_dataset",
-    "samples[].source_url",
-    "samples[].license",
-    "samples[].redistributable",
-    "samples[].target_metrics",
-)
-
-
-@dataclass(frozen=True)
-class BenchProfile:
-    name: str
-    device: str
-    compute_type: str
-
-
-@dataclass(frozen=True)
-class BenchOptions:
-    provider: str = DEFAULT_PROVIDER
-    model: str = DEFAULT_MODEL
-    language: str = DEFAULT_LANGUAGE
-    mode: str = DEFAULT_MODE
-    repeat: int = 1
-    gpu_load: str = DEFAULT_GPU_LOAD
-    batch_size: int | None = None
-    markdown: Path | None = None
-    sample_manifest: Path | None = None
-    sample_id: str | None = None
-    command: list[str] | None = None
-    progress: Any | None = None
-    profile: str = "all"
-
-
-DEFAULT_PROFILES = (
-    BenchProfile(name="cpu-int8", device="cpu", compute_type="int8"),
-    BenchProfile(name="auto", device="auto", compute_type="auto"),
-)
+MEASUREMENT_SCOPE = BENCH_MEASUREMENT_SCOPE
 
 
 def run_bench(
@@ -102,6 +49,7 @@ def run_bench(
     transcriber: Any | None = None,
     profiles: tuple[BenchProfile, ...] | None = None,
 ) -> dict[str, Any]:
+    """Run transcription benchmarks for selected local provider profiles."""
     options = options or BenchOptions()
     _validate_options(input_file, options)
     selected_profiles = profiles or _profiles_for_choice(options.profile)
@@ -163,13 +111,8 @@ def run_bench(
     return report
 
 
-class BenchError(SubGenError):
-    def __init__(self, message: str, *, report: dict[str, Any] | None = None) -> None:
-        super().__init__(message)
-        self.report = report
-
-
 def detect_hardware() -> dict[str, Any]:
+    """Return best-effort local CPU, memory, GPU, and CUDA metadata."""
     gpu_info = _detect_nvidia_gpu()
     cuda_count = _detect_cuda_device_count()
     memory_info = _detect_system_memory()
@@ -194,6 +137,7 @@ def load_sample_metadata(
     sample_id: str | None,
     input_file: Path,
 ) -> dict[str, Any]:
+    """Load sample metadata from a benchmark manifest, falling back to input metadata."""
     fallback = {"id": sample_id or input_file.stem}
     if manifest_path is None:
         return fallback
@@ -232,50 +176,17 @@ def load_sample_metadata(
     return metadata
 
 
-def sample_manifest_schema_payload() -> dict[str, Any]:
-    return {
-        "schema_version": BENCH_SCHEMA_VERSION,
-        "kind": "fast_sub_bench_sample_manifest_schema",
-        "matching_rule": (
-            "fast-sub bench matches the input media filename against samples[].prepared_media_path."
-        ),
-        "required_fields": list(SAMPLE_MANIFEST_REQUIRED_FIELDS),
-        "recommended_fields": list(SAMPLE_MANIFEST_RECOMMENDED_FIELDS),
-        "supported_languages": ["auto", "zh", "en", "ja", "ko"],
-        "notes": [
-            "assets[] is not required by fast-sub bench.",
-            "The bench CLI does not take --sample-id; use prepared_media_path to match samples.",
-            "reference_transcript_path enables WER/CER scoring.",
-            "Unsupported language metadata falls back to auto for transcription.",
-        ],
-        "example": SAMPLE_MANIFEST_EXAMPLE,
-    }
-
-
-def render_sample_manifest_schema() -> str:
-    payload = sample_manifest_schema_payload()
-    lines = [
-        "Fast Sub Bench Sample Manifest",
-        "",
-        "Matching:",
-        f"- {payload['matching_rule']}",
-        "",
-        "Required fields:",
-        *[f"- {field}" for field in payload["required_fields"]],
-        "",
-        "Recommended fields:",
-        *[f"- {field}" for field in payload["recommended_fields"]],
-        "",
-        "Supported language values:",
-        "- auto, zh, en, ja, ko",
-        "",
-        "Example:",
-        json.dumps(payload["example"], ensure_ascii=False, indent=2),
-    ]
+def render_markdown_report(report: dict[str, Any]) -> str:
+    """Render a full Markdown report for a transcription benchmark result."""
+    lines = _render_report_overview(report)
+    lines.extend(_render_metric_guide())
+    lines.extend(_render_run_details(report))
+    lines.extend(_render_warnings_and_errors(report))
+    lines.extend(_render_follow_up())
     return "\n".join(lines)
 
 
-def render_markdown_report(report: dict[str, Any]) -> str:
+def _render_report_overview(report: dict[str, Any]) -> list[str]:
     sample = report.get("sample", {})
     hardware = report.get("hardware", {})
     fastest = _fastest_profile(report)
@@ -323,40 +234,46 @@ def render_markdown_report(report: dict[str, Any]) -> str:
         "",
     ]
     lines.extend(_render_profile_table(report, include_requested=True))
-    lines.extend(
-        [
-            "",
-            "## Metric Guide",
-            "",
-            (
-                "- RTFx: higher is faster. `1.0` is roughly real time; `10.0` "
-                "means about 10 minutes of audio per minute of processing."
-            ),
-            (
-                "- CER: character error rate. Lower is better, and it is usually "
-                "more useful for Chinese and Japanese samples."
-            ),
-            (
-                "- WER: word error rate. Lower is better, and it is usually more "
-                "useful for English and Korean samples."
-            ),
-            (
-                "- CER/WER rough guide: `< 0.05` excellent, `0.05-0.10` good, "
-                "`0.10-0.20` usable with review, `> 0.20` higher quality risk."
-            ),
-            (
-                "- CER/WER thresholds depend on language, noise, accents, "
-                "segmentation, and reference transcript quality."
-            ),
-            "- End-to-end elapsed includes audio preparation and worker orchestration.",
-            (
-                "- Worker elapsed is measured inside the transcription worker; "
-                "the difference is a rough proxy for preparation, process startup, "
-                "model load, and dispatch overhead."
-            ),
-        ]
-    )
-    lines.extend(["", "## Run Details", ""])
+    return lines
+
+
+def _render_metric_guide() -> list[str]:
+    return [
+        "",
+        "## Metric Guide",
+        "",
+        (
+            "- RTFx: higher is faster. `1.0` is roughly real time; `10.0` "
+            "means about 10 minutes of audio per minute of processing."
+        ),
+        (
+            "- CER: character error rate. Lower is better, and it is usually "
+            "more useful for Chinese and Japanese samples."
+        ),
+        (
+            "- WER: word error rate. Lower is better, and it is usually more "
+            "useful for English and Korean samples."
+        ),
+        (
+            "- CER/WER rough guide: `< 0.05` excellent, `0.05-0.10` good, "
+            "`0.10-0.20` usable with review, `> 0.20` higher quality risk."
+        ),
+        (
+            "- CER/WER thresholds depend on language, noise, accents, "
+            "segmentation, and reference transcript quality."
+        ),
+        "- End-to-end elapsed includes audio preparation and worker orchestration.",
+        (
+            "- Worker elapsed is measured inside the transcription worker; "
+            "the difference is a rough proxy for preparation, process startup, "
+            "model load, and dispatch overhead."
+        ),
+    ]
+
+
+def _render_run_details(report: dict[str, Any]) -> list[str]:
+    lines = ["", "## Run Details", ""]
+    has_quality = _report_has_quality(report)
     for profile in report.get("profiles", []):
         lines.append(f"### {profile.get('name', 'unknown')}")
         lines.append("")
@@ -388,30 +305,35 @@ def render_markdown_report(report: dict[str, Any]) -> str:
             )
             lines.append("| " + " | ".join(row) + " |")
         lines.append("")
+    return lines
 
+
+def _render_warnings_and_errors(report: dict[str, Any]) -> list[str]:
     warnings = _collect_profile_messages(report, "warnings")
     errors = _collect_profile_messages(report, "error")
-    lines.extend(["", "## Warnings And Errors", ""])
+    lines = ["", "## Warnings And Errors", ""]
     if not warnings and not errors:
         lines.append("- None.")
     for warning in warnings:
         lines.append(f"- warning: {warning}")
     for error in errors:
         lines.append(f"- error: {error}")
-    lines.extend(
-        [
-            "",
-            "## Follow-up",
-            "",
-            "- TODO: add RTX 3060 and additional machine baselines before release.",
-            "- TODO: expand fixed samples as local licensed media becomes available.",
-            "",
-        ]
-    )
-    return "\n".join(lines)
+    return lines
+
+
+def _render_follow_up() -> list[str]:
+    return [
+        "",
+        "## Follow-up",
+        "",
+        "- TODO: add RTX 3060 and additional machine baselines before release.",
+        "- TODO: expand fixed samples as local licensed media becomes available.",
+        "",
+    ]
 
 
 def render_brief_report(report: dict[str, Any]) -> str:
+    """Render a compact plain-text summary for CLI output."""
     sample = report.get("sample", {})
     hardware = report.get("hardware", {})
     has_quality = _report_has_quality(report)
@@ -540,6 +462,7 @@ def _run_once(
 
 
 def summarize_runs(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize repeated benchmark runs for one profile."""
     ok_runs = [run for run in runs if run.get("status") == "ok"]
     summary: dict[str, Any] = {
         "runs": len(runs),
@@ -572,36 +495,25 @@ def summarize_runs(runs: list[dict[str, Any]]) -> dict[str, Any]:
     if not ok_runs:
         return summary
 
-    elapsed = [_number(run.get("elapsed_sec")) for run in ok_runs]
-    elapsed = [value for value in elapsed if value is not None]
-    rtfx_e2e = [_number(run.get("rtfx_e2e")) for run in ok_runs]
-    rtfx_e2e = [value for value in rtfx_e2e if value is not None]
-    worker_rtfx = [_number(run.get("worker_rtfx")) for run in ok_runs]
-    worker_rtfx = [value for value in worker_rtfx if value is not None]
-    worker_elapsed = [_number(run.get("worker_elapsed_sec")) for run in ok_runs]
-    worker_elapsed = [value for value in worker_elapsed if value is not None]
-    overhead = [_number(run.get("overhead_sec")) for run in ok_runs]
-    overhead = [value for value in overhead if value is not None]
-    steady_elapsed = [_number(run.get("elapsed_sec")) for run in ok_runs[1:]]
-    steady_elapsed = [value for value in steady_elapsed if value is not None]
-    invalid_segments = [_number(run.get("invalid_segments_count")) for run in ok_runs]
-    invalid_segments = [value for value in invalid_segments if value is not None]
-    prediction_chars = [_number(run.get("prediction_chars")) for run in ok_runs]
-    prediction_chars = [value for value in prediction_chars if value is not None]
-    reference_chars = [_number(run.get("reference_chars")) for run in ok_runs]
-    reference_chars = [value for value in reference_chars if value is not None]
-    cer_values = [
-        _number((run.get("quality") or {}).get("cer"))
+    elapsed = _numbers(run.get("elapsed_sec") for run in ok_runs)
+    rtfx_e2e = _numbers(run.get("rtfx_e2e") for run in ok_runs)
+    worker_rtfx = _numbers(run.get("worker_rtfx") for run in ok_runs)
+    worker_elapsed = _numbers(run.get("worker_elapsed_sec") for run in ok_runs)
+    overhead = _numbers(run.get("overhead_sec") for run in ok_runs)
+    steady_elapsed = _numbers(run.get("elapsed_sec") for run in ok_runs[1:])
+    invalid_segments = _numbers(run.get("invalid_segments_count") for run in ok_runs)
+    prediction_chars = _numbers(run.get("prediction_chars") for run in ok_runs)
+    reference_chars = _numbers(run.get("reference_chars") for run in ok_runs)
+    cer_values = _numbers(
+        (run.get("quality") or {}).get("cer")
         for run in ok_runs
         if isinstance(run.get("quality"), dict)
-    ]
-    cer_values = [value for value in cer_values if value is not None]
-    wer_values = [
-        _number((run.get("quality") or {}).get("wer"))
+    )
+    wer_values = _numbers(
+        (run.get("quality") or {}).get("wer")
         for run in ok_runs
         if isinstance(run.get("quality"), dict)
-    ]
-    wer_values = [value for value in wer_values if value is not None]
+    )
 
     summary.update(
         {
@@ -942,11 +854,9 @@ def _format_memory_pair(hardware: dict[str, Any]) -> str:
 
 
 def _rtfx_interpretation(report: dict[str, Any]) -> str:
-    values = [
-        _number((profile.get("summary") or {}).get("rtfx_e2e_avg"))
-        for profile in report.get("profiles", [])
-    ]
-    values = [value for value in values if value is not None]
+    values = _numbers(
+        (profile.get("summary") or {}).get("rtfx_e2e_avg") for profile in report.get("profiles", [])
+    )
     if not values:
         return "RTFx: higher is faster. 1.0 is roughly real time."
     best = max(values)
@@ -977,7 +887,7 @@ def _analyze_srt_output(path: Path) -> dict[str, Any]:
     invalid = 0
     previous_end = 0
     for event in subs.events:
-        text = _normalize_subtitle_text(event.text)
+        text = normalize_subtitle_text(event.text)
         if not text:
             invalid += 1
             continue
@@ -988,7 +898,7 @@ def _analyze_srt_output(path: Path) -> dict[str, Any]:
     joined = "\n".join(texts).strip()
     return {
         "text": joined,
-        "prediction_chars": len(_normalize_for_cer(joined)),
+        "prediction_chars": len(normalize_for_cer(joined)),
         "empty_output": not bool(joined),
         "invalid_segments_count": invalid,
     }
@@ -1008,7 +918,7 @@ def _score_quality(sample: dict[str, Any], prediction: str) -> dict[str, Any]:
             "wer": None,
             "cer": None,
             "reference_chars": None,
-            "prediction_chars": len(_normalize_for_cer(prediction)),
+            "prediction_chars": len(normalize_for_cer(prediction)),
         }
     path = Path(str(reference_path))
     if not path.is_absolute():
@@ -1019,60 +929,20 @@ def _score_quality(sample: dict[str, Any], prediction: str) -> dict[str, Any]:
             "wer": None,
             "cer": None,
             "reference_chars": None,
-            "prediction_chars": len(_normalize_for_cer(prediction)),
+            "prediction_chars": len(normalize_for_cer(prediction)),
         }
     reference = path.read_text(encoding="utf-8")
-    reference_cer_text = _normalize_for_cer(reference)
-    prediction_cer_text = _normalize_for_cer(prediction)
-    reference_words = _normalize_for_wer(reference)
-    prediction_words = _normalize_for_wer(prediction)
+    reference_cer_text = normalize_for_cer(reference)
+    prediction_cer_text = normalize_for_cer(prediction)
+    reference_words = normalize_for_wer(reference)
+    prediction_words = normalize_for_wer(prediction)
     return {
         "reference_available": True,
-        "wer": _error_rate(reference_words, prediction_words),
-        "cer": _error_rate(list(reference_cer_text), list(prediction_cer_text)),
+        "wer": error_rate(reference_words, prediction_words),
+        "cer": error_rate(list(reference_cer_text), list(prediction_cer_text)),
         "reference_chars": len(reference_cer_text),
         "prediction_chars": len(prediction_cer_text),
     }
-
-
-def _normalize_subtitle_text(text: str) -> str:
-    normalized = text.replace("\\N", "\n").replace("\r\n", "\n").replace("\r", "\n")
-    normalized = re.sub(r"<[^>]+>", "", normalized)
-    return "\n".join(line.strip() for line in normalized.splitlines() if line.strip())
-
-
-def _normalize_for_cer(text: str) -> str:
-    normalized = _normalize_subtitle_text(text).casefold()
-    return "".join(char for char in normalized if char.isalnum())
-
-
-def _normalize_for_wer(text: str) -> list[str]:
-    normalized = _normalize_subtitle_text(text).casefold()
-    normalized = re.sub(r"[^\w\s]", " ", normalized, flags=re.UNICODE)
-    return [word for word in normalized.split() if word]
-
-
-def _error_rate(reference: list[str], prediction: list[str]) -> float | None:
-    if not reference:
-        return None
-    return _round(_edit_distance(reference, prediction) / len(reference))
-
-
-def _edit_distance(reference: list[str], prediction: list[str]) -> int:
-    previous = list(range(len(prediction) + 1))
-    for ref_index, ref_item in enumerate(reference, start=1):
-        current = [ref_index]
-        for pred_index, pred_item in enumerate(prediction, start=1):
-            cost = 0 if ref_item == pred_item else 1
-            current.append(
-                min(
-                    current[pred_index - 1] + 1,
-                    previous[pred_index] + 1,
-                    previous[pred_index - 1] + cost,
-                )
-            )
-        previous = current
-    return previous[-1]
 
 
 def _redacted_command_string(command: list[str] | None, *, input_file: Path) -> str | None:
@@ -1098,7 +968,7 @@ def _redacted_command_string(command: list[str] | None, *, input_file: Path) -> 
 
 def _bench_output_dir(input_file: Path, generated_at: str) -> Path:
     safe_stamp = generated_at.replace(":", "").replace("-", "").replace(".", "").replace("Z", "z")
-    return Path(".fast-sub") / "bench" / f"{input_file.stem}-{safe_stamp}"
+    return Path(*BENCH_OUTPUT_DIR_PARTS) / f"{input_file.stem}-{safe_stamp}"
 
 
 def _rtfx(duration_sec: float | None, elapsed_sec: float | None) -> float | None:
@@ -1128,7 +998,11 @@ def _number(value: Any) -> float | None:
         return None
 
 
-def _optional_int(value: object) -> int | None:
+def _numbers(values: Iterable[Any]) -> list[float]:
+    return [number for value in values if (number := _number(value)) is not None]
+
+
+def _optional_int(value: Any) -> int | None:
     try:
         return None if value is None else int(value)
     except (TypeError, ValueError):

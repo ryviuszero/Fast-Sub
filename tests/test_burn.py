@@ -6,12 +6,8 @@ from pathlib import Path
 import pytest
 
 from fast_sub.contracts.errors import SubGenError
-from fast_sub.output.burn import (
-    BurnOptions,
-    build_ffmpeg_burn_command,
-    burn_subtitles,
-    default_burn_output_path,
-)
+from fast_sub.output.burn import build_ffmpeg_burn_command, burn_subtitles, default_burn_output_path
+from fast_sub.output.models import BurnOptions
 
 
 def test_default_burn_output_path_uses_subtitled_suffix() -> None:

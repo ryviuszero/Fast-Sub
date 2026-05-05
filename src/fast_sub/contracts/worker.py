@@ -17,7 +17,7 @@ def default_worker_job_id() -> str:
 
 
 class SttWorkerRequest(BaseModel):
-    schema_version: Literal[1] = WORKER_SCHEMA_VERSION
+    schema_version: Literal[1] = 1
     job_id: str = Field(default_factory=default_worker_job_id)
     audio_path: Path
     language: str = "auto"
@@ -30,7 +30,7 @@ class SttWorkerRequest(BaseModel):
 
 
 class SttWorkerResponse(SttProviderResponse):
-    schema_version: Literal[1] = WORKER_SCHEMA_VERSION
+    schema_version: Literal[1] = 1
     segments: list[SttProviderSegment]
 
 
@@ -43,5 +43,5 @@ class WorkerErrorDetail(BaseModel):
 
 
 class WorkerErrorResponse(BaseModel):
-    schema_version: Literal[1] = WORKER_SCHEMA_VERSION
+    schema_version: Literal[1] = 1
     error: WorkerErrorDetail

@@ -1,3 +1,5 @@
+"""Orchestration for the local automatic subtitle pipeline."""
+
 from __future__ import annotations
 
 import time
@@ -7,194 +9,35 @@ from typing import Any
 
 from fast_sub.contracts.errors import SubGenError, WorkerRunnerError
 from fast_sub.infrastructure.ffmpeg import ensure_media_tools, is_media_file, probe_media
-from fast_sub.managers.providers import resolve_stt_provider
 from fast_sub.media.service import analyze_media
-from fast_sub.model_store.manager import ModelManagerError, install_model
+from fast_sub.model_store.errors import ModelManagerError
+from fast_sub.model_store.manager import install_model
 from fast_sub.model_store.manifest import get_model
+from fast_sub.pipeline.constants import RAW_TRANSCRIBE_SUFFIX
+from fast_sub.pipeline.errors import AutoPipelineError
+from fast_sub.pipeline.models import AutoOptions, AutoResult, AutoStep
+from fast_sub.providers.resolution import resolve_stt_provider
 from fast_sub.stt.service import (
-    DEFAULT_COMPUTE_TYPE,
-    DEFAULT_DEVICE,
-    DEFAULT_GPU_LOAD,
-    DEFAULT_LANGUAGE,
-    DEFAULT_MODE,
-    DEFAULT_MODEL,
-    DEFAULT_PROVIDER,
-    DEFAULT_VAD,
     TranscribeOptions,
     TranscribeResult,
     transcribe_media,
 )
 from fast_sub.subtitles.srt import RefineOptions, refine_srt_text
 
-DEFAULT_REFINE_MAX_DURATION = 6.0
 
+@dataclass
+class _AutoRunState:
+    input_file: Path
+    options: AutoOptions
+    started: float = field(default_factory=time.perf_counter)
+    steps: list[AutoStep] = field(default_factory=list)
 
-@dataclass(frozen=True)
-class AutoOptions:
-    provider: str = DEFAULT_PROVIDER
-    model: str = DEFAULT_MODEL
-    language: str = DEFAULT_LANGUAGE
-    device: str = DEFAULT_DEVICE
-    compute_type: str = DEFAULT_COMPUTE_TYPE
-    batch_size: int | None = None
-    gpu_load: str = DEFAULT_GPU_LOAD
-    vad: str = DEFAULT_VAD
-    mode: str = DEFAULT_MODE
-    output: Path | None = None
-    dry_run: bool = False
-    yes: bool = False
-    keep_temp: bool = False
-    refine_max_chars: int | None = None
-    refine_max_duration: float = DEFAULT_REFINE_MAX_DURATION
-    worker_command: list[str | Path] | None = None
-
-
-@dataclass(frozen=True)
-class AutoStep:
-    name: str
-    status: str
-    message: str
-    action_hint: str | None = None
-    details: dict[str, Any] = field(default_factory=dict)
-
-    def as_dict(self) -> dict[str, Any]:
-        data: dict[str, Any] = {
-            "name": self.name,
-            "status": self.status,
-            "message": self.message,
-        }
-        if self.action_hint:
-            data["action_hint"] = self.action_hint
-        if self.details:
-            data["details"] = self.details
-        return data
-
-
-@dataclass(frozen=True)
-class AutoResult:
-    ok: bool
-    input: Path
-    output: Path
-    provider: str
-    model: str
-    language: str
-    dry_run: bool
-    steps: list[AutoStep]
-    elapsed_sec: float
-    error: str | None = None
-    transcribe_result: TranscribeResult | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        data: dict[str, Any] = {
-            "ok": self.ok,
-            "input": str(self.input),
-            "output": str(self.output),
-            "provider": self.provider,
-            "model": self.model,
-            "language": self.language,
-            "dry_run": self.dry_run,
-            "elapsed_sec": self.elapsed_sec,
-            "steps": [step.as_dict() for step in self.steps],
-        }
-        if self.error:
-            error_step = next((step for step in reversed(self.steps) if step.status != "ok"), None)
-            error_info = _auto_error_info(self.error, error_step)
-            data["error"] = {
-                "code": error_info["code"],
-                "stage": error_info["stage"],
-                "message": self.error,
-                "action_hint": error_info["action_hint"],
-                "details": error_step.details if error_step else {},
-            }
-        if self.transcribe_result is not None:
-            data["transcribe"] = self.transcribe_result.as_dict()
-        return data
-
-
-class AutoPipelineError(SubGenError):
-    def __init__(self, result: AutoResult) -> None:
-        self.result = result
-        super().__init__(result.error or "fast-sub auto failed.")
-
-
-def _auto_error_code(status: str) -> str:
-    if status in {"missing_model", "missing_dependency"}:
-        return status
-    if status in {"unknown_model", "unsupported_api_provider"}:
-        return status
-    if status == "error":
-        return "command_failed"
-    return status or "command_failed"
-
-
-def _auto_error_info(message: str, step: AutoStep | None) -> dict[str, str | None]:
-    if step is None:
-        return {"code": "command_failed", "stage": "auto", "action_hint": None}
-    if step.status != "error":
-        return {
-            "code": _auto_error_code(step.status),
-            "stage": step.name,
-            "action_hint": step.action_hint,
-        }
-
-    code = _classify_auto_error_message(message)
-    return {
-        "code": code,
-        "stage": _auto_error_stage(code, step.name),
-        "action_hint": step.action_hint or _auto_action_hint(message, code),
-    }
-
-
-def _classify_auto_error_message(message: str) -> str:
-    lower = message.lower()
-    if "input file does not exist" in lower or "unsupported input file type" in lower:
-        return "invalid_input"
-    if "input path is not a file" in lower or "no audio stream" in lower:
-        return "invalid_input"
-    if "missing_model" in lower or "model is not installed" in lower:
-        return "missing_model"
-    if "models install" in lower or "model directory is missing" in lower:
-        return "missing_model"
-    if "ffmpeg" in lower or "ffprobe" in lower:
-        return "missing_dependency"
-    if "local-asr" in lower or "faster_whisper" in lower or "not installed" in lower:
-        return "missing_dependency"
-    if "checksum" in lower:
-        return "checksum_failed"
-    if "download" in lower:
-        return "download_failed"
-    return "command_failed"
-
-
-def _auto_error_stage(code: str, fallback: str) -> str:
-    if code == "invalid_input":
-        return "input"
-    if code == "missing_dependency":
-        return "doctor"
-    if code == "missing_model":
-        return "model"
-    return fallback or "auto"
-
-
-def _auto_action_hint(message: str, code: str) -> str | None:
-    lower = message.lower()
-    if code == "missing_dependency" and ("local-asr" in lower or "faster_whisper" in lower):
-        return (
-            "Install local ASR dependencies with `uv sync --extra local-asr` "
-            "or `pip install fast-sub[local-asr]`."
-        )
-    if code == "missing_model":
-        return "Run `fast-sub models install whisper-small` or `fast-sub auto --yes`."
-    return None
-
-
-def auto_media(input_file: Path, options: AutoOptions | None = None) -> AutoResult:
-    options = options or AutoOptions()
-    started = time.perf_counter()
-    steps: list[AutoStep] = []
-    output = options.output or input_file.with_suffix(".srt")
+    @property
+    def output(self) -> Path:
+        return self.options.output or self.input_file.with_suffix(".srt")
 
     def finish(
+        self,
         *,
         ok: bool,
         error: str | None = None,
@@ -202,146 +45,42 @@ def auto_media(input_file: Path, options: AutoOptions | None = None) -> AutoResu
     ) -> AutoResult:
         return AutoResult(
             ok=ok,
-            input=input_file,
-            output=output,
-            provider=options.provider,
-            model=options.model,
-            language=options.language,
-            dry_run=options.dry_run,
-            steps=list(steps),
-            elapsed_sec=round(time.perf_counter() - started, 3),
+            input=self.input_file,
+            output=self.output,
+            provider=self.options.provider,
+            model=self.options.model,
+            language=self.options.language,
+            dry_run=self.options.dry_run,
+            steps=list(self.steps),
+            elapsed_sec=round(time.perf_counter() - self.started, 3),
             error=error,
             transcribe_result=transcribe_result,
         )
 
-    def fail(step: AutoStep) -> AutoPipelineError:
-        steps.append(step)
-        return AutoPipelineError(finish(ok=False, error=step.message))
+    def fail(self, step: AutoStep) -> AutoPipelineError:
+        self.steps.append(step)
+        return AutoPipelineError(self.finish(ok=False, error=step.message))
+
+
+def auto_media(input_file: Path, options: AutoOptions | None = None) -> AutoResult:
+    """Run the local auto pipeline from media inspection through refined SRT output."""
+    state = _AutoRunState(input_file=input_file, options=options or AutoOptions())
 
     try:
-        _validate_auto_input(input_file)
-        steps.append(AutoStep("input", "ok", "Input media file is usable."))
-
-        ensure_media_tools()
-        steps.append(AutoStep("doctor", "ok", "Required media tools are available."))
-
-        probe = probe_media(input_file)
-        steps.append(
-            AutoStep(
-                "probe",
-                "ok",
-                "Media probe completed.",
-                details={
-                    "duration_sec": probe.get("duration_sec"),
-                    "audio_streams": len(probe.get("audio_streams", [])),
-                    "video_streams": len(probe.get("video_streams", [])),
-                },
-            )
-        )
-
-        analysis = analyze_media(input_file)
-        steps.append(
-            AutoStep(
-                "analyze",
-                "ok",
-                "Audio analysis completed.",
-                details=analysis.as_dict(),
-            )
-        )
-
-        resolution = resolve_stt_provider(
-            options.provider,
-            options.model,
-            language=options.language,
-            device=options.device,
-            compute_type=options.compute_type,
-        )
-        steps.append(_resolution_step(resolution))
+        _run_preflight_steps(state)
+        resolution = _resolve_provider(state)
 
         if resolution.provider_location == "api":
-            steps.append(
-                AutoStep(
-                    "provider",
-                    "unsupported_api_provider",
-                    "fast-sub auto v0 only supports local STT providers.",
-                    action_hint=(
-                        "Choose --provider local-faster-whisper. --yes never authorizes API upload."
-                    ),
-                )
-            )
-            if options.dry_run:
-                steps.append(AutoStep("transcribe", "blocked", "API STT is not used by auto v0."))
-                steps.append(AutoStep("refine", "blocked", "Refine requires local transcription."))
-                return finish(ok=True)
-            raise AutoPipelineError(
-                finish(ok=False, error="fast-sub auto v0 only supports local STT providers.")
-            )
+            return _handle_api_provider(state)
 
         if resolution.status == "missing_model":
-            if options.dry_run:
-                steps.append(
-                    AutoStep(
-                        "model",
-                        "missing_model",
-                        f"Model is not installed: {options.model}.",
-                        action_hint=(
-                            f"Run `fast-sub models install {options.model}` "
-                            "or `fast-sub auto --yes`."
-                        ),
-                    )
-                )
-                steps.append(
-                    AutoStep(
-                        "transcribe",
-                        "planned",
-                        "Would transcribe after model install.",
-                    )
-                )
-                steps.append(AutoStep("refine", "planned", "Would refine the generated subtitle."))
-                return finish(ok=True)
-            if not options.yes:
-                raise fail(
-                    AutoStep(
-                        "model",
-                        "missing_model",
-                        f"Model is not installed: {options.model}.",
-                        action_hint=(
-                            f"Run `fast-sub models install {options.model}` "
-                            "or `fast-sub auto --yes`."
-                        ),
-                    )
-                )
-            _install_local_model(options.model, steps)
-            resolution = resolve_stt_provider(
-                options.provider,
-                options.model,
-                language=options.language,
-                device=options.device,
-                compute_type=options.compute_type,
-            )
-            steps.append(_resolution_step(resolution, name="provider_after_install"))
+            resolution = _handle_missing_model(state)
 
-        if options.dry_run:
-            if resolution.status == "available":
-                steps.append(AutoStep("model", "installed", "Model is already installed."))
-                steps.append(
-                    AutoStep("transcribe", "planned", "Would transcribe source subtitles.")
-                )
-                steps.append(AutoStep("refine", "planned", "Would refine the generated subtitle."))
-            else:
-                steps.append(
-                    AutoStep(
-                        "transcribe",
-                        "blocked",
-                        f"Provider/model is not ready: {resolution.status}.",
-                        action_hint=resolution.action_hint,
-                    )
-                )
-                steps.append(AutoStep("refine", "blocked", "Refine requires transcription output."))
-            return finish(ok=True)
+        if state.options.dry_run:
+            return _finish_dry_run(state, resolution)
 
         if resolution.status != "available":
-            raise fail(
+            raise state.fail(
                 AutoStep(
                     "provider",
                     resolution.status,
@@ -350,49 +89,165 @@ def auto_media(input_file: Path, options: AutoOptions | None = None) -> AutoResu
                 )
             )
 
-        raw_output = _raw_transcribe_output(output)
-        transcribe_result = transcribe_media(
-            input_file,
-            TranscribeOptions(
-                provider=options.provider,
-                model=options.model,
-                language=options.language,
-                device=options.device,
-                compute_type=options.compute_type,
-                batch_size=options.batch_size,
-                gpu_load=options.gpu_load,
-                vad=options.vad,
-                mode=options.mode,
-                output=raw_output,
-                keep_temp=options.keep_temp,
-                worker_command=options.worker_command,
-            ),
-        )
-        steps.append(
-            AutoStep(
-                "transcribe",
-                "ok",
-                "Source subtitle transcription completed.",
-                details={"output": str(transcribe_result.srt_path)},
-            )
-        )
-
-        _refine_subtitle(transcribe_result.srt_path, output, options)
-        steps.append(
-            AutoStep(
-                "refine",
-                "ok",
-                "Final subtitle refinement completed.",
-                details={"output": str(output)},
-            )
-        )
-        return finish(ok=True, transcribe_result=transcribe_result)
+        return _run_transcribe_and_refine(state)
     except AutoPipelineError:
         raise
     except (SubGenError, WorkerRunnerError, ModelManagerError, KeyError, OSError) as exc:
         step = AutoStep("auto", "error", str(exc))
-        steps.append(step)
-        raise AutoPipelineError(finish(ok=False, error=str(exc))) from exc
+        state.steps.append(step)
+        raise AutoPipelineError(state.finish(ok=False, error=str(exc))) from exc
+
+
+def _run_preflight_steps(state: _AutoRunState) -> None:
+    _validate_auto_input(state.input_file)
+    state.steps.append(AutoStep("input", "ok", "Input media file is usable."))
+
+    ensure_media_tools()
+    state.steps.append(AutoStep("doctor", "ok", "Required media tools are available."))
+
+    probe = probe_media(state.input_file)
+    state.steps.append(
+        AutoStep(
+            "probe",
+            "ok",
+            "Media probe completed.",
+            details={
+                "duration_sec": probe.get("duration_sec"),
+                "audio_streams": len(probe.get("audio_streams", [])),
+                "video_streams": len(probe.get("video_streams", [])),
+            },
+        )
+    )
+
+    analysis = analyze_media(state.input_file)
+    state.steps.append(
+        AutoStep(
+            "analyze",
+            "ok",
+            "Audio analysis completed.",
+            details=analysis.as_dict(),
+        )
+    )
+
+
+def _resolve_provider(state: _AutoRunState, *, step_name: str = "provider") -> Any:
+    options = state.options
+    resolution = resolve_stt_provider(
+        options.provider,
+        options.model,
+        language=options.language,
+        device=options.device,
+        compute_type=options.compute_type,
+    )
+    state.steps.append(_resolution_step(resolution, name=step_name))
+    return resolution
+
+
+def _handle_api_provider(state: _AutoRunState) -> AutoResult:
+    state.steps.append(
+        AutoStep(
+            "provider",
+            "unsupported_api_provider",
+            "fast-sub auto v0 only supports local STT providers.",
+            action_hint=(
+                "Choose --provider local-faster-whisper. --yes never authorizes API upload."
+            ),
+        )
+    )
+    if state.options.dry_run:
+        state.steps.append(AutoStep("transcribe", "blocked", "API STT is not used by auto v0."))
+        state.steps.append(AutoStep("refine", "blocked", "Refine requires local transcription."))
+        return state.finish(ok=True)
+    raise AutoPipelineError(
+        state.finish(ok=False, error="fast-sub auto v0 only supports local STT providers.")
+    )
+
+
+def _handle_missing_model(state: _AutoRunState) -> Any:
+    options = state.options
+    if options.dry_run:
+        state.steps.append(_missing_model_step(options.model))
+        state.steps.append(
+            AutoStep("transcribe", "planned", "Would transcribe after model install.")
+        )
+        state.steps.append(AutoStep("refine", "planned", "Would refine the generated subtitle."))
+        return None
+    if not options.yes:
+        raise state.fail(_missing_model_step(options.model))
+
+    _install_local_model(options.model, state.steps)
+    return _resolve_provider(state, step_name="provider_after_install")
+
+
+def _finish_dry_run(state: _AutoRunState, resolution: Any) -> AutoResult:
+    if resolution is not None and resolution.status == "available":
+        state.steps.append(AutoStep("model", "installed", "Model is already installed."))
+        state.steps.append(AutoStep("transcribe", "planned", "Would transcribe source subtitles."))
+        state.steps.append(AutoStep("refine", "planned", "Would refine the generated subtitle."))
+    elif resolution is not None:
+        state.steps.append(
+            AutoStep(
+                "transcribe",
+                "blocked",
+                f"Provider/model is not ready: {resolution.status}.",
+                action_hint=resolution.action_hint,
+            )
+        )
+        state.steps.append(AutoStep("refine", "blocked", "Refine requires transcription output."))
+    return state.finish(ok=True)
+
+
+def _run_transcribe_and_refine(state: _AutoRunState) -> AutoResult:
+    raw_output = _raw_transcribe_output(state.output)
+    transcribe_result = transcribe_media(
+        state.input_file,
+        _transcribe_options(state.options, raw_output),
+    )
+    state.steps.append(
+        AutoStep(
+            "transcribe",
+            "ok",
+            "Source subtitle transcription completed.",
+            details={"output": str(transcribe_result.srt_path)},
+        )
+    )
+
+    _refine_subtitle(transcribe_result.srt_path, state.output, state.options)
+    state.steps.append(
+        AutoStep(
+            "refine",
+            "ok",
+            "Final subtitle refinement completed.",
+            details={"output": str(state.output)},
+        )
+    )
+    return state.finish(ok=True, transcribe_result=transcribe_result)
+
+
+def _transcribe_options(options: AutoOptions, output: Path) -> TranscribeOptions:
+    return TranscribeOptions(
+        provider=options.provider,
+        model=options.model,
+        language=options.language,
+        device=options.device,
+        compute_type=options.compute_type,
+        batch_size=options.batch_size,
+        gpu_load=options.gpu_load,
+        vad=options.vad,
+        mode=options.mode,
+        output=output,
+        keep_temp=options.keep_temp,
+        worker_command=options.worker_command,
+    )
+
+
+def _missing_model_step(model: str) -> AutoStep:
+    return AutoStep(
+        "model",
+        "missing_model",
+        f"Model is not installed: {model}.",
+        action_hint=f"Run `fast-sub models install {model}` or `fast-sub auto --yes`.",
+    )
 
 
 def _validate_auto_input(input_file: Path) -> None:
@@ -445,7 +300,7 @@ def _install_local_model(model_id: str, steps: list[AutoStep]) -> None:
 
 
 def _raw_transcribe_output(output: Path) -> Path:
-    return output.with_name(f"{output.stem}.raw.srt")
+    return output.with_name(f"{output.stem}{RAW_TRANSCRIBE_SUFFIX}")
 
 
 def _refine_subtitle(input_srt: Path, output: Path, options: AutoOptions) -> None:
