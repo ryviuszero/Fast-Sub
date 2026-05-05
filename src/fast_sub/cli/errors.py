@@ -2,18 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from fast_sub.cli.redaction import redact_value
+from fast_sub.cli.helpers import redact_value
 
-EXIT_CODE_BY_ERROR_CODE = {
-    "invalid_input": 2,
-    "missing_dependency": 3,
-    "missing_model": 4,
-    "download_failed": 5,
-    "gpu_oom": 6,
-    "ffmpeg_failed": 7,
-    "invalid_provider": 8,
-    "provider_failed": 9,
-}
+__all__ = [
+    "action_hint_for_message",
+    "classify_error_code",
+    "error_payload",
+    "exit_code_for_payload",
+    "json_error_for_exception",
+]
 
 
 def error_payload(

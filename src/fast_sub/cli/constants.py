@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Constants shared by the CLI entry point and command modules."""
+
+from __future__ import annotations
 
 COMMAND_NAMES = {
     "analyze",

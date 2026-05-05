@@ -1,8 +1,41 @@
 from __future__ import annotations
 
+import json
 import os
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+import typer
+from rich.console import Console
+
+__all__ = [
+    "CliContext",
+    "console",
+    "echo_json",
+    "err_console",
+    "redact_secrets",
+    "redact_value",
+]
+
+console = Console()
+err_console = Console(stderr=True)
+
+
+@dataclass(frozen=True)
+class CliContext:
+    """Shared CLI rendering and workspace options."""
+
+    json_output: bool = False
+    workdir: Path | None = None
+    verbose: bool = False
+
+
+def echo_json(payload: Any, *, pretty: bool = False) -> None:
+    """Print a JSON payload using the CLI's UTF-8 friendly formatting."""
+    indent = 2 if pretty else None
+    typer.echo(json.dumps(payload, ensure_ascii=False, indent=indent))
 
 
 def redact_value(value: Any) -> Any:

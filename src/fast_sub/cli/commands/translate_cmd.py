@@ -9,9 +9,8 @@ from typing import Annotated, Any
 import typer
 
 from fast_sub.cli.constants import OPENAI_BASE_URL
-from fast_sub.cli.context import console, err_console
 from fast_sub.cli.errors import error_payload, exit_code_for_payload, json_error_for_exception
-from fast_sub.cli.redaction import redact_secrets
+from fast_sub.cli.helpers import console, err_console, redact_secrets
 from fast_sub.config import load_config
 from fast_sub.models import BilingualOrder, Mode
 from fast_sub.translation.errors import TranslationProviderError

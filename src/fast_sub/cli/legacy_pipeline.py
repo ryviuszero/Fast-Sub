@@ -9,8 +9,7 @@ from typing import TypeVar
 import typer
 
 from fast_sub.cli.constants import OPENAI_BASE_URL
-from fast_sub.cli.context import console, err_console
-from fast_sub.cli.redaction import redact_secrets
+from fast_sub.cli.helpers import console, err_console, redact_secrets
 from fast_sub.config import AppConfig, load_config
 from fast_sub.contracts.errors import ProviderResponseError, SubGenError
 from fast_sub.infrastructure.ffmpeg import (

@@ -6,9 +6,8 @@ from typing import Any
 
 import typer
 
-from fast_sub.cli.context import err_console
 from fast_sub.cli.errors import exit_code_for_payload, json_error_for_exception
-from fast_sub.cli.redaction import redact_secrets
+from fast_sub.cli.helpers import err_console, redact_secrets
 from fast_sub.contracts.errors import SubGenError
 
 

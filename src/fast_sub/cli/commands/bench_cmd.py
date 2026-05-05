@@ -35,9 +35,8 @@ from fast_sub.benchmark.translation import (
     render_markdown_report as render_translate_bench_markdown_report,
 )
 from fast_sub.cli.constants import OPENAI_BASE_URL
-from fast_sub.cli.context import console, err_console
 from fast_sub.cli.errors import error_payload
-from fast_sub.cli.redaction import redact_secrets
+from fast_sub.cli.helpers import console, err_console, redact_secrets
 from fast_sub.config import load_config
 from fast_sub.stt.constants import VALID_LANGUAGES
 

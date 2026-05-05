@@ -7,9 +7,8 @@ from typing import Annotated, Any
 
 import typer
 
-from fast_sub.cli.context import console, err_console
 from fast_sub.cli.errors import exit_code_for_payload, json_error_for_exception
-from fast_sub.cli.redaction import redact_secrets
+from fast_sub.cli.helpers import console, err_console, redact_secrets
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.pipeline.orchestrator import AutoOptions, AutoPipelineError, auto_media
 

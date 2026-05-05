@@ -5,9 +5,8 @@ from typing import Annotated
 
 import typer
 
-from fast_sub.cli.context import console, err_console
 from fast_sub.cli.errors import error_payload
-from fast_sub.cli.redaction import redact_secrets
+from fast_sub.cli.helpers import console, err_console, redact_secrets
 from fast_sub.providers.registry import default_registry
 
 providers_app = typer.Typer(help="Inspect provider contracts.", no_args_is_help=True)
