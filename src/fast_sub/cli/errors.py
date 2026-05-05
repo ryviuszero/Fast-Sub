@@ -4,14 +4,6 @@ from typing import Any
 
 from fast_sub.cli.helpers import redact_value
 
-__all__ = [
-    "action_hint_for_message",
-    "classify_error_code",
-    "error_payload",
-    "exit_code_for_payload",
-    "json_error_for_exception",
-]
-
 
 def error_payload(
     *,
@@ -103,3 +95,12 @@ def action_hint_for_message(message: str) -> str | None:
         model_id = match.group(0) if match else "whisper-small"
         return f"Run `fast-sub models install {model_id}` or `fast-sub auto --yes`."
     return None
+
+
+__all__ = [
+    "action_hint_for_message",
+    "classify_error_code",
+    "error_payload",
+    "exit_code_for_payload",
+    "json_error_for_exception",
+]

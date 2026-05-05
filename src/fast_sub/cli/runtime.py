@@ -17,16 +17,12 @@ from fast_sub.cli.commands.bench_cmd import register_bench_commands
 from fast_sub.cli.commands.media_cmd import register_media_commands
 from fast_sub.cli.commands.models_cmd import models_app
 from fast_sub.cli.commands.providers_cmd import providers_app
-from fast_sub.cli.commands.refine_cmd import (
-    refine_subtitle_file,  # noqa: F401
-    register_refine_command,
-)
+from fast_sub.cli.commands.refine_cmd import register_refine_command
 from fast_sub.cli.commands.transcribe_cmd import register_transcribe_command
 from fast_sub.cli.commands.translate_cmd import register_translate_command
 from fast_sub.cli.constants import COMMAND_NAMES
-from fast_sub.cli.legacy_pipeline import legacy_run  # noqa: F401
 from fast_sub.config import load_dotenv
-from fast_sub.contracts.errors import SubGenError  # noqa: F401
+from fast_sub.contracts.errors import SubGenError
 from fast_sub.pipeline.orchestrator import auto_media
 from fast_sub.stt.service import (
     transcribe_media,
@@ -37,6 +33,8 @@ from fast_sub.translation.service import (
 
 app = typer.Typer(help="Fast local subtitles for video.", no_args_is_help=True)
 app.add_typer(providers_app, name="providers")
+
+__all__ = ["SubGenError", "app", "auto_media", "main", "transcribe_media", "translate_srt"]
 
 
 def _package_version() -> str:
