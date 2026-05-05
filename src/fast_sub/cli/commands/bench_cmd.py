@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import sys
 import tomllib
@@ -36,13 +35,15 @@ from fast_sub.benchmark.translation import (
 )
 from fast_sub.cli.constants import OPENAI_BASE_URL
 from fast_sub.cli.errors import error_payload
-from fast_sub.cli.helpers import console, err_console, redact_secrets
+from fast_sub.cli.helpers import console, echo_json, err_console, redact_secrets
 from fast_sub.config import load_config
 from fast_sub.stt.constants import VALID_LANGUAGES
 
 BenchRunner = Callable[[Path, BenchOptions], dict[str, Any]]
 BenchTranslateRunner = Callable[[Path, BenchTranslateOptions], dict[str, Any]]
 
+
+# Command registration
 
 def register_bench_commands(
     app: typer.Typer,
@@ -62,7 +63,7 @@ def register_bench_commands(
         """Show the sample manifest fields consumed by `fast-sub bench`."""
         payload = sample_manifest_schema_payload()
         if json_output:
-            typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+            echo_json(payload, pretty=True)
             return
         console.print(render_sample_manifest_schema())
 
@@ -76,7 +77,7 @@ def register_bench_commands(
         """Show the manifest fields planned for `fast-sub bench-translate` matrices."""
         payload = translate_sample_manifest_schema_payload()
         if json_output:
-            typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+            echo_json(payload, pretty=True)
             return
         console.print(render_translate_sample_manifest_schema())
 
@@ -251,6 +252,8 @@ def register_bench_commands(
         )
 
 
+# Command runners
+
 def run_bench_command(
     *,
     ctx: typer.Context,
@@ -305,15 +308,15 @@ def run_bench_command(
         report = bench_runner(input_file, options)
     except BenchError as exc:
         if json_output and exc.report is not None:
-            typer.echo(json.dumps(exc.report, ensure_ascii=False, indent=2))
+            echo_json(exc.report, pretty=True)
         elif json_output:
-            typer.echo(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+            echo_json({"ok": False, "error": str(exc)})
         else:
             err_console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc
 
     if json_output:
-        typer.echo(json.dumps(report, ensure_ascii=False, indent=2))
+        echo_json(report, pretty=True)
         return
     console.print(render_brief_report(report))
 
@@ -402,23 +405,25 @@ def run_bench_translate_command(
     except BenchTranslateError as exc:
         if exc.report is not None:
             if json_output:
-                typer.echo(json.dumps(exc.report, ensure_ascii=False, indent=2))
+                echo_json(exc.report, pretty=True)
             else:
                 err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
                 console.print(render_translate_bench_markdown_report(exc.report))
             raise typer.Exit(bench_translate_report_exit_code(exc.report)) from exc
         payload = bench_translate_error_payload(exc)
         if json_output:
-            typer.echo(json.dumps(payload, ensure_ascii=False))
+            echo_json(payload)
         else:
             err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
         raise typer.Exit(2) from exc
 
     if json_output:
-        typer.echo(json.dumps(report, ensure_ascii=False, indent=2))
+        echo_json(report, pretty=True)
         return
     console.print(render_translate_bench_markdown_report(report))
 
+
+# Error and exit-code helpers
 
 def bench_translate_error_payload(exc: BenchTranslateError) -> dict[str, Any]:
     """Build the structured CLI error payload for bench-translate failures."""
@@ -449,6 +454,8 @@ def bench_translate_report_exit_code(report: dict[str, Any]) -> int:
         return 4
     return 1
 
+
+# Option resolution
 
 def resolve_bench_translate_model(
     *,
@@ -533,6 +540,8 @@ def _infer_bench_language(
     language = sample.get("language")
     return language if isinstance(language, str) and language in VALID_LANGUAGES else "auto"
 
+
+# Progress and notices
 
 def _bench_progress_logger(*, json_output: bool):  # noqa: ANN202
     console_target = err_console if json_output else console

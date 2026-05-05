@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from fast_sub.cli.errors import exit_code_for_payload, json_error_for_exception
-from fast_sub.cli.helpers import console, err_console, redact_secrets
-from fast_sub.cli.legacy_pipeline import validate_positive
+from fast_sub.cli.helpers import console, echo_json, err_console, redact_secrets, validate_positive
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.subtitles.srt import RefineOptions, refine_srt_text
 
@@ -72,22 +70,13 @@ def run_refine_command(
     except SubGenError as exc:
         payload = json_error_for_exception(exc, stage="refine", code="invalid_input")
         if json_output:
-            typer.echo(json.dumps(payload, ensure_ascii=False))
+            echo_json(payload)
         else:
             err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
         raise typer.Exit(exit_code_for_payload(payload)) from exc
 
     if json_output:
-        typer.echo(
-            json.dumps(
-                {
-                    "ok": True,
-                    "input": str(input_file),
-                    "output": str(out_path),
-                },
-                ensure_ascii=False,
-            )
-        )
+        echo_json({"ok": True, "input": str(input_file), "output": str(out_path)})
     else:
         console.print(f"[green]Wrote refined subtitle:[/green] {out_path}")
 

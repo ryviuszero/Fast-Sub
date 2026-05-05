@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
@@ -8,7 +7,7 @@ from typing import Annotated, Any
 import typer
 
 from fast_sub.cli.errors import exit_code_for_payload
-from fast_sub.cli.helpers import err_console, redact_secrets, redact_value
+from fast_sub.cli.helpers import echo_json, err_console, redact_secrets, redact_value
 from fast_sub.contracts.errors import SubGenError, WorkerRunnerError
 from fast_sub.stt.service import TranscribeOptions, transcribe_error_payload, transcribe_media
 
@@ -131,13 +130,13 @@ def run_transcribe_command(
     except (SubGenError, WorkerRunnerError) as exc:
         payload = transcribe_error_payload(exc)
         if json_output:
-            typer.echo(json.dumps(redact_value(payload), ensure_ascii=False))
+            echo_json(redact_value(payload))
         else:
             err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
         raise typer.Exit(exit_code_for_payload(payload)) from exc
 
     if json_output:
-        typer.echo(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
+        echo_json(result.as_dict(), pretty=True)
         return
     err_console.print(f"[green]Wrote subtitle:[/green] {result.srt_path}")
     if result.warnings:

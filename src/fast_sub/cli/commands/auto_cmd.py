@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
@@ -8,7 +7,7 @@ from typing import Annotated, Any
 import typer
 
 from fast_sub.cli.errors import exit_code_for_payload, json_error_for_exception
-from fast_sub.cli.helpers import console, err_console, redact_secrets
+from fast_sub.cli.helpers import console, echo_json, err_console, redact_secrets
 from fast_sub.contracts.errors import SubGenError
 from fast_sub.pipeline.orchestrator import AutoOptions, AutoPipelineError, auto_media
 
@@ -147,14 +146,14 @@ def run_auto_entry(
         )
     except AutoPipelineError as exc:
         if json_output:
-            typer.echo(json.dumps(exc.result.as_dict(), ensure_ascii=False, indent=2))
+            echo_json(exc.result.as_dict(), pretty=True)
         else:
             _print_auto_result(exc.result)
             err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
         raise typer.Exit(_auto_exit_code(exc.result)) from exc
 
     if json_output:
-        typer.echo(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
+        echo_json(result.as_dict(), pretty=True)
         return
     _print_auto_result(result)
 

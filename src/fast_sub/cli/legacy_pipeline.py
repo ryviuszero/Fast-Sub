@@ -16,7 +16,7 @@ from fast_sub.cli.constants import (
     OPENAI_TRANSCRIBE_JSON_ONLY_MODELS,
     WHISPERX_DEFAULT_STT_MODEL,
 )
-from fast_sub.cli.helpers import console, err_console, redact_secrets
+from fast_sub.cli.helpers import console, err_console, redact_secrets, validate_positive
 from fast_sub.config import AppConfig, load_config
 from fast_sub.contracts.errors import ProviderResponseError, SubGenError
 from fast_sub.infrastructure.ffmpeg import (
@@ -44,6 +44,8 @@ from fast_sub.translation.service import translate_segments
 T = TypeVar("T")
 
 
+# Public entry points
+
 def legacy_run(
     input_file: Path,
     output: Path | None,
@@ -56,12 +58,6 @@ def legacy_run(
     except SubGenError as exc:
         err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
         raise typer.Exit(1) from exc
-
-
-def validate_positive(value: float | int, option: str) -> None:
-    """Raise a CLI error when a numeric option is not positive."""
-    if value <= 0:
-        raise SubGenError(f"{option} must be greater than 0.")
 
 
 def resolve_legacy_options(
@@ -113,6 +109,8 @@ def resolve_legacy_options(
     return options
 
 
+# Input dispatch
+
 def _run_input(
     input_file: Path,
     output: Path | None,
@@ -124,6 +122,8 @@ def _run_input(
         return
     _run_pipeline(input_file, output, options, keep_temp)
 
+
+# Directory batch progress
 
 def _run_directory(
     input_dir: Path,
@@ -253,6 +253,8 @@ def _directory_item_signature(input_file: Path) -> dict[str, int]:
     stat = input_file.stat()
     return {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
 
+
+# Pipeline execution
 
 def _run_pipeline(
     input_file: Path,
@@ -413,6 +415,8 @@ def _all_translation_batches_failed(result: TranslationResult) -> bool:
     return bool(result.errors) and all(not segment.translation for segment in result.segments)
 
 
+# Validation
+
 def _validate_input(input_file: Path, options: AppConfig) -> None:
     if not input_file.exists():
         raise SubGenError(f"Input file does not exist: {input_file}")
@@ -509,6 +513,8 @@ def _validate_stt_model_support(options: AppConfig) -> None:
         "provider/model that supports timestamped segments."
     )
 
+
+# Defaults and tiny utilities
 
 def _apply_openai_defaults(options: AppConfig) -> None:
     if options.stt.provider is SttProvider.WHISPERX:

@@ -10,6 +10,8 @@ from typing import Any
 import typer
 from rich.console import Console
 
+from fast_sub.contracts.errors import SubGenError
+
 console = Console()
 err_console = Console(stderr=True)
 
@@ -23,10 +25,10 @@ class CliContext:
     verbose: bool = False
 
 
-def echo_json(payload: Any, *, pretty: bool = False) -> None:
+def echo_json(payload: Any, *, pretty: bool = False, indent: int | None = None) -> None:
     """Print a JSON payload using the CLI's UTF-8 friendly formatting."""
-    indent = 2 if pretty else None
-    typer.echo(json.dumps(payload, ensure_ascii=False, indent=indent))
+    json_indent = indent if indent is not None else (2 if pretty else None)
+    typer.echo(json.dumps(payload, ensure_ascii=False, indent=json_indent))
 
 
 def redact_value(value: Any) -> Any:
@@ -56,6 +58,12 @@ def redact_secrets(message: str) -> str:
     return redacted
 
 
+def validate_positive(value: float | int, option: str) -> None:
+    """Raise a CLI error when a numeric option is not positive."""
+    if value <= 0:
+        raise SubGenError(f"{option} must be greater than 0.")
+
+
 __all__ = [
     "CliContext",
     "console",
@@ -63,4 +71,5 @@ __all__ = [
     "err_console",
     "redact_secrets",
     "redact_value",
+    "validate_positive",
 ]

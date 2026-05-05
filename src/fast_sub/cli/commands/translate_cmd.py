@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from collections.abc import Callable
 from pathlib import Path
@@ -10,7 +9,7 @@ import typer
 
 from fast_sub.cli.constants import OPENAI_BASE_URL
 from fast_sub.cli.errors import error_payload, exit_code_for_payload, json_error_for_exception
-from fast_sub.cli.helpers import console, err_console, redact_secrets
+from fast_sub.cli.helpers import console, echo_json, err_console, redact_secrets
 from fast_sub.config import load_config
 from fast_sub.models import BilingualOrder, Mode
 from fast_sub.translation.errors import TranslationProviderError
@@ -199,13 +198,13 @@ def run_translate_command(
     except Exception as exc:
         payload = json_error_for_exception(exc, stage="translate", code="provider_failed")
         if json_output:
-            typer.echo(json.dumps(payload, ensure_ascii=False))
+            echo_json(payload)
         else:
             err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
         raise typer.Exit(exit_code_for_payload(payload)) from exc
 
     if json_output:
-        typer.echo(json.dumps(result.as_dict(), ensure_ascii=False))
+        echo_json(result.as_dict())
     else:
         console.print(f"[green]Wrote translated subtitle:[/green] {result.srt_path}")
         if result.errors_path:
@@ -261,7 +260,7 @@ def _handle_translate_provider_error(
         details={"input": str(input_file), "errors_path": errors_path},
     )
     if json_output:
-        typer.echo(json.dumps(payload, ensure_ascii=False))
+        echo_json(payload)
     else:
         err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
         if exc.hint:

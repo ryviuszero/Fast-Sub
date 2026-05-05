@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Annotated, Any, cast
@@ -17,7 +16,7 @@ from rich.progress import (
 )
 
 from fast_sub.cli.errors import error_payload
-from fast_sub.cli.helpers import console, err_console, redact_secrets
+from fast_sub.cli.helpers import console, echo_json, err_console, redact_secrets
 from fast_sub.model_store.constants import MODEL_DOWNLOADERS
 from fast_sub.model_store.errors import ModelManagerError
 from fast_sub.model_store.manager import (
@@ -49,7 +48,7 @@ def models_list_command(
         model_path_func=model_path,
     )
     if json_output:
-        typer.echo(json.dumps(rows, ensure_ascii=False, indent=2))
+        echo_json(rows, pretty=True)
         return
 
     for row in rows:
@@ -83,13 +82,13 @@ def models_verify_command(
             action_hint="Run `fast-sub models list` to see available models.",
         )
         if json_output:
-            typer.echo(json.dumps(payload, ensure_ascii=False))
+            echo_json(payload)
         else:
             err_console.print(f"[red]Error:[/red] {redact_secrets(str(exc))}")
         raise typer.Exit(2) from exc
 
     if json_output:
-        typer.echo(json.dumps(status.as_dict(), ensure_ascii=False, indent=2))
+        echo_json(status.as_dict(), pretty=True)
     else:
         color = "green" if status.installed else "yellow"
         console.print(f"[{color}]{status.status}:[/{color}] {status.message} {status.path}")
