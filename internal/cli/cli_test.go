@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"fast-sub/internal/cli"
 	"fast-sub/internal/providers"
@@ -28,6 +30,58 @@ func TestVersionOutputsNonEmpty(t *testing.T) {
 	}
 	if strings.TrimSpace(stdout.String()) != "test-version" {
 		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
+func TestServeReadyJSON(t *testing.T) {
+	oldCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldCWD)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stdout := &notifyWriter{wrote: make(chan struct{})}
+	done := make(chan int, 1)
+	go func() {
+		done <- cli.Run(ctx, cli.Config{
+			Args:    []string{"serve", "--host", "127.0.0.1", "--port", "0", "--json-ready", "--max-running-jobs", "1"},
+			Stdout:  stdout,
+			Stderr:  ioDiscard{},
+			Version: "test-version",
+		})
+	}()
+
+	select {
+	case <-stdout.wrote:
+	case <-time.After(3 * time.Second):
+		cancel()
+		t.Fatal("timed out waiting for ready JSON")
+	}
+	cancel()
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("serve did not stop after context cancel")
+	}
+	var ready struct {
+		SchemaVersion int    `json:"schema_version"`
+		Ready         bool   `json:"ready"`
+		BaseURL       string `json:"base_url"`
+		Token         string `json:"token"`
+		PID           int    `json:"pid"`
+	}
+	if err := json.Unmarshal([]byte(stdout.String()), &ready); err != nil {
+		t.Fatalf("ready JSON invalid: %v; stdout=%s", err, stdout.String())
+	}
+	if ready.SchemaVersion != 1 || !ready.Ready || ready.Token == "" || ready.PID == 0 || !strings.HasPrefix(ready.BaseURL, "http://127.0.0.1:") {
+		t.Fatalf("ready = %#v", ready)
 	}
 }
 
@@ -377,6 +431,33 @@ func prependPath(t *testing.T, binaryPath string) {
 	t.Helper()
 	current := os.Getenv("PATH")
 	t.Setenv("PATH", fmt.Sprintf("%s%c%s", filepath.Dir(binaryPath), os.PathListSeparator, current))
+}
+
+type notifyWriter struct {
+	mu    sync.Mutex
+	once  sync.Once
+	wrote chan struct{}
+	buf   bytes.Buffer
+}
+
+func (w *notifyWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	n, err := w.buf.Write(p)
+	w.once.Do(func() { close(w.wrote) })
+	return n, err
+}
+
+func (w *notifyWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.String()
+}
+
+type ioDiscard struct{}
+
+func (ioDiscard) Write(p []byte) (int, error) {
+	return len(p), nil
 }
 
 func fakeVersionBinary(line string) string {
