@@ -10,6 +10,7 @@ These documents are intentionally kept separate from the existing Fast Sub plann
 - `specs/round8-go-foundation.md`: Round 8 implementation plan for the parallel Go CLI foundation.
 - `specs/round9-go-transcribe-auto.md`: Round 9 implementation plan for Go-side transcribe/auto orchestration through Python STT workers.
 - `specs/round10-go-product-core.md`: Round 10 product-core plan covering Go model management, provider registry, OpenAI-compatible STT, and native whisper.cpp.
+- `specs/round10-5-go-daemon-job-api.md`: Round 10.5 daemon/job API gate plan using HTTP REST plus SSE before desktop UI.
 
 ## Target Architecture
 
@@ -120,14 +121,16 @@ Electron <-> Go local daemon
 
 推荐协议：
 
-- HTTP：创建任务、查询任务、取消任务、读取结果。
-- WebSocket 或 SSE：推送进度、日志和状态变化。
+- HTTP REST：创建任务、查询任务、取消任务、读取模型/provider/结果。
+- SSE：推送任务进度、日志和状态变化。
+- WebSocket：暂缓，等需要高频双向控制时再加入。
 
 演进路径：
 
 ```text
-Round 8/9: Electron or tests spawn Go CLI
-Later desktop: Electron starts Go daemon and talks through HTTP/WebSocket
+Round 8/9/10: Electron or tests spawn Go CLI
+Round 10.5: Electron starts Go daemon and talks through HTTP REST + SSE
+Later desktop/Web: add WebSocket only if REST + SSE is insufficient
 ```
 
 ### Go Core <-> Python Worker

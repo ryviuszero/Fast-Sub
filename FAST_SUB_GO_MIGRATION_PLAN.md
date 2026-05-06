@@ -394,27 +394,65 @@ Acceptance:
 
 ## Round 10.5: Go Daemon / Job API Gate
 
-Goal: avoid building a desktop UI directly on fragile one-shot CLI calls.
+Goal: avoid building the desktop UI directly on fragile one-shot CLI calls.
 
-This can be a small planning/implementation round before desktop UI if progress, cancellation, and background jobs are needed.
+Detailed spec:
 
-Possible API forms:
+```text
+go-docs/specs/round10-5-go-daemon-job-api.md
+```
 
-- Local HTTP daemon.
-- Local stdio JSON protocol.
-- CLI-managed job directory with polling.
+Recommended branch:
+
+```text
+codex/fast-sub-go-daemon-job-api
+```
+
+Default communication decision:
+
+```text
+HTTP REST + SSE
+```
+
+Responsibilities:
+
+- HTTP REST handles create/query/cancel and low-frequency metadata calls.
+- SSE handles job progress, logs, warnings, and terminal status events.
+- WebSocket is deferred until the product needs high-frequency bidirectional control.
+- Electron may use IPC/stdio only to start the Go daemon and read the selected local port.
+
+Minimum API:
+
+```text
+POST /v1/jobs
+GET  /v1/jobs/{id}
+POST /v1/jobs/{id}/cancel
+GET  /v1/jobs/{id}/events
+GET  /v1/models
+GET  /v1/providers
+GET  /v1/health
+GET  /v1/version
+```
 
 Minimum job concepts:
 
 ```text
 job create
 job status
-job logs
+job events
 job cancel
 job output
 ```
 
-Desktop UI should call the daemon/job API or a stable CLI contract, not reimplement model/provider/subtitle logic.
+Round 10.5 should initially support transcribe jobs through the Round 10 Go provider/runtime stack:
+
+- `local-faster-whisper`
+- `local-whisper-cpp`
+- `api-openai-transcription`
+
+Translation remains Python CLI/provider functionality for now. Round 10.5 may reserve a `translate` job type in the schema, but should not implement Go translation provider runtime.
+
+Desktop UI should call the daemon/job API, not reimplement model/provider/subtitle logic.
 
 ## Round 11: Desktop UI
 
