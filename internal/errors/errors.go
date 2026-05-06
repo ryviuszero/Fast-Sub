@@ -25,6 +25,8 @@ const (
 	CodeMissingWorker     = "missing_worker"
 	CodeMissingModel      = "missing_model"
 	CodeNotImplemented    = "not_implemented"
+	CodeDownloadFailed    = "download_failed"
+	CodeHashMismatch      = "hash_mismatch"
 	CodeOutputExists      = "output_exists"
 	CodeFFmpegFailed      = "ffmpeg_failed"
 	CodeFFprobeFailed     = "ffprobe_failed"
@@ -84,6 +86,10 @@ func ExitCode(err *AppError) int {
 		return ExitMissingDependency
 	case CodeMissingModel:
 		return 4
+	case CodeDiskFull:
+		return 5
+	case CodePermissionDenied:
+		return 6
 	case CodeFFmpegFailed, CodeFFprobeFailed:
 		return ExitProcessFailed
 	case CodeWorkerProtocol, CodeWorkerTimeout, CodeWorkerCanceled, CodeCanceled:

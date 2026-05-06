@@ -15,6 +15,9 @@ type successPayload struct {
 	OK            bool   `json:"ok"`
 	Command       string `json:"command"`
 	Result        any    `json:"result"`
+	Warnings      []any  `json:"warnings"`
+	Error         any    `json:"error"`
+	ActionHint    string `json:"action_hint"`
 }
 
 type errorPayload struct {
@@ -22,7 +25,10 @@ type errorPayload struct {
 	OK            bool               `json:"ok"`
 	Command       string             `json:"command"`
 	ExitCode      int                `json:"exit_code"`
+	Result        any                `json:"result"`
 	Error         *fserrors.AppError `json:"error"`
+	Warnings      []any              `json:"warnings"`
+	ActionHint    string             `json:"action_hint"`
 }
 
 func writeJSON(w io.Writer, payload any) {
@@ -38,6 +44,9 @@ func writeSuccessJSON(w io.Writer, command string, result any) {
 		OK:            true,
 		Command:       command,
 		Result:        result,
+		Warnings:      []any{},
+		Error:         nil,
+		ActionHint:    "",
 	})
 }
 
@@ -48,7 +57,10 @@ func writeErrorJSON(w io.Writer, command string, appErr *fserrors.AppError) int 
 		OK:            false,
 		Command:       command,
 		ExitCode:      exitCode,
+		Result:        nil,
 		Error:         appErr,
+		Warnings:      []any{},
+		ActionHint:    appErr.ActionHint,
 	})
 	return exitCode
 }
