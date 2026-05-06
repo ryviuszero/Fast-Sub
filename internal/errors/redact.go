@@ -21,6 +21,9 @@ func Redact(value string) string {
 			return "[redacted]"
 		}
 	}
+	if strings.Contains(value, "sk-") || strings.Contains(lower, "bearer ") {
+		return "[redacted]"
+	}
 	return value
 }
 

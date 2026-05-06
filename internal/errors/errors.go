@@ -19,24 +19,26 @@ const (
 )
 
 const (
-	CodeInvalidInput      = "invalid_input"
-	CodeInvalidUsage      = "invalid_usage"
-	CodeMissingDependency = "missing_dependency"
-	CodeMissingWorker     = "missing_worker"
-	CodeMissingModel      = "missing_model"
-	CodeNotImplemented    = "not_implemented"
-	CodeDownloadFailed    = "download_failed"
-	CodeHashMismatch      = "hash_mismatch"
-	CodeOutputExists      = "output_exists"
-	CodeFFmpegFailed      = "ffmpeg_failed"
-	CodeFFprobeFailed     = "ffprobe_failed"
-	CodeWorkerFailed      = "worker_failed"
-	CodeWorkerTimeout     = "worker_timeout"
-	CodeWorkerCanceled    = "worker_canceled"
-	CodeWorkerProtocol    = "worker_protocol_error"
-	CodeCanceled          = "canceled"
-	CodePermissionDenied  = "permission_denied"
-	CodeDiskFull          = "disk_full"
+	CodeInvalidInput        = "invalid_input"
+	CodeInvalidUsage        = "invalid_usage"
+	CodeMissingDependency   = "missing_dependency"
+	CodeMissingWorker       = "missing_worker"
+	CodeMissingModel        = "missing_model"
+	CodeMissingAPIKey       = "missing_api_key"
+	CodeNotImplemented      = "not_implemented"
+	CodeProviderUnavailable = "provider_unavailable"
+	CodeDownloadFailed      = "download_failed"
+	CodeHashMismatch        = "hash_mismatch"
+	CodeOutputExists        = "output_exists"
+	CodeFFmpegFailed        = "ffmpeg_failed"
+	CodeFFprobeFailed       = "ffprobe_failed"
+	CodeWorkerFailed        = "worker_failed"
+	CodeWorkerTimeout       = "worker_timeout"
+	CodeWorkerCanceled      = "worker_canceled"
+	CodeWorkerProtocol      = "worker_protocol_error"
+	CodeCanceled            = "canceled"
+	CodePermissionDenied    = "permission_denied"
+	CodeDiskFull            = "disk_full"
 )
 
 // AppError is the stable error payload used by JSON CLI output.
@@ -86,7 +88,7 @@ func ExitCode(err *AppError) int {
 		return ExitMissingDependency
 	case CodeMissingModel:
 		return 4
-	case CodeDiskFull:
+	case CodeDiskFull, CodeMissingAPIKey, CodeProviderUnavailable:
 		return 5
 	case CodePermissionDenied:
 		return 6

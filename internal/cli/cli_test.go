@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"fast-sub/internal/cli"
+	"fast-sub/internal/providers"
 )
 
 func TestVersionOutputsNonEmpty(t *testing.T) {
@@ -211,6 +212,93 @@ func TestExtractJSONOutputExistsWithoutOverwrite(t *testing.T) {
 	}
 }
 
+func TestProvidersListJSONSuccess(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args:      []string{"providers", "list", "--json"},
+		Stdout:    &stdout,
+		Stderr:    &stderr,
+		Providers: providerRuntimeForCLI(nil, false),
+	})
+	if code != 0 {
+		t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr should be empty in JSON mode, got %q", stderr.String())
+	}
+	payload := mustJSON(t, stdout.String())
+	result := payload["result"].(map[string]any)
+	list := result["providers"].([]any)
+	if len(list) != 3 {
+		t.Fatalf("providers len = %d", len(list))
+	}
+}
+
+func TestProvidersTestJSONAvailable(t *testing.T) {
+	modelDir := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args:   []string{"providers", "test", "local-faster-whisper", "--json"},
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Providers: providerRuntimeForCLI(map[string]string{
+			"FAST_SUB_FASTER_WHISPER_MODEL_PATH": modelDir,
+		}, true),
+	})
+	if code != 0 {
+		t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr should be empty in JSON mode, got %q", stderr.String())
+	}
+	payload := mustJSON(t, stdout.String())
+	result := payload["result"].(map[string]any)
+	if result["status"] != "available" {
+		t.Fatalf("status = %#v", result["status"])
+	}
+	if result["check_mode"] != "static" {
+		t.Fatalf("check_mode = %#v", result["check_mode"])
+	}
+}
+
+func TestProvidersTestJSONFailureAndSecretRedaction(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args:   []string{"providers", "test", "api-openai-transcription", "--json"},
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Providers: providerRuntimeForCLI(map[string]string{
+			"OPENAI_API_KEY": "sk-test-raw-secret",
+		}, false),
+	})
+	if code != 0 {
+		t.Fatalf("configured API key should make static provider test pass, exit code = %d", code)
+	}
+	if strings.Contains(stdout.String(), "sk-test-raw-secret") || strings.Contains(stderr.String(), "sk-test-raw-secret") {
+		t.Fatalf("secret leaked in output")
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = cli.Run(context.Background(), cli.Config{
+		Args:      []string{"providers", "test", "api-openai-transcription", "--json"},
+		Stdout:    &stdout,
+		Stderr:    &stderr,
+		Providers: providerRuntimeForCLI(nil, false),
+	})
+	if code == 0 {
+		t.Fatalf("missing API key should fail")
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr should be empty in JSON mode, got %q", stderr.String())
+	}
+	payload := mustJSON(t, stdout.String())
+	errorPayload := payload["error"].(map[string]any)
+	if errorPayload["code"] != "missing_api_key" {
+		t.Fatalf("error code = %#v", errorPayload["code"])
+	}
+}
+
 func mustJSON(t *testing.T, output string) map[string]any {
 	t.Helper()
 	var payload map[string]any
@@ -218,6 +306,21 @@ func mustJSON(t *testing.T, output string) map[string]any {
 		t.Fatalf("stdout is not JSON: %v\n%s", err, output)
 	}
 	return payload
+}
+
+func providerRuntimeForCLI(env map[string]string, lookPathOK bool) providers.RuntimeConfig {
+	return providers.RuntimeConfig{
+		Env: func(key string) string {
+			return env[key]
+		},
+		LookPath: func(name string) (string, error) {
+			if lookPathOK {
+				return filepath.Join("fake", name), nil
+			}
+			return "", os.ErrNotExist
+		},
+		Stat: os.Stat,
+	}
 }
 
 func fakeBinary(t *testing.T, name string, source string) string {
