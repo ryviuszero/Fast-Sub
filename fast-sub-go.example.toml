@@ -1,0 +1,27 @@
+# Fast Sub Go example configuration.
+# Keep raw API keys out of this file. Store secrets in environment variables.
+#
+# To use this as the default config from the project root:
+#   Copy or rename it to fast-sub-go.toml
+# Or pass it explicitly:
+#   fast-sub-go transcribe input.mp4 --config fast-sub-go.example.toml ...
+
+[providers.api-openai-transcription]
+# Transcription model. This keeps API provider model selection explicit even when
+# you do not pass --model on the command line.
+model = "gpt-4o-transcribe"
+
+# Read the API key from this environment variable.
+# FAST_SUB_OPENAI_API_KEY is also recognized by `providers test`.
+api_key_env = "OPENAI_API_KEY"
+
+# OpenAI-compatible base URL. Use a local or self-hosted compatible endpoint here if needed.
+base_url = "https://api.openai.com/v1"
+
+# Upload format for API STT audio preparation: auto, wav, m4a, or mp3.
+# auto currently chooses a compressed m4a upload for the official OpenAI endpoint.
+api_upload_format = "auto"
+
+# Request word timestamps when the selected model supports them.
+# The current OpenAI runtime only sends word timestamp parameters for whisper-1.
+words = false

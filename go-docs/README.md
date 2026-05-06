@@ -9,6 +9,7 @@ These documents are intentionally kept separate from the existing Fast Sub plann
 - `project-standards.md`: project-wide standards and code style for the Go migration era, including Python compatibility expectations, Go style, cross-language contracts, and review gates.
 - `specs/round8-go-foundation.md`: Round 8 implementation plan for the parallel Go CLI foundation.
 - `specs/round9-go-transcribe-auto.md`: Round 9 implementation plan for Go-side transcribe/auto orchestration through Python STT workers.
+- `specs/round10-go-product-core.md`: Round 10 product-core plan covering Go model management, provider registry, OpenAI-compatible STT, and native whisper.cpp.
 
 ## Target Architecture
 

@@ -297,6 +297,36 @@ func TestProvidersTestJSONFailureAndSecretRedaction(t *testing.T) {
 	if errorPayload["code"] != "missing_api_key" {
 		t.Fatalf("error code = %#v", errorPayload["code"])
 	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = cli.Run(context.Background(), cli.Config{
+		Args:   []string{"providers", "test", "api-openai-transcription", "--json"},
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Providers: providerRuntimeForCLI(map[string]string{
+			"FAST_SUB_GO_CONFIG": filepath.Join(t.TempDir(), "missing.toml"),
+			"OPENAI_API_KEY":     "sk-test-raw-secret",
+		}, false),
+	})
+	if code == 0 {
+		t.Fatalf("invalid config should fail")
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr should be empty in JSON mode, got %q", stderr.String())
+	}
+	payload = mustJSON(t, stdout.String())
+	errorPayload = payload["error"].(map[string]any)
+	if errorPayload["code"] != "invalid_input" {
+		t.Fatalf("error code = %#v", errorPayload["code"])
+	}
+	details := errorPayload["details"].(map[string]any)
+	if details["status"] != "invalid_config" {
+		t.Fatalf("status = %#v", details["status"])
+	}
+	if strings.Contains(stdout.String(), "sk-test-raw-secret") || strings.Contains(stderr.String(), "sk-test-raw-secret") {
+		t.Fatalf("secret leaked in output")
+	}
 }
 
 func mustJSON(t *testing.T, output string) map[string]any {

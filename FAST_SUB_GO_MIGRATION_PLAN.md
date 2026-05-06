@@ -372,6 +372,9 @@ Key work:
 - Make Round 9 `transcribe/auto` support `--model <id>` through the Go model resolver while preserving `--model-path`.
 - Make `auto --yes` able to install local models, but never silently enable API upload.
 - Implement real `api-openai-transcription` through explicit provider selection, explicit model, explicit API key/config, mock HTTP tests, and secret redaction.
+  - Go config lookup is `--config <path>`, then `FAST_SUB_GO_CONFIG`, then current-directory `fast-sub-go.toml`.
+  - API STT config may include `model`, `api_key_env`, `base_url`, `api_upload_format`, and `words`; raw API keys are rejected in config files.
+  - `transcribe` and `providers test api-openai-transcription` share the same config parser; provider static checks honor config-file `api_key_env` without making network calls, and invalid requested config returns unavailable status instead of falling back to ambient API keys.
 - Implement `local-whisper-cpp` as a native backend by calling an external whisper.cpp binary through argv, not CGo.
 - Keep Python as worker / AI adapter only; Python should not own download or provider decision logic going forward.
 
@@ -379,13 +382,14 @@ Acceptance:
 
 - `fast-sub-go models list/install/verify --json` works with fake HTTP tests and does not require real network by default.
 - `fast-sub-go providers list/test --json` reports `local-faster-whisper`, `local-whisper-cpp`, and `api-openai-transcription`.
-- Provider states are consistent: `available`, `missing_dependency`, `missing_model`, `missing_api_key`, `disabled`, `not_implemented`.
+- Provider states are consistent: `available`, `missing_dependency`, `missing_model`, `missing_api_key`, `invalid_config`, `disabled`, `not_implemented`.
+- `providers test api-openai-transcription --json` reports configured when the API key is available through `FAST_SUB_OPENAI_API_KEY`, `OPENAI_API_KEY`, or the env var named by config-file `api_key_env`; it must remain static and not call the network.
 - `fast-sub-go transcribe input.mp4 --provider local-faster-whisper --model whisper-small --json` works in default tests with fakes.
 - `fast-sub-go transcribe input.mp4 --provider local-whisper-cpp --model whisper-small --json` works in default tests with a fake whisper.cpp binary.
-- `fast-sub-go transcribe input.mp4 --provider api-openai-transcription --model <model> --json` works in default tests with a mock HTTP server.
+- `fast-sub-go transcribe input.mp4 --provider api-openai-transcription --model <model> --json` works in default tests with a mock HTTP server; equivalent explicit model selection through `fast-sub-go.toml` also works.
 - `fast-sub-go auto input.mp4 --model whisper-small --yes --json` can trigger local model install but never API upload.
 - JSON output remains parseable on success and failure.
-- API keys, Authorization headers, raw secrets, model download URLs with credentials, and sensitive request bodies are redacted.
+- API keys, Authorization headers, raw secrets, model download URLs with credentials, and sensitive request bodies are redacted; raw API keys are not accepted in Go config files.
 - Default automated tests do not require real models, GPU, real ffmpeg, real whisper.cpp, real OpenAI, or real network.
 
 ## Round 10.5: Go Daemon / Job API Gate

@@ -297,6 +297,7 @@ available
 missing_dependency
 missing_model
 missing_api_key
+invalid_config
 disabled
 not_implemented
 ```
@@ -330,6 +331,9 @@ compatible_model_types[]
 `providers test` 语义：
 
 - 默认执行静态检查，只验证依赖、binary、worker、模型、API key 是否配置，不调用真实网络 API。
+- `api-openai-transcription` 的静态 API key 检查使用与 `transcribe` 相同的 Go 配置读取顺序：`FAST_SUB_OPENAI_API_KEY` / `OPENAI_API_KEY`，或配置文件中的 `api_key_env` 指向的环境变量。
+- OpenAI-compatible provider 配置文件读取顺序统一为：`--config <path>`（transcribe 命令）、`FAST_SUB_GO_CONFIG`、当前工作目录 `fast-sub-go.toml`；`providers test` 没有命令级 `--config`，因此使用后两者。
+- 如果请求的配置文件不存在或解析失败，`providers test api-openai-transcription` 必须返回 `invalid_config`，即使环境中同时存在 API key；这与 `transcribe` 的配置加载失败语义保持一致。
 - 后续如需要真实连通性，另加 `--live`，并要求用户显式确认 API provider 可能联网或上传测试数据。
 - 静态检查和 live 检查的 JSON 字段必须可区分，例如 `check_mode: static|live`。
 
@@ -338,7 +342,7 @@ compatible_model_types[]
 - provider list JSON shape。
 - local-faster-whisper 缺 worker / 缺模型 / available。
 - local-whisper-cpp 缺 binary / 缺模型 / available。
-- api-openai-transcription 缺 API key / configured。
+- api-openai-transcription 缺 API key / env configured / config-file `api_key_env` configured / invalid config。
 - secret redaction。
 
 ## Workstream 3: Go OpenAI STT Provider
@@ -360,19 +364,34 @@ fast-sub-go transcribe input.mp4 --provider api-openai-transcription --model <mo
 
 配置来源：
 
-- CLI 显式 model。
-- API key 通过环境变量或显式配置 key name。
-- base URL 可配置，便于 OpenAI-compatible endpoint。
+- CLI 显式 model，或配置文件中的显式 `model`。
+- API key 通过环境变量或显式配置 key name；配置文件只允许保存 `api_key_env`，不得保存 raw API key。`transcribe` 和 `providers test` 必须复用同一套配置解析。
+- base URL 可通过 CLI 或配置文件配置，便于 OpenAI-compatible endpoint。
+- `api_upload_format` 和 `words` 可通过 CLI 或配置文件配置。
+- 配置文件读取顺序：`--config <path>`、`FAST_SUB_GO_CONFIG`、当前工作目录 `fast-sub-go.toml`。
+
+配置文件示例：
+
+```toml
+[providers.api-openai-transcription]
+model = "gpt-4o-transcribe"
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1"
+api_upload_format = "auto"
+words = false
+```
+
+项目根目录提供 `fast-sub-go.toml` / example 配置作为本地默认位置示例；真实 key 应只存在于环境变量中。
 
 行为要求：
 
 - 必须显式选择 API provider。
-- 必须显式 model；不设隐藏默认模型。
+- 必须显式 model；不设隐藏默认模型。显式来源可以是 CLI `--model` 或配置文件 `model`。
 - API provider 不强制使用 16k mono wav 上传；官方 OpenAI base URL 默认优先压缩上传格式，避免 wav 放大后误触 25MB 限制。
 - 本轮至少预留 `api_upload_format` 配置，取值建议为 `auto|wav|m4a|mp3`；`auto` 默认选择压缩格式，除非兼容 endpoint 明确要求 wav。
 - 官方 OpenAI base URL 才默认启用 25MB 上传检查；OpenAI-compatible endpoint 不硬套官方限制，除非用户显式配置。
 - API response 转成统一 segments，再复用 Go SRT renderer。
-- OpenAI 官方模型参数能力必须按模型区分：`whisper-1` 可优先 `verbose_json` + segment timestamps；`gpt-4o-transcribe` / `gpt-4o-mini-transcribe` 不假设支持同样 timestamp 参数。
+- OpenAI 官方模型参数能力必须按模型区分：`whisper-1` 可优先 `verbose_json` + segment timestamps，并且仅当 `words=true` / `--word-timestamps on` 时请求 word timestamps；`gpt-4o-transcribe` / `gpt-4o-mini-transcribe` 不假设支持同样 timestamp 参数。
 - 网络/API 错误返回结构化 `api_failed` 或现有兼容错误码。
 - API key 和 Authorization 必须 redacted。
 
@@ -380,7 +399,7 @@ fast-sub-go transcribe input.mp4 --provider api-openai-transcription --model <mo
 
 - mock HTTP server。
 - 不访问真实 OpenAI。
-- 覆盖成功、401、429、5xx、invalid JSON、timeout、secret redaction。
+- 覆盖成功、401、429、5xx、invalid JSON、timeout、secret redaction、配置文件读取、拒绝配置文件 raw API key。
 - 验证 JSON stdout 纯净。
 
 手动 smoke：

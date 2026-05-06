@@ -123,6 +123,52 @@ func TestOpenAIKeyConfiguredWithoutNetwork(t *testing.T) {
 	}
 }
 
+func TestOpenAIKeyConfiguredThroughConfigFile(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "fast-sub-go.toml")
+	if err := os.WriteFile(configPath, []byte(`
+[providers.api-openai-transcription]
+api_key_env = "FAST_SUB_TEST_OPENAI_KEY"
+model = "gpt-4o-transcribe"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	configured, ok := Test(context.Background(), fakeRuntime(map[string]string{
+		"FAST_SUB_GO_CONFIG":       configPath,
+		"FAST_SUB_TEST_OPENAI_KEY": "sk-test-secret",
+	}, false, nil), "api-openai-transcription")
+	if !ok {
+		t.Fatal("provider missing")
+	}
+	if configured.Status != StatusAvailable || !configured.Available {
+		t.Fatalf("configured check = %#v", configured)
+	}
+	if configured.Details["api_key_env"] != "FAST_SUB_TEST_OPENAI_KEY" {
+		t.Fatalf("api_key_env = %#v", configured.Details["api_key_env"])
+	}
+	if configured.Details["live_network"] != false {
+		t.Fatalf("provider test should be static, details = %#v", configured.Details)
+	}
+}
+
+func TestOpenAIInvalidConfigIsUnavailableEvenWithEnvKey(t *testing.T) {
+	missingConfigPath := filepath.Join(t.TempDir(), "missing.toml")
+
+	result, ok := Test(context.Background(), fakeRuntime(map[string]string{
+		"FAST_SUB_GO_CONFIG": missingConfigPath,
+		"OPENAI_API_KEY":     "sk-test-secret",
+	}, false, nil), "api-openai-transcription")
+	if !ok {
+		t.Fatal("provider missing")
+	}
+	if result.Status != StatusInvalidConfig || result.Available {
+		t.Fatalf("invalid config check = %#v", result)
+	}
+	if result.Checks[0].Name != "config" {
+		t.Fatalf("check name = %q", result.Checks[0].Name)
+	}
+}
+
 func TestUnknownProvider(t *testing.T) {
 	_, ok := Test(context.Background(), fakeRuntime(nil, false, nil), "missing")
 	if ok {

@@ -11,19 +11,22 @@ import (
 	"strings"
 	"time"
 
+	appconfig "fast-sub/internal/config"
 	fserrors "fast-sub/internal/errors"
 	"fast-sub/internal/ffmpeg"
 	"fast-sub/internal/models"
 	"fast-sub/internal/paths"
 	"fast-sub/internal/providers"
+	openairuntime "fast-sub/internal/runtime/openai"
 	"fast-sub/internal/subtitle"
 	"fast-sub/internal/worker"
 )
 
 const (
-	doctorTimeout  = 5 * time.Second
-	probeTimeout   = 30 * time.Second
-	extractTimeout = 30 * time.Minute
+	doctorTimeout               = 5 * time.Second
+	probeTimeout                = 30 * time.Second
+	extractTimeout              = 30 * time.Minute
+	rawAPIKeyUnsupportedMessage = "raw --api-key is not supported; use --api-key-env"
 )
 
 // Config carries command inputs and injectable writers.
@@ -151,6 +154,8 @@ func providerUnavailableError(result providers.CheckResult) *fserrors.AppError {
 		code = fserrors.CodeMissingModel
 	case providers.StatusMissingAPIKey:
 		code = fserrors.CodeMissingAPIKey
+	case providers.StatusInvalidConfig:
+		code = fserrors.CodeInvalidInput
 	case providers.StatusNotImplemented:
 		code = fserrors.CodeNotImplemented
 	}
@@ -173,7 +178,11 @@ func providerUnavailableError(result providers.CheckResult) *fserrors.AppError {
 func runTranscribe(ctx context.Context, cfg Config, command string, args []string) int {
 	parsed, err := parseTranscribeArgs(args, command)
 	if err != nil {
-		return commandError(cfg, command, parsed.jsonOutput, fserrors.New(fserrors.CodeInvalidUsage, command, err.Error(), "", nil))
+		code := fserrors.CodeInvalidUsage
+		if err.Error() == rawAPIKeyUnsupportedMessage {
+			code = fserrors.CodeInvalidInput
+		}
+		return commandError(cfg, command, parsed.jsonOutput, fserrors.New(code, command, err.Error(), "", nil))
 	}
 	if len(parsed.positionals) != 1 {
 		return commandError(cfg, command, parsed.jsonOutput, fserrors.New(fserrors.CodeInvalidUsage, command, command+" requires exactly one input path", "", nil))
@@ -313,20 +322,26 @@ type extractArgs struct {
 }
 
 type transcribeArgs struct {
-	jsonOutput     bool
-	output         string
-	modelPath      string
-	model          string
-	language       string
-	device         string
-	computeType    string
-	batchSize      int
-	workerCommand  string
-	workerArgs     []string
-	wordTimestamps string
-	keepTemp       bool
-	yes            bool
-	positionals    []string
+	jsonOutput        bool
+	output            string
+	modelPath         string
+	model             string
+	provider          string
+	language          string
+	device            string
+	computeType       string
+	batchSize         int
+	workerCommand     string
+	workerArgs        []string
+	wordTimestamps    string
+	wordTimestampsSet bool
+	apiKeyEnv         string
+	baseURL           string
+	apiUploadFormat   string
+	configPath        string
+	keepTemp          bool
+	yes               bool
+	positionals       []string
 }
 
 type transcribeResult struct {
@@ -337,6 +352,8 @@ type transcribeResult struct {
 	ElapsedSec        float64  `json:"elapsed_sec"`
 	JobDir            string   `json:"job_dir"`
 	Provider          string   `json:"provider,omitempty"`
+	Model             string   `json:"model,omitempty"`
+	APIUploadFormat   string   `json:"api_upload_format,omitempty"`
 	ActualDevice      string   `json:"actual_device,omitempty"`
 	ActualComputeType string   `json:"actual_compute_type,omitempty"`
 	Warnings          []string `json:"warnings,omitempty"`
@@ -392,6 +409,12 @@ func parseTranscribeArgs(args []string, command string) (transcribeArgs, error) 
 		wordTimestamps: "off",
 		positionals:    make([]string, 0, len(args)),
 	}
+	for _, arg := range args {
+		if arg == "--json" {
+			parsed.jsonOutput = true
+			break
+		}
+	}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
@@ -428,6 +451,15 @@ func parseTranscribeArgs(args []string, command string) (transcribeArgs, error) 
 			i = next
 		case strings.HasPrefix(arg, "--model="):
 			parsed.model = strings.TrimPrefix(arg, "--model=")
+		case arg == "--provider":
+			value, next, err := requireValue(args, i, arg)
+			if err != nil {
+				return parsed, err
+			}
+			parsed.provider = value
+			i = next
+		case strings.HasPrefix(arg, "--provider="):
+			parsed.provider = strings.TrimPrefix(arg, "--provider=")
 		case arg == "--language":
 			value, next, err := requireValue(args, i, arg)
 			if err != nil {
@@ -493,9 +525,49 @@ func parseTranscribeArgs(args []string, command string) (transcribeArgs, error) 
 				return parsed, err
 			}
 			parsed.wordTimestamps = value
+			parsed.wordTimestampsSet = true
 			i = next
 		case strings.HasPrefix(arg, "--word-timestamps="):
 			parsed.wordTimestamps = strings.TrimPrefix(arg, "--word-timestamps=")
+			parsed.wordTimestampsSet = true
+		case arg == "--api-key" || strings.HasPrefix(arg, "--api-key="):
+			return parsed, fmt.Errorf(rawAPIKeyUnsupportedMessage)
+		case arg == "--api-key-env":
+			value, next, err := requireValue(args, i, arg)
+			if err != nil {
+				return parsed, err
+			}
+			parsed.apiKeyEnv = value
+			i = next
+		case strings.HasPrefix(arg, "--api-key-env="):
+			parsed.apiKeyEnv = strings.TrimPrefix(arg, "--api-key-env=")
+		case arg == "--base-url":
+			value, next, err := requireValue(args, i, arg)
+			if err != nil {
+				return parsed, err
+			}
+			parsed.baseURL = value
+			i = next
+		case strings.HasPrefix(arg, "--base-url="):
+			parsed.baseURL = strings.TrimPrefix(arg, "--base-url=")
+		case arg == "--api-upload-format":
+			value, next, err := requireValue(args, i, arg)
+			if err != nil {
+				return parsed, err
+			}
+			parsed.apiUploadFormat = value
+			i = next
+		case strings.HasPrefix(arg, "--api-upload-format="):
+			parsed.apiUploadFormat = strings.TrimPrefix(arg, "--api-upload-format=")
+		case arg == "--config":
+			value, next, err := requireValue(args, i, arg)
+			if err != nil {
+				return parsed, err
+			}
+			parsed.configPath = value
+			i = next
+		case strings.HasPrefix(arg, "--config="):
+			parsed.configPath = strings.TrimPrefix(arg, "--config=")
 		case strings.HasPrefix(arg, "-"):
 			return parsed, fmt.Errorf("unknown flag: %s", arg)
 		default:
@@ -518,6 +590,12 @@ func requireValue(args []string, index int, flag string) (string, int, error) {
 func transcribeLocal(ctx context.Context, cfg Config, command, input string, parsed transcribeArgs) (transcribeResult, *fserrors.AppError) {
 	var empty transcribeResult
 	started := time.Now()
+	if parsed.provider == "api-openai-transcription" {
+		return transcribeOpenAI(ctx, cfg, command, input, parsed, started)
+	}
+	if parsed.provider != "" && parsed.provider != "local-faster-whisper" {
+		return empty, fserrors.New(fserrors.CodeInvalidInput, command, "unsupported provider: "+parsed.provider, "Use local-faster-whisper or api-openai-transcription.", nil)
+	}
 	if parsed.model != "" {
 		return empty, fserrors.New(fserrors.CodeNotImplemented, command, "--model is not implemented in fast-sub-go Round 9 and will not download models.", "Pass --model-path to an existing local model directory.", nil)
 	}
@@ -603,6 +681,152 @@ func transcribeLocal(ctx context.Context, cfg Config, command, input string, par
 		ActualComputeType: response.ActualComputeType,
 		Warnings:          response.Warnings,
 	}, nil
+}
+
+func transcribeOpenAI(ctx context.Context, cfg Config, command, input string, parsed transcribeArgs, started time.Time) (transcribeResult, *fserrors.AppError) {
+	var empty transcribeResult
+	if command != "transcribe" {
+		return empty, fserrors.New(fserrors.CodeInvalidInput, command, "api-openai-transcription must be selected explicitly with transcribe.", "Run fast-sub-go transcribe with --provider api-openai-transcription.", nil)
+	}
+	cfgFile, appErr := loadCLIConfig(parsed.configPath, command)
+	if appErr != nil {
+		return empty, appErr
+	}
+	applyOpenAIConfig(&parsed, cfgFile.OpenAI)
+	if parsed.model == "" {
+		return empty, fserrors.New(fserrors.CodeInvalidInput, command, "--model is required for api-openai-transcription.", "Pass an explicit OpenAI-compatible transcription model or set model in the config file.", nil)
+	}
+	apiKey, appErr := resolveAPIKey(parsed)
+	if appErr != nil {
+		return empty, appErr
+	}
+	if err := validateChoice("language", parsed.language, []string{"auto", "zh", "en", "ja", "ko"}); err != nil {
+		return empty, fserrors.New(fserrors.CodeInvalidInput, command, err.Error(), "", nil)
+	}
+	wordTimestamps, appErr := resolveWordTimestamps(parsed.wordTimestamps, command)
+	if appErr != nil {
+		return empty, appErr
+	}
+	format, appErr := resolveAPIUploadFormat(parsed.apiUploadFormat, parsed.baseURL)
+	if appErr != nil {
+		return empty, appErr
+	}
+	output := parsed.output
+	if output == "" {
+		output = defaultSRTPath(input)
+	}
+	if appErr := validateSRTOutput(output); appErr != nil {
+		return empty, appErr
+	}
+	metadata, appErr := cfg.Runner.Probe(ctx, input, probeTimeout)
+	if appErr != nil {
+		return empty, appErr
+	}
+	jobDir, _, appErr := createJobDir()
+	if appErr != nil {
+		return empty, appErr
+	}
+	audioPath := filepath.Join(jobDir, "api-upload."+string(format))
+	if _, appErr := cfg.Runner.PrepareAPIUploadAudio(ctx, input, audioPath, format, extractTimeout); appErr != nil {
+		return empty, appErr
+	}
+	result, appErr := openairuntime.Client{BaseURL: parsed.baseURL}.Transcribe(ctx, openairuntime.TranscribeOptions{
+		AudioPath:      audioPath,
+		FileName:       filepath.Base(audioPath),
+		Model:          parsed.model,
+		APIKey:         apiKey,
+		Language:       parsed.language,
+		DurationSec:    metadata.DurationSec,
+		WordTimestamps: wordTimestamps,
+	})
+	if appErr != nil {
+		return empty, appErr
+	}
+	refinedSegments := subtitle.RefineSegments(result.Segments, subtitle.RefineOptions{Lang: result.Language})
+	srt, err := subtitle.RenderSRT(refinedSegments)
+	if err != nil {
+		return empty, fserrors.New(fserrors.CodeAPIFailed, "rendering", err.Error(), "Check provider segment timestamps and text.", nil)
+	}
+	if err := os.WriteFile(output, []byte(srt), 0o600); err != nil {
+		return empty, classifyWriteError("rendering", "write SRT: "+err.Error())
+	}
+	if !parsed.keepTemp {
+		_ = os.Remove(audioPath)
+	}
+	return transcribeResult{
+		InputPath:       input,
+		OutputPath:      output,
+		Language:        result.Language,
+		Segments:        len(refinedSegments),
+		ElapsedSec:      time.Since(started).Seconds(),
+		JobDir:          jobDir,
+		Provider:        result.Provider,
+		Model:           result.Model,
+		APIUploadFormat: string(format),
+		Warnings:        result.Warnings,
+	}, nil
+}
+
+func resolveAPIKey(parsed transcribeArgs) (string, *fserrors.AppError) {
+	if parsed.apiKeyEnv == "" {
+		return "", fserrors.New(fserrors.CodeMissingAPIKey, "api_openai_transcription", "--api-key-env is required for api-openai-transcription.", "Pass --api-key-env with an environment variable that contains the API key.", nil)
+	}
+	apiKey := os.Getenv(parsed.apiKeyEnv)
+	if apiKey == "" {
+		return "", fserrors.New(fserrors.CodeMissingAPIKey, "api_openai_transcription", "API key environment variable is not set.", "Set "+parsed.apiKeyEnv+" or pass a different --api-key-env.", map[string]any{"api_key_env": parsed.apiKeyEnv})
+	}
+	return apiKey, nil
+}
+
+func loadCLIConfig(path, command string) (appconfig.AppConfig, *fserrors.AppError) {
+	cfg, resolvedPath, err := appconfig.Load(path, os.Getenv)
+	if err != nil {
+		return appconfig.AppConfig{}, fserrors.New(
+			fserrors.CodeInvalidInput,
+			command,
+			"read config file: "+err.Error(),
+			"Check --config, FAST_SUB_GO_CONFIG, or fast-sub-go.toml. Supported OpenAI keys are model, api_key_env, base_url, api_upload_format, and words.",
+			map[string]any{"config_path": resolvedPath},
+		)
+	}
+	return cfg, nil
+}
+
+func applyOpenAIConfig(parsed *transcribeArgs, cfg appconfig.OpenAIProviderConfig) {
+	if parsed.model == "" {
+		parsed.model = cfg.Model
+	}
+	if parsed.apiKeyEnv == "" {
+		parsed.apiKeyEnv = cfg.APIKeyEnv
+	}
+	if parsed.baseURL == "" {
+		parsed.baseURL = cfg.BaseURL
+	}
+	if parsed.apiUploadFormat == "" {
+		parsed.apiUploadFormat = cfg.APIUploadFormat
+	}
+	if !parsed.wordTimestampsSet && cfg.Words != nil {
+		if *cfg.Words {
+			parsed.wordTimestamps = "on"
+		} else {
+			parsed.wordTimestamps = "off"
+		}
+	}
+}
+
+func resolveAPIUploadFormat(value, baseURL string) (ffmpeg.APIUploadFormat, *fserrors.AppError) {
+	switch value {
+	case "", "auto":
+		return ffmpeg.APIUploadM4A, nil
+	case "wav":
+		return ffmpeg.APIUploadWAV, nil
+	case "m4a":
+		return ffmpeg.APIUploadM4A, nil
+	case "mp3":
+		return ffmpeg.APIUploadMP3, nil
+	default:
+		return "", fserrors.New(fserrors.CodeInvalidInput, "api_openai_transcription", "--api-upload-format must be one of: auto, wav, m4a, mp3", "", map[string]any{"base_url_is_official_openai": openairuntime.IsOfficialBaseURL(baseURL)})
+	}
 }
 
 func resolveWordTimestamps(value, command string) (bool, *fserrors.AppError) {
@@ -714,6 +938,7 @@ func printHelp(stdout io.Writer) {
 	fmt.Fprintln(stdout, "  models verify <id> [--json]")
 	fmt.Fprintln(stdout, "  models install <id> [--dry-run] [--json]")
 	fmt.Fprintln(stdout, "  transcribe <input> --model-path <path> [--output <srt>] [--word-timestamps auto|on|off] [--json]")
+	fmt.Fprintln(stdout, "  transcribe <input> --provider api-openai-transcription --model <model> [--api-key-env <env>] [--config <toml>] [--base-url <url>] [--api-upload-format auto|wav|m4a|mp3] [--json]")
 	fmt.Fprintln(stdout, "  auto <input> --model-path <path> [--output <srt>] [--word-timestamps auto|on|off] [--json]")
 	fmt.Fprintln(stdout, "  providers list [--json]")
 	fmt.Fprintln(stdout, "  providers test <id> [--json]")

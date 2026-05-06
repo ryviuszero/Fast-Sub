@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,6 +84,322 @@ func TestTranscribeJSONSuccessWithFakeWorker(t *testing.T) {
 	}
 	if request["model_path"] != modelDir {
 		t.Fatalf("model_path = %#v", request["model_path"])
+	}
+}
+
+func TestTranscribeOpenAIJSONSuccessWithMockHTTP(t *testing.T) {
+	withWorkingDir(t, t.TempDir())
+	ffmpeg := fakeBinary(t, "ffmpeg", fakeFFmpegSuccessBinary())
+	ffprobe := fakeBinary(t, "ffprobe", fakeProbeBinary(validProbeJSON()))
+	prependPath(t, ffmpeg)
+	prependPath(t, ffprobe)
+
+	var sawAuth bool
+	var sawJSONFormat bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/audio/transcriptions" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		sawAuth = r.Header.Get("Authorization") == "Bearer test-openai-secret"
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			t.Fatalf("multipart: %v", err)
+		}
+		sawJSONFormat = r.FormValue("response_format") == "json"
+		if r.FormValue("timestamp_granularities[]") != "" {
+			t.Fatalf("gpt-4o request should not send whisper timestamp_granularities")
+		}
+		_, fileHeader, err := r.FormFile("file")
+		if err != nil {
+			t.Fatalf("file part: %v", err)
+		}
+		if filepath.Ext(fileHeader.Filename) != ".m4a" {
+			t.Fatalf("upload filename = %s", fileHeader.Filename)
+		}
+		_, _ = io.WriteString(w, `{"text":"hello from api","usage":{"total_tokens":3}}`)
+	}))
+	defer server.Close()
+
+	workDir := t.TempDir()
+	input := writeFile(t, filepath.Join(workDir, "input.mp4"), "fake")
+	output := filepath.Join(workDir, "api.srt")
+	t.Setenv("FAST_SUB_OPENAI_TEST_KEY", "test-openai-secret")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args: []string{
+			"transcribe", input,
+			"--provider", "api-openai-transcription",
+			"--model", "gpt-4o-transcribe",
+			"--api-key-env", "FAST_SUB_OPENAI_TEST_KEY",
+			"--base-url", server.URL,
+			"--output", output,
+			"--json",
+		},
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	if code != 0 {
+		t.Fatalf("exit code = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if !sawAuth || !sawJSONFormat {
+		t.Fatalf("server did not observe expected auth/format")
+	}
+	payload := mustJSON(t, stdout.String())
+	result := payload["result"].(map[string]any)
+	if result["provider"] != "api-openai-transcription" || result["model"] != "gpt-4o-transcribe" {
+		t.Fatalf("result = %#v", result)
+	}
+	if result["api_upload_format"] != "m4a" {
+		t.Fatalf("api_upload_format = %#v", result["api_upload_format"])
+	}
+	srt, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(srt), "hello from api") {
+		t.Fatalf("unexpected SRT:\n%s", srt)
+	}
+	if strings.Contains(stdout.String(), "test-openai-secret") || strings.Contains(stderr.String(), "test-openai-secret") {
+		t.Fatalf("secret leaked: stdout=%s stderr=%s", stdout.String(), stderr.String())
+	}
+}
+
+func TestTranscribeOpenAIJSONFailureIsRedacted(t *testing.T) {
+	withWorkingDir(t, t.TempDir())
+	ffmpeg := fakeBinary(t, "ffmpeg", fakeFFmpegSuccessBinary())
+	ffprobe := fakeBinary(t, "ffprobe", fakeProbeBinary(validProbeJSON()))
+	prependPath(t, ffmpeg)
+	prependPath(t, ffprobe)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"error":{"message":"bad key sk-real-secret"}}`)
+	}))
+	defer server.Close()
+
+	workDir := t.TempDir()
+	input := writeFile(t, filepath.Join(workDir, "input.mp4"), "fake")
+	t.Setenv("FAST_SUB_OPENAI_TEST_KEY", "sk-real-secret")
+
+	var stdout bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args: []string{
+			"transcribe", input,
+			"--provider", "api-openai-transcription",
+			"--model", "whisper-1",
+			"--api-key-env", "FAST_SUB_OPENAI_TEST_KEY",
+			"--base-url", server.URL,
+			"--output", filepath.Join(workDir, "api-fail.srt"),
+			"--json",
+		},
+		Stdout: &stdout,
+	})
+	if code != 1 {
+		t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+	}
+	payload := mustJSON(t, stdout.String())
+	errorPayload := payload["error"].(map[string]any)
+	if errorPayload["code"] != "api_failed" {
+		t.Fatalf("error code = %#v", errorPayload["code"])
+	}
+	if strings.Contains(stdout.String(), "sk-real-secret") || strings.Contains(stdout.String(), "Authorization") {
+		t.Fatalf("secret leaked in JSON: %s", stdout.String())
+	}
+}
+
+func TestTranscribeOpenAIUsesConfigFile(t *testing.T) {
+	withWorkingDir(t, t.TempDir())
+	ffmpeg := fakeBinary(t, "ffmpeg", fakeFFmpegSuccessBinary())
+	ffprobe := fakeBinary(t, "ffprobe", fakeProbeBinary(validProbeJSON()))
+	prependPath(t, ffmpeg)
+	prependPath(t, ffprobe)
+
+	var sawAuth bool
+	var sawMP3 bool
+	var sawWords bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAuth = r.Header.Get("Authorization") == "Bearer configured-secret"
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			t.Fatalf("multipart: %v", err)
+		}
+		for _, value := range r.MultipartForm.Value["timestamp_granularities[]"] {
+			if value == "word" {
+				sawWords = true
+			}
+		}
+		_, fileHeader, err := r.FormFile("file")
+		if err != nil {
+			t.Fatalf("file part: %v", err)
+		}
+		sawMP3 = filepath.Ext(fileHeader.Filename) == ".mp3"
+		_, _ = io.WriteString(w, `{"text":"configured hello"}`)
+	}))
+	defer server.Close()
+
+	workDir := t.TempDir()
+	input := writeFile(t, filepath.Join(workDir, "input.mp4"), "fake")
+	output := filepath.Join(workDir, "configured.srt")
+	configPath := writeFile(t, filepath.Join(workDir, "fast-sub-go.toml"), fmt.Sprintf(`
+[providers.api-openai-transcription]
+model = "whisper-1"
+api_key_env = "FAST_SUB_CONFIGURED_OPENAI_KEY"
+base_url = "%s"
+api_upload_format = "mp3"
+words = true
+`, server.URL))
+	t.Setenv("FAST_SUB_CONFIGURED_OPENAI_KEY", "configured-secret")
+
+	var stdout bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args: []string{
+			"transcribe", input,
+			"--provider", "api-openai-transcription",
+			"--config", configPath,
+			"--output", output,
+			"--json",
+		},
+		Stdout: &stdout,
+	})
+	if code != 0 {
+		t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+	}
+	if !sawAuth || !sawMP3 || !sawWords {
+		t.Fatalf("server did not observe configured auth/upload format/words")
+	}
+	payload := mustJSON(t, stdout.String())
+	result := payload["result"].(map[string]any)
+	if result["model"] != "whisper-1" {
+		t.Fatalf("model = %#v", result["model"])
+	}
+	if result["api_upload_format"] != "mp3" {
+		t.Fatalf("api_upload_format = %#v", result["api_upload_format"])
+	}
+	if strings.Contains(stdout.String(), "configured-secret") {
+		t.Fatalf("secret leaked in stdout: %s", stdout.String())
+	}
+}
+
+func TestTranscribeOpenAIUsesDefaultConfigFile(t *testing.T) {
+	workingDir := t.TempDir()
+	withWorkingDir(t, workingDir)
+	ffmpeg := fakeBinary(t, "ffmpeg", fakeFFmpegSuccessBinary())
+	ffprobe := fakeBinary(t, "ffprobe", fakeProbeBinary(validProbeJSON()))
+	prependPath(t, ffmpeg)
+	prependPath(t, ffprobe)
+
+	var sawAuth bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAuth = r.Header.Get("Authorization") == "Bearer default-config-secret"
+		_, _ = io.WriteString(w, `{"text":"default config hello"}`)
+	}))
+	defer server.Close()
+
+	input := writeFile(t, filepath.Join(workingDir, "input.mp4"), "fake")
+	output := filepath.Join(workingDir, "default-config.srt")
+	writeFile(t, filepath.Join(workingDir, "fast-sub-go.toml"), fmt.Sprintf(`
+[providers.api-openai-transcription]
+model = "gpt-4o-transcribe"
+api_key_env = "FAST_SUB_DEFAULT_CONFIG_OPENAI_KEY"
+base_url = "%s"
+api_upload_format = "m4a"
+`, server.URL))
+	t.Setenv("FAST_SUB_DEFAULT_CONFIG_OPENAI_KEY", "default-config-secret")
+
+	var stdout bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args: []string{
+			"transcribe", input,
+			"--provider", "api-openai-transcription",
+			"--output", output,
+			"--json",
+		},
+		Stdout: &stdout,
+	})
+	if code != 0 {
+		t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+	}
+	if !sawAuth {
+		t.Fatalf("server did not observe auth from default config")
+	}
+	if strings.Contains(stdout.String(), "default-config-secret") {
+		t.Fatalf("secret leaked in stdout: %s", stdout.String())
+	}
+}
+
+func TestTranscribeOpenAIRejectsRawAPIKeyInConfigFile(t *testing.T) {
+	withWorkingDir(t, t.TempDir())
+	workDir := t.TempDir()
+	input := writeFile(t, filepath.Join(workDir, "input.mp4"), "fake")
+	configPath := writeFile(t, filepath.Join(workDir, "fast-sub-go.toml"), `
+[providers.api-openai-transcription]
+api_key = "sk-should-not-be-here"
+`)
+
+	var stdout bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args: []string{
+			"transcribe", input,
+			"--provider", "api-openai-transcription",
+			"--model", "gpt-4o-transcribe",
+			"--config", configPath,
+			"--json",
+		},
+		Stdout: &stdout,
+	})
+	if code != 2 {
+		t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+	}
+	payload := mustJSON(t, stdout.String())
+	errorPayload := payload["error"].(map[string]any)
+	if errorPayload["code"] != "invalid_input" {
+		t.Fatalf("error code = %#v", errorPayload["code"])
+	}
+	if strings.Contains(stdout.String(), "sk-should-not-be-here") {
+		t.Fatalf("secret leaked in stdout: %s", stdout.String())
+	}
+}
+
+func TestTranscribeOpenAIRejectsRawAPIKeyFlag(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "separate value", args: []string{"--api-key", "sk-test"}},
+		{name: "equals value", args: []string{"--api-key=sk-test"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			withWorkingDir(t, t.TempDir())
+			workDir := t.TempDir()
+			input := writeFile(t, filepath.Join(workDir, "input.mp4"), "fake")
+
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			args := []string{
+				"transcribe", input,
+				"--provider", "api-openai-transcription",
+				"--model", "gpt-4o-transcribe",
+			}
+			args = append(args, tc.args...)
+			args = append(args, "--json")
+			code := cli.Run(context.Background(), cli.Config{
+				Args:   args,
+				Stdout: &stdout,
+				Stderr: &stderr,
+			})
+			if code == 0 {
+				t.Fatalf("raw API key flag should fail")
+			}
+			payload := mustJSON(t, stdout.String())
+			errorPayload := payload["error"].(map[string]any)
+			if errorPayload["code"] != "invalid_input" {
+				t.Fatalf("error code = %#v", errorPayload["code"])
+			}
+			if strings.Contains(stdout.String(), "sk-test") || strings.Contains(stderr.String(), "sk-test") {
+				t.Fatalf("secret leaked: stdout=%s stderr=%s", stdout.String(), stderr.String())
+			}
+		})
 	}
 }
 

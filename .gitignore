@@ -22,3 +22,5 @@ tests/test_bench_assets.py
 .env
 .gocache/
 .gomodcache/
+fast-sub-go.toml
+

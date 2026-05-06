@@ -25,6 +25,7 @@ const (
 	CodeMissingWorker       = "missing_worker"
 	CodeMissingModel        = "missing_model"
 	CodeMissingAPIKey       = "missing_api_key"
+	CodeAPIFailed           = "api_failed"
 	CodeNotImplemented      = "not_implemented"
 	CodeProviderUnavailable = "provider_unavailable"
 	CodeDownloadFailed      = "download_failed"

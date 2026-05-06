@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 
+	appconfig "fast-sub/internal/config"
 	"fast-sub/internal/models"
 )
 
@@ -18,6 +19,8 @@ const (
 	StatusMissingModel = "missing_model"
 	// StatusMissingAPIKey means an API provider has no configured API key.
 	StatusMissingAPIKey = "missing_api_key"
+	// StatusInvalidConfig means a provider config file was requested but could not be loaded.
+	StatusInvalidConfig = "invalid_config"
 	// StatusDisabled means the provider is intentionally disabled.
 	StatusDisabled = "disabled"
 	// StatusNotImplemented means metadata exists but runtime execution is not implemented.
@@ -242,13 +245,22 @@ func checkWhisperCPP(_ context.Context, cfg RuntimeConfig, metadata Metadata) Ch
 }
 
 func checkOpenAI(_ context.Context, cfg RuntimeConfig, metadata Metadata) CheckResult {
-	keyName := "OPENAI_API_KEY"
-	if envFirst(cfg, "FAST_SUB_OPENAI_API_KEY") != "" {
-		keyName = "FAST_SUB_OPENAI_API_KEY"
+	providerConfig, configPath, configErr := loadProviderConfig(cfg)
+	details := map[string]any{"config_path": configPath, "live_network": false}
+	if configErr != nil {
+		check := Check{
+			Name:       "config",
+			OK:         false,
+			Status:     StatusInvalidConfig,
+			Message:    "OpenAI config could not be read: " + configErr.Error(),
+			ActionHint: "Fix FAST_SUB_GO_CONFIG or fast-sub-go.toml before selecting this provider.",
+		}
+		return summarize(metadata, []Check{check}, details)
 	}
+	keyName := openAIKeyName(cfg, providerConfig)
 	check := Check{
 		Name:       "api_key",
-		OK:         envFirst(cfg, "FAST_SUB_OPENAI_API_KEY", "OPENAI_API_KEY") != "",
+		OK:         keyName != "" && cfg.Env(keyName) != "",
 		Status:     StatusAvailable,
 		Message:    "API key is configured.",
 		ActionHint: "",
@@ -256,9 +268,28 @@ func checkOpenAI(_ context.Context, cfg RuntimeConfig, metadata Metadata) CheckR
 	if !check.OK {
 		check.Status = StatusMissingAPIKey
 		check.Message = "No OpenAI-compatible transcription API key is configured."
-		check.ActionHint = "Set FAST_SUB_OPENAI_API_KEY or OPENAI_API_KEY before selecting this provider."
+		check.ActionHint = "Set FAST_SUB_OPENAI_API_KEY or OPENAI_API_KEY, or set api_key_env in fast-sub-go.toml before selecting this provider."
 	}
-	return summarize(metadata, []Check{check}, map[string]any{"api_key_env": keyName, "live_network": false})
+	details["api_key_env"] = keyName
+	return summarize(metadata, []Check{check}, details)
+}
+
+func loadProviderConfig(cfg RuntimeConfig) (appconfig.OpenAIProviderConfig, string, error) {
+	loaded, path, err := appconfig.Load("", cfg.Env)
+	if err != nil {
+		return appconfig.OpenAIProviderConfig{}, path, err
+	}
+	return loaded.OpenAI, path, nil
+}
+
+func openAIKeyName(cfg RuntimeConfig, providerConfig appconfig.OpenAIProviderConfig) string {
+	if providerConfig.APIKeyEnv != "" {
+		return providerConfig.APIKeyEnv
+	}
+	if envFirst(cfg, "FAST_SUB_OPENAI_API_KEY") != "" {
+		return "FAST_SUB_OPENAI_API_KEY"
+	}
+	return "OPENAI_API_KEY"
 }
 
 func checkCommand(cfg RuntimeConfig, name, explicitCommand, pathName, actionHint string) Check {
