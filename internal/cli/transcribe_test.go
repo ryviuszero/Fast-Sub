@@ -87,6 +87,46 @@ func TestTranscribeJSONSuccessWithFakeWorker(t *testing.T) {
 	}
 }
 
+func TestTranscribeFasterWhisperJSONSuccessWithModelID(t *testing.T) {
+	withWorkingDir(t, t.TempDir())
+	ffmpeg := fakeBinary(t, "ffmpeg", fakeFFmpegSuccessBinary())
+	ffprobe := fakeBinary(t, "ffprobe", fakeProbeBinary(validProbeJSON()))
+	worker := fakeBinary(t, "fake-worker", fakeSTTWorkerBinary())
+	prependPath(t, ffmpeg)
+	prependPath(t, ffprobe)
+
+	workDir := t.TempDir()
+	storeDir := mkdir(t, filepath.Join(workDir, "store with spaces"))
+	modelDir := mkdir(t, filepath.Join(storeDir, "whisper-small"))
+	writeFile(t, filepath.Join(modelDir, "config.json"), "config")
+	writeFile(t, filepath.Join(modelDir, "model.bin"), "model")
+	manifestPath := filepath.Join(workDir, "manifest.json")
+	writeTranscribeManifest(t, manifestPath)
+	t.Setenv("FAST_SUB_GO_MODEL_MANIFEST", manifestPath)
+	t.Setenv("FAST_SUB_MODEL_STORE_DIR", storeDir)
+	requestCopy := filepath.Join(workDir, "request-copy.json")
+	t.Setenv("FAST_SUB_FAKE_WORKER_REQUEST_COPY", requestCopy)
+	input := writeFile(t, filepath.Join(workDir, "input.mp4"), "fake")
+
+	var stdout bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args:   []string{"transcribe", input, "--provider", "local-faster-whisper", "--model", "whisper-small", "--worker-command", worker, "--json"},
+		Stdout: &stdout,
+	})
+	if code != 0 {
+		t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+	}
+	payload := mustJSON(t, stdout.String())
+	result := payload["result"].(map[string]any)
+	if result["model"] != "whisper-small" {
+		t.Fatalf("model = %#v", result["model"])
+	}
+	request := mustJSONFile(t, requestCopy)
+	if request["model_path"] != modelDir {
+		t.Fatalf("model_path = %#v, want %s", request["model_path"], modelDir)
+	}
+}
+
 func TestTranscribeOpenAIJSONSuccessWithMockHTTP(t *testing.T) {
 	withWorkingDir(t, t.TempDir())
 	ffmpeg := fakeBinary(t, "ffmpeg", fakeFFmpegSuccessBinary())
@@ -433,6 +473,156 @@ func TestAutoJSONSuccessWithFakeWorkerAndYesPlaceholder(t *testing.T) {
 	}
 }
 
+func TestTranscribeWhisperCPPJSONSuccessWithModelPath(t *testing.T) {
+	withWorkingDir(t, t.TempDir())
+	ffmpeg := fakeBinary(t, "ffmpeg", fakeFFmpegSuccessBinary())
+	ffprobe := fakeBinary(t, "ffprobe", fakeProbeBinary(validProbeJSON()))
+	whisper := fakeBinary(t, "fake-whisper", fakeWhisperCPPBinary())
+	prependPath(t, ffmpeg)
+	prependPath(t, ffprobe)
+
+	workDir := t.TempDir()
+	input := writeFile(t, filepath.Join(workDir, "含 空格", "input sample.mp4"), "fake")
+	modelPath := writeFile(t, filepath.Join(workDir, "模型 small.bin"), "model")
+	output := filepath.Join(workDir, "输出 local.srt")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args: []string{
+			"transcribe", input,
+			"--provider", "local-whisper-cpp",
+			"--model-path", modelPath,
+			"--output", output,
+			"--whisper-cpp-command", whisper,
+			"--json",
+		},
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	if code != 0 {
+		t.Fatalf("exit code = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if stderr.String() != "" {
+		t.Fatalf("stderr should be empty in JSON mode, got %q", stderr.String())
+	}
+	payload := mustJSON(t, stdout.String())
+	result := payload["result"].(map[string]any)
+	if result["provider"] != "local-whisper-cpp" || result["segments"] != float64(2) {
+		t.Fatalf("result = %#v", result)
+	}
+	srt, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(srt), "你好世界") {
+		t.Fatalf("unexpected SRT:\n%s", srt)
+	}
+}
+
+func TestTranscribeWhisperCPPJSONSuccessWithModelID(t *testing.T) {
+	withWorkingDir(t, t.TempDir())
+	ffmpeg := fakeBinary(t, "ffmpeg", fakeFFmpegSuccessBinary())
+	ffprobe := fakeBinary(t, "ffprobe", fakeProbeBinary(validProbeJSON()))
+	whisper := fakeBinary(t, "fake-whisper", fakeWhisperCPPBinary())
+	prependPath(t, ffmpeg)
+	prependPath(t, ffprobe)
+
+	workDir := t.TempDir()
+	modelStore := mkdir(t, filepath.Join(workDir, "store with spaces"))
+	modelDir := mkdir(t, filepath.Join(modelStore, "whispercpp-small"))
+	writeFile(t, filepath.Join(modelDir, "whispercpp-small.bin"), "model")
+	manifestPath := filepath.Join(workDir, "manifest.json")
+	writeTranscribeManifest(t, manifestPath)
+	t.Setenv("FAST_SUB_GO_MODEL_MANIFEST", manifestPath)
+	t.Setenv("FAST_SUB_MODEL_STORE_DIR", modelStore)
+	t.Setenv("FAST_SUB_WHISPER_CPP_COMMAND", whisper)
+	input := writeFile(t, filepath.Join(workDir, "input.mp4"), "fake")
+
+	var stdout bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args:   []string{"transcribe", input, "--provider", "local-whisper-cpp", "--model", "whispercpp-small", "--json"},
+		Stdout: &stdout,
+	})
+	if code != 0 {
+		t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+	}
+	payload := mustJSON(t, stdout.String())
+	if payload["ok"] != true {
+		t.Fatalf("payload = %#v", payload)
+	}
+}
+
+func TestTranscribeWhisperCPPAllowsUnknownLegacyModelID(t *testing.T) {
+	withWorkingDir(t, t.TempDir())
+	ffmpeg := fakeBinary(t, "ffmpeg", fakeFFmpegSuccessBinary())
+	ffprobe := fakeBinary(t, "ffprobe", fakeProbeBinary(validProbeJSON()))
+	whisper := fakeBinary(t, "fake-whisper", fakeWhisperCPPBinary())
+	prependPath(t, ffmpeg)
+	prependPath(t, ffprobe)
+
+	workDir := t.TempDir()
+	modelStore := mkdir(t, filepath.Join(workDir, "store with spaces"))
+	modelDir := mkdir(t, filepath.Join(modelStore, "legacy-whispercpp-small"))
+	writeFile(t, filepath.Join(modelDir, "ggml-small.bin"), "model")
+	manifestPath := filepath.Join(workDir, "manifest.json")
+	writeTranscribeManifest(t, manifestPath)
+	t.Setenv("FAST_SUB_GO_MODEL_MANIFEST", manifestPath)
+	t.Setenv("FAST_SUB_MODEL_STORE_DIR", modelStore)
+	t.Setenv("FAST_SUB_WHISPER_CPP_COMMAND", whisper)
+	input := writeFile(t, filepath.Join(workDir, "input.mp4"), "fake")
+
+	var stdout bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args:   []string{"transcribe", input, "--provider", "local-whisper-cpp", "--model", "legacy-whispercpp-small", "--json"},
+		Stdout: &stdout,
+	})
+	if code != 0 {
+		t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+	}
+	payload := mustJSON(t, stdout.String())
+	if payload["ok"] != true {
+		t.Fatalf("payload = %#v", payload)
+	}
+}
+
+func TestTranscribeWhisperCPPRejectsKnownIncompatibleModelID(t *testing.T) {
+	withWorkingDir(t, t.TempDir())
+	whisper := fakeBinary(t, "fake-whisper", fakeWhisperCPPBinary())
+
+	workDir := t.TempDir()
+	modelStore := mkdir(t, filepath.Join(workDir, "store with spaces"))
+	legacyModelDir := mkdir(t, filepath.Join(modelStore, "whisper-small"))
+	writeFile(t, filepath.Join(legacyModelDir, "ggml-small.bin"), "legacy model")
+	manifestPath := filepath.Join(workDir, "manifest.json")
+	writeTranscribeManifest(t, manifestPath)
+	t.Setenv("FAST_SUB_GO_MODEL_MANIFEST", manifestPath)
+	t.Setenv("FAST_SUB_MODEL_STORE_DIR", modelStore)
+	markerPath := filepath.Join(workDir, "whisper-ran.txt")
+	t.Setenv("FAST_SUB_FAKE_WHISPER_RUN_MARKER", markerPath)
+	input := writeFile(t, filepath.Join(workDir, "input.mp4"), "fake")
+
+	var stdout bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args:   []string{"transcribe", input, "--provider", "local-whisper-cpp", "--model", "whisper-small", "--whisper-cpp-command", whisper, "--json"},
+		Stdout: &stdout,
+	})
+	if code == 0 {
+		t.Fatalf("expected failure, stdout=%s", stdout.String())
+	}
+	payload := mustJSON(t, stdout.String())
+	errorPayload := payload["error"].(map[string]any)
+	if errorPayload["code"] != "missing_model" {
+		t.Fatalf("error code = %#v", errorPayload["code"])
+	}
+	if !strings.Contains(errorPayload["message"].(string), "model is not compatible with local-whisper-cpp") {
+		t.Fatalf("message = %#v", errorPayload["message"])
+	}
+	if _, err := os.Stat(markerPath); !os.IsNotExist(err) {
+		t.Fatalf("whisper.cpp fake binary should not run, stat err=%v", err)
+	}
+}
+
 func TestTranscribeJSONFailureCases(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -488,13 +678,13 @@ func TestTranscribeJSONFailureCases(t *testing.T) {
 			wantExit: 4,
 		},
 		{
-			name: "model option is not implemented",
+			name: "missing model id",
 			args: func(workDir, input, modelDir, workerPath string) []string {
 				return []string{"transcribe", input, "--model", "small", "--worker-command", workerPath, "--json"}
 			},
 			pathMode: "all",
-			wantCode: "not_implemented",
-			wantExit: 2,
+			wantCode: "missing_model",
+			wantExit: 4,
 		},
 		{
 			name: "output exists",
@@ -707,6 +897,7 @@ func main() {
     writeJSON(responsePath, success(defaultSegments()))
   }
 }
+
 func defaultSegments() []map[string]any {
   return []map[string]any{
     {"start_sec": 0.0, "end_sec": 1.25, "text": " 你好 "},
@@ -721,4 +912,98 @@ func writeJSON(path string, payload any) {
   _ = os.WriteFile(path, raw, 0600)
 }
 `
+}
+
+func fakeWhisperCPPBinary() string {
+	return `package main
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+  "strings"
+)
+func main() {
+  if marker := os.Getenv("FAST_SUB_FAKE_WHISPER_RUN_MARKER"); marker != "" {
+    _ = os.WriteFile(marker, []byte(strings.Join(os.Args, "\n")), 0600)
+  }
+  for _, arg := range os.Args[1:] {
+    if arg == "--help" {
+      fmt.Println("--output-json -oj --output-srt -osrt --output-file -of --no-prints -np --language auto")
+      return
+    }
+    if arg == "--version" {
+      fmt.Println("whisper.cpp fake")
+      return
+    }
+  }
+  outputBase := ""
+  for i := 1; i < len(os.Args); i++ {
+    if os.Args[i] == "-of" && i+1 < len(os.Args) {
+      outputBase = os.Args[i+1]
+      i++
+    }
+  }
+  if outputBase == "" {
+    os.Exit(2)
+  }
+  fmt.Println("stdout that must not reach fast-sub-go stdout")
+  fmt.Fprintln(os.Stderr, "stderr that must not reach fast-sub-go stdout")
+  payload := map[string]any{
+    "result": map[string]any{"language": "zh"},
+    "transcription": []map[string]any{
+      {"timestamps": map[string]any{"from": "00:00:00.000", "to": "00:00:01.250"}, "text": "你好世界"},
+      {"timestamps": map[string]any{"from": "00:00:01.250", "to": "00:00:02.500"}, "text": "第二行"},
+    },
+  }
+  raw, _ := json.Marshal(payload)
+  _ = os.WriteFile(outputBase+".json", raw, 0600)
+}
+`
+}
+
+func writeTranscribeManifest(t *testing.T, path string) {
+	t.Helper()
+	manifest := `{
+  "schema_version": 1,
+  "models": [
+    {
+      "id": "whisper-small",
+      "name": "Whisper Small Fixture",
+      "type": "asr",
+      "backend": "faster-whisper",
+      "artifact_kind": "model",
+      "compatible_providers": ["local-faster-whisper"],
+      "size_bytes": 2,
+      "license": "MIT",
+      "urls": ["https://example.test/"],
+      "required_files": [
+        {"path": "config.json", "size_bytes": 6, "sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"},
+        {"path": "model.bin", "size_bytes": 5, "sha256": "9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4"}
+      ],
+      "privacy_class": "local",
+      "install_layout": "directory",
+      "source_type": "http",
+      "platforms": ["all"]
+    },
+    {
+      "id": "whispercpp-small",
+      "name": "Whisper CPP Small Fixture",
+      "type": "asr",
+      "backend": "whisper.cpp",
+      "artifact_kind": "model",
+      "compatible_providers": ["local-whisper-cpp"],
+      "size_bytes": 5,
+      "license": "MIT",
+      "urls": ["https://example.test/whispercpp-small.bin"],
+      "sha256": "9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4",
+      "privacy_class": "local",
+      "install_layout": "file",
+      "source_type": "http",
+      "platforms": ["all"]
+    }
+  ]
+}`
+	if err := os.WriteFile(path, []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
 }

@@ -18,6 +18,7 @@ import (
 	"fast-sub/internal/paths"
 	"fast-sub/internal/providers"
 	openairuntime "fast-sub/internal/runtime/openai"
+	"fast-sub/internal/runtime/whispercpp"
 	"fast-sub/internal/subtitle"
 	"fast-sub/internal/worker"
 )
@@ -327,6 +328,7 @@ type transcribeArgs struct {
 	modelPath         string
 	model             string
 	provider          string
+	whisperCommand    string
 	language          string
 	device            string
 	computeType       string
@@ -460,6 +462,15 @@ func parseTranscribeArgs(args []string, command string) (transcribeArgs, error) 
 			i = next
 		case strings.HasPrefix(arg, "--provider="):
 			parsed.provider = strings.TrimPrefix(arg, "--provider=")
+		case arg == "--whisper-cpp-command":
+			value, next, err := requireValue(args, i, arg)
+			if err != nil {
+				return parsed, err
+			}
+			parsed.whisperCommand = value
+			i = next
+		case strings.HasPrefix(arg, "--whisper-cpp-command="):
+			parsed.whisperCommand = strings.TrimPrefix(arg, "--whisper-cpp-command=")
 		case arg == "--language":
 			value, next, err := requireValue(args, i, arg)
 			if err != nil {
@@ -593,17 +604,15 @@ func transcribeLocal(ctx context.Context, cfg Config, command, input string, par
 	if parsed.provider == "api-openai-transcription" {
 		return transcribeOpenAI(ctx, cfg, command, input, parsed, started)
 	}
+	if parsed.provider == "local-whisper-cpp" {
+		return transcribeWhisperCPP(ctx, cfg, command, input, parsed, started)
+	}
 	if parsed.provider != "" && parsed.provider != "local-faster-whisper" {
-		return empty, fserrors.New(fserrors.CodeInvalidInput, command, "unsupported provider: "+parsed.provider, "Use local-faster-whisper or api-openai-transcription.", nil)
+		return empty, fserrors.New(fserrors.CodeInvalidInput, command, "unsupported provider: "+parsed.provider, "Use local-faster-whisper, local-whisper-cpp, or api-openai-transcription.", nil)
 	}
-	if parsed.model != "" {
-		return empty, fserrors.New(fserrors.CodeNotImplemented, command, "--model is not implemented in fast-sub-go Round 9 and will not download models.", "Pass --model-path to an existing local model directory.", nil)
-	}
-	if parsed.modelPath == "" {
-		return empty, fserrors.New(fserrors.CodeMissingModel, command, "--model-path is required in fast-sub-go Round 9.", "Pass --model-path to an existing local model directory.", nil)
-	}
-	if err := validateModelPath(parsed.modelPath); err != nil {
-		return empty, fserrors.New(fserrors.CodeMissingModel, command, err.Error(), "Pass --model-path to an existing local model directory.", nil)
+	modelPath, appErr := resolveFasterWhisperModelPath(parsed, command)
+	if appErr != nil {
+		return empty, appErr
 	}
 	if err := validateChoice("language", parsed.language, []string{"auto", "zh", "en", "ja", "ko"}); err != nil {
 		return empty, fserrors.New(fserrors.CodeInvalidInput, command, err.Error(), "", nil)
@@ -648,7 +657,7 @@ func transcribeLocal(ctx context.Context, cfg Config, command, input string, par
 	}.RunSTT(ctx, requestPath, responsePath, worker.STTRequest{
 		JobID:          jobID,
 		AudioPath:      audioPath,
-		ModelPath:      parsed.modelPath,
+		ModelPath:      modelPath,
 		Language:       parsed.language,
 		Device:         parsed.device,
 		ComputeType:    parsed.computeType,
@@ -677,6 +686,7 @@ func transcribeLocal(ctx context.Context, cfg Config, command, input string, par
 		ElapsedSec:        time.Since(started).Seconds(),
 		JobDir:            jobDir,
 		Provider:          response.Provider,
+		Model:             parsed.model,
 		ActualDevice:      response.ActualDevice,
 		ActualComputeType: response.ActualComputeType,
 		Warnings:          response.Warnings,
@@ -767,6 +777,71 @@ func transcribeOpenAI(ctx context.Context, cfg Config, command, input string, pa
 	}, nil
 }
 
+func transcribeWhisperCPP(ctx context.Context, cfg Config, command, input string, parsed transcribeArgs, started time.Time) (transcribeResult, *fserrors.AppError) {
+	var empty transcribeResult
+	modelPath, appErr := resolveWhisperCPPModelPath(parsed, command)
+	if appErr != nil {
+		return empty, appErr
+	}
+	if err := validateChoice("language", parsed.language, []string{"auto", "zh", "en", "ja", "ko"}); err != nil {
+		return empty, fserrors.New(fserrors.CodeInvalidInput, command, err.Error(), "", nil)
+	}
+	if parsed.wordTimestamps != "" && parsed.wordTimestamps != "off" && parsed.wordTimestamps != "auto" {
+		return empty, fserrors.New(fserrors.CodeInvalidInput, command, "--word-timestamps is not supported by local-whisper-cpp in this preview.", "Use --word-timestamps off or auto.", nil)
+	}
+	output := parsed.output
+	if output == "" {
+		output = defaultSRTPath(input)
+	}
+	if appErr := validateSRTOutput(output); appErr != nil {
+		return empty, appErr
+	}
+	if _, appErr := cfg.Runner.Probe(ctx, input, probeTimeout); appErr != nil {
+		return empty, appErr
+	}
+	jobDir, _, appErr := createJobDir()
+	if appErr != nil {
+		return empty, appErr
+	}
+	audioPath := filepath.Join(jobDir, "audio.wav")
+	if _, appErr := cfg.Runner.ExtractAudio(ctx, input, audioPath, extractTimeout); appErr != nil {
+		return empty, appErr
+	}
+	result, appErr := whispercpp.Transcribe(ctx, whispercpp.Options{
+		Command:          parsed.whisperCommand,
+		AudioPath:        audioPath,
+		ModelPath:        modelPath,
+		JobDir:           jobDir,
+		Language:         parsed.language,
+		ManagedBinaryDir: defaultManagedWhisperCPPBinaryDir(),
+	})
+	if appErr != nil {
+		return empty, appErr
+	}
+	refinedSegments := subtitle.RefineSegments(result.Segments, subtitle.RefineOptions{Lang: result.Language})
+	srt, err := subtitle.RenderSRT(refinedSegments)
+	if err != nil {
+		return empty, fserrors.New(fserrors.CodeWorkerProtocol, "rendering", err.Error(), "Check whisper.cpp segment timestamps and text.", nil)
+	}
+	if err := os.WriteFile(output, []byte(srt), 0o600); err != nil {
+		return empty, classifyWriteError("rendering", "write SRT: "+err.Error())
+	}
+	if !parsed.keepTemp {
+		_ = os.Remove(audioPath)
+	}
+	return transcribeResult{
+		InputPath:  input,
+		OutputPath: output,
+		Language:   result.Language,
+		Segments:   len(refinedSegments),
+		ElapsedSec: time.Since(started).Seconds(),
+		JobDir:     jobDir,
+		Provider:   result.Provider,
+		Model:      parsed.model,
+		Warnings:   result.Warnings,
+	}, nil
+}
+
 func resolveAPIKey(parsed transcribeArgs) (string, *fserrors.AppError) {
 	if parsed.apiKeyEnv == "" {
 		return "", fserrors.New(fserrors.CodeMissingAPIKey, "api_openai_transcription", "--api-key-env is required for api-openai-transcription.", "Pass --api-key-env with an environment variable that contains the API key.", nil)
@@ -827,6 +902,165 @@ func resolveAPIUploadFormat(value, baseURL string) (ffmpeg.APIUploadFormat, *fse
 	default:
 		return "", fserrors.New(fserrors.CodeInvalidInput, "api_openai_transcription", "--api-upload-format must be one of: auto, wav, m4a, mp3", "", map[string]any{"base_url_is_official_openai": openairuntime.IsOfficialBaseURL(baseURL)})
 	}
+}
+
+func resolveFasterWhisperModelPath(parsed transcribeArgs, command string) (string, *fserrors.AppError) {
+	if parsed.modelPath != "" {
+		if err := validateModelPath(parsed.modelPath); err != nil {
+			return "", fserrors.New(fserrors.CodeMissingModel, command, err.Error(), "Pass --model-path to an existing local model directory.", nil)
+		}
+		return parsed.modelPath, nil
+	}
+	if parsed.model == "" {
+		envPath := os.Getenv("FAST_SUB_FASTER_WHISPER_MODEL_PATH")
+		if envPath == "" {
+			envPath = os.Getenv("FAST_SUB_MODEL_PATH")
+		}
+		if envPath != "" {
+			if err := validateModelPath(envPath); err != nil {
+				return "", fserrors.New(fserrors.CodeMissingModel, command, err.Error(), "Fix FAST_SUB_FASTER_WHISPER_MODEL_PATH or pass --model-path.", nil)
+			}
+			return envPath, nil
+		}
+		return "", fserrors.New(fserrors.CodeMissingModel, command, "--model or --model-path is required for local-faster-whisper.", "Pass --model-path to an existing local model directory or install the requested model id.", nil)
+	}
+	modelPath, err := resolveInstalledProviderModelPath(parsed.model, "local-faster-whisper")
+	if err != nil {
+		return "", fserrors.New(fserrors.CodeMissingModel, command, err.Error(), "Install the model or pass --model-path to an existing local model directory.", nil)
+	}
+	if err := validateModelPath(modelPath); err != nil {
+		return "", fserrors.New(fserrors.CodeMissingModel, command, err.Error(), "Repair or reinstall the model, or pass --model-path.", nil)
+	}
+	return modelPath, nil
+}
+
+func resolveWhisperCPPModelPath(parsed transcribeArgs, command string) (string, *fserrors.AppError) {
+	if parsed.modelPath != "" {
+		modelPath, err := resolveModelFileOrDir(parsed.modelPath)
+		if err != nil {
+			return "", fserrors.New(fserrors.CodeMissingModel, command, err.Error(), "Pass --model-path to an existing whisper.cpp model file.", nil)
+		}
+		return modelPath, nil
+	}
+	if parsed.model == "" {
+		envPath := os.Getenv("FAST_SUB_WHISPER_CPP_MODEL_PATH")
+		if envPath == "" {
+			envPath = os.Getenv("FAST_SUB_MODEL_PATH")
+		}
+		if envPath != "" {
+			modelPath, err := resolveModelFileOrDir(envPath)
+			if err != nil {
+				return "", fserrors.New(fserrors.CodeMissingModel, command, err.Error(), "Fix FAST_SUB_WHISPER_CPP_MODEL_PATH or pass --model-path.", nil)
+			}
+			return modelPath, nil
+		}
+		return "", fserrors.New(fserrors.CodeMissingModel, command, "--model or --model-path is required for local-whisper-cpp.", "Pass --model-path to a whisper.cpp model file or install the requested model id.", nil)
+	}
+	modelPath, err := resolveInstalledWhisperCPPModelPath(parsed.model)
+	if err != nil {
+		return "", fserrors.New(fserrors.CodeMissingModel, command, err.Error(), "Install the model or pass --model-path to an existing whisper.cpp model file.", nil)
+	}
+	return modelPath, nil
+}
+
+func resolveInstalledWhisperCPPModelPath(modelID string) (string, error) {
+	if manifest, err := models.LoadManifest(""); err == nil {
+		if entry, ok := manifest.Get(modelID); ok {
+			if !hasString(entry.CompatibleProviders, "local-whisper-cpp") {
+				return "", fmt.Errorf("model is not compatible with local-whisper-cpp: %s", modelID)
+			}
+			status := models.DefaultStore().Verify(entry)
+			if !status.Installed {
+				return "", fmt.Errorf("model is not installed: %s", modelID)
+			}
+			return resolveModelFileOrDir(status.Path)
+		}
+	}
+	candidates := []string{}
+	if legacyStore := os.Getenv("FAST_SUB_MODEL_STORE"); legacyStore != "" {
+		candidates = append(candidates, filepath.Join(legacyStore, modelID))
+	}
+	candidates = append(candidates,
+		filepath.Join(models.DefaultStore().Root, modelID),
+		filepath.Join(".fast-sub", "models", modelID),
+	)
+	for _, candidate := range candidates {
+		modelPath, ok := existingModelCandidate(candidate)
+		if ok {
+			return modelPath, nil
+		}
+	}
+	return "", fmt.Errorf("model is not installed: %s", modelID)
+}
+
+func resolveInstalledProviderModelPath(modelID, providerID string) (string, error) {
+	manifest, err := models.LoadManifest("")
+	if err != nil {
+		return "", fmt.Errorf("model manifest could not be loaded: %w", err)
+	}
+	entry, ok := manifest.Get(modelID)
+	if !ok || !hasString(entry.CompatibleProviders, providerID) {
+		return "", fmt.Errorf("model is not compatible with %s: %s", providerID, modelID)
+	}
+	status := models.DefaultStore().Verify(entry)
+	if !status.Installed {
+		return "", fmt.Errorf("model is not installed: %s", modelID)
+	}
+	return status.Path, nil
+}
+
+func existingModelCandidate(path string) (string, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", false
+	}
+	if !info.IsDir() {
+		return path, true
+	}
+	for _, name := range []string{"model.bin", "ggml-model.bin", "model.gguf"} {
+		candidate := filepath.Join(path, name)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, true
+		}
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return "", false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		lower := strings.ToLower(entry.Name())
+		if strings.HasSuffix(lower, ".bin") || strings.HasSuffix(lower, ".gguf") {
+			return filepath.Join(path, entry.Name()), true
+		}
+	}
+	return "", false
+}
+
+func resolveModelFileOrDir(modelPath string) (string, error) {
+	info, err := os.Stat(modelPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("model path does not exist: %s", filepath.Clean(modelPath))
+		}
+		return "", fmt.Errorf("inspect model path: %w", err)
+	}
+	if info.IsDir() {
+		if candidate, ok := existingModelCandidate(modelPath); ok && candidate != "" {
+			return candidate, nil
+		}
+		return "", fmt.Errorf("model directory contains no .bin or .gguf model file: %s", filepath.Clean(modelPath))
+	}
+	return modelPath, nil
+}
+
+func defaultManagedWhisperCPPBinaryDir() string {
+	if legacyStore := os.Getenv("FAST_SUB_MODEL_STORE"); legacyStore != "" {
+		return filepath.Join(legacyStore, "whisper-cpp")
+	}
+	return filepath.Join(models.DefaultStore().Root, "whisper-cpp")
 }
 
 func resolveWordTimestamps(value, command string) (bool, *fserrors.AppError) {
@@ -938,6 +1172,7 @@ func printHelp(stdout io.Writer) {
 	fmt.Fprintln(stdout, "  models verify <id> [--json]")
 	fmt.Fprintln(stdout, "  models install <id> [--dry-run] [--json]")
 	fmt.Fprintln(stdout, "  transcribe <input> --model-path <path> [--output <srt>] [--word-timestamps auto|on|off] [--json]")
+	fmt.Fprintln(stdout, "  transcribe <input> --provider local-whisper-cpp (--model <id>|--model-path <path>) [--whisper-cpp-command <path>] [--json]")
 	fmt.Fprintln(stdout, "  transcribe <input> --provider api-openai-transcription --model <model> [--api-key-env <env>] [--config <toml>] [--base-url <url>] [--api-upload-format auto|wav|m4a|mp3] [--json]")
 	fmt.Fprintln(stdout, "  auto <input> --model-path <path> [--output <srt>] [--word-timestamps auto|on|off] [--json]")
 	fmt.Fprintln(stdout, "  providers list [--json]")
@@ -978,10 +1213,30 @@ func runModelsList(cfg Config, args []string) int {
 		writeSuccessJSON(cfg.Stdout, "models list", map[string]any{"models": rows})
 		return fserrors.ExitOK
 	}
-	for _, row := range rows {
-		fmt.Fprintf(cfg.Stdout, "%s\t%s\t%s\t%s\n", row.ID, row.Type, row.Status, row.Path)
-	}
+	writeModelsListTable(cfg.Stdout, rows)
 	return fserrors.ExitOK
+}
+
+func writeModelsListTable(stdout io.Writer, rows []models.ListRow) {
+	idWidth := len("MODEL")
+	typeWidth := len("TYPE")
+	statusWidth := len("STATUS")
+	for _, row := range rows {
+		idWidth = maxInt(idWidth, len(row.ID))
+		typeWidth = maxInt(typeWidth, len(row.Type))
+		statusWidth = maxInt(statusWidth, len(row.Status))
+	}
+	fmt.Fprintf(stdout, "%-*s  %-*s  %-*s  %s\n", idWidth, "MODEL", typeWidth, "TYPE", statusWidth, "STATUS", "PATH")
+	for _, row := range rows {
+		fmt.Fprintf(stdout, "%-*s  %-*s  %-*s  %s\n", idWidth, row.ID, typeWidth, row.Type, statusWidth, row.Status, row.Path)
+	}
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func runModelsVerify(cfg Config, args []string) int {
@@ -1089,6 +1344,15 @@ func unknownModelError(command string, manifest models.Manifest, id string) *fse
 		ids = append(ids, entry.ID)
 	}
 	return fserrors.New(fserrors.CodeMissingModel, command, "unknown model id: "+id, "Choose one of: "+strings.Join(ids, ", "), map[string]any{"model_id": id})
+}
+
+func hasString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 type installProgressWriter struct {

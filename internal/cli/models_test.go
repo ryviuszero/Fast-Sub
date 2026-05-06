@@ -124,6 +124,36 @@ func TestModelsInstallVerifyListJSONWithFakeHTTP(t *testing.T) {
 	}
 }
 
+func TestModelsListHumanOutputIsAligned(t *testing.T) {
+	manifestPath, storeDir, manifest := writeFixtureManifest(t, []byte("model"))
+	manifest = strings.Replace(manifest, `"id": "fixture-model"`, `"id": "fixture-model-with-a-long-name"`, 1)
+	manifest = strings.Replace(manifest, `"type": "asr"`, `"type": "translate"`, 1)
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FAST_SUB_GO_MODEL_MANIFEST", manifestPath)
+	t.Setenv("FAST_SUB_MODEL_STORE_DIR", storeDir)
+
+	var stdout bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args:   []string{"models", "list"},
+		Stdout: &stdout,
+	})
+	if code != 0 {
+		t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+	}
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("lines = %#v", lines)
+	}
+	if !strings.HasPrefix(lines[0], "MODEL") || !strings.Contains(lines[0], "  TYPE  ") || !strings.Contains(lines[0], "  STATUS  ") {
+		t.Fatalf("header is not aligned: %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "fixture-model-with-a-long-name  translate  missing") {
+		t.Fatalf("row is not aligned:\n%s", stdout.String())
+	}
+}
+
 func TestModelsInstallHumanShowsProgressOnStderr(t *testing.T) {
 	payload := []byte("model progress payload")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

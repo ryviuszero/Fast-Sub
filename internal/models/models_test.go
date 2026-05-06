@@ -268,6 +268,31 @@ func TestBuiltInManifestIncludesFasterWhisperASRModels(t *testing.T) {
 	}
 }
 
+func TestBuiltInManifestIncludesWhisperCPPModels(t *testing.T) {
+	manifest := BuiltInManifest()
+	for _, id := range []string{"whispercpp-base", "whispercpp-small", "whispercpp-large-v3-turbo-q5_0"} {
+		entry, ok := manifest.Get(id)
+		if !ok {
+			t.Fatalf("missing built-in model %s", id)
+		}
+		if entry.Type != "asr" || entry.Backend != "whisper.cpp" {
+			t.Fatalf("%s = type %s backend %s", id, entry.Type, entry.Backend)
+		}
+		if !hasString(entry.CompatibleProviders, "local-whisper-cpp") {
+			t.Fatalf("%s compatible providers = %#v", id, entry.CompatibleProviders)
+		}
+		if entry.ManifestType() != "file" || entry.SHA256 == "" || len(entry.URLs) != 1 {
+			t.Fatalf("%s has invalid file manifest: %#v", id, entry)
+		}
+		if !strings.Contains(entry.URLs[0], "huggingface.co/ggerganov/whisper.cpp") {
+			t.Fatalf("%s URL = %s", id, entry.URLs[0])
+		}
+		if status := (Store{Root: t.TempDir()}).Verify(entry); status.Status != "missing" {
+			t.Fatalf("%s verify status = %#v", id, status)
+		}
+	}
+}
+
 func hasString(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
