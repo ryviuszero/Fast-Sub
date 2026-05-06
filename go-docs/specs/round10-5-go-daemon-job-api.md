@@ -44,6 +44,35 @@ Round 10 已完成 Go product core：
 - 没有 job list、retention、restart recovery 和 event replay gap 语义。
 - Python translate 已实现，但 Go 侧 translate runtime 尚未实现。
 
+## Implementation Status
+
+Round 10.5 已在 `master` 合并，提交为：
+
+```text
+a81703a feat: add go daemon job api
+```
+
+已完成：
+
+- `fast-sub-go serve` / `fast-sub-go daemon`。
+- loopback-only daemon startup。
+- ready JSON：`schema_version`、`ready`、`base_url`、`token`、`pid`。
+- bearer token auth，health/version 公开，其余 API 需要 token。
+- 默认禁用 CORS。
+- REST：jobs create/list/get/cancel/result/logs/delete、models、providers、health、version。
+- SSE：job events、Last-Event-ID replay、heartbeat、events_lost。
+- job manager：持久化 request/job/events、FIFO queue、默认 `max_running_jobs=1`。
+- transcribe job runner：复用 `local-faster-whisper`、`local-whisper-cpp`、`api-openai-transcription`。
+- daemon shutdown cancel：server context 取消后 running jobs 会收到 cancel，不会错误成功。
+- restart recovery：旧 running/canceling jobs 标记为 interrupted。
+- redaction tests：token/API key/Authorization 不进入 SSE、logs、JSON 输出。
+
+当前 UI 接入应以独立 contract 文档为准：
+
+```text
+go-docs/specs/daemon-api.md
+```
+
 ## Branch
 
 推荐分支：

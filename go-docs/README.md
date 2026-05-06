@@ -11,6 +11,7 @@ These documents are intentionally kept separate from the existing Fast Sub plann
 - `specs/round9-go-transcribe-auto.md`: Round 9 implementation plan for Go-side transcribe/auto orchestration through Python STT workers.
 - `specs/round10-go-product-core.md`: Round 10 product-core plan covering Go model management, provider registry, OpenAI-compatible STT, and native whisper.cpp.
 - `specs/round10-5-go-daemon-job-api.md`: Round 10.5 daemon/job API gate plan using HTTP REST plus SSE before desktop UI.
+- `specs/daemon-api.md`: current Round 10.5 daemon API contract for desktop UI integration.
 
 ## Target Architecture
 
@@ -132,6 +133,14 @@ Round 8/9/10: Electron or tests spawn Go CLI
 Round 10.5: Electron starts Go daemon and talks through HTTP REST + SSE
 Later desktop/Web: add WebSocket only if REST + SSE is insufficient
 ```
+
+Current Round 10.5 status:
+
+- Go daemon/job API is implemented on `master`.
+- `fast-sub-go serve` / `fast-sub-go daemon` starts a loopback daemon and emits ready JSON.
+- REST covers jobs, models, providers, health, and version.
+- SSE covers job events, replay, heartbeat, and replay-gap notification.
+- Desktop UI should use `go-docs/specs/daemon-api.md` as the current integration contract.
 
 ### Go Core <-> Python Worker
 

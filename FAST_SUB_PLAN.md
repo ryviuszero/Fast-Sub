@@ -307,7 +307,11 @@ api-custom-http-translate
 - [x] `auto` 最小自动调度，支持 dry-run、缺模型提示、`--yes` 本地模型安装、transcribe/refine 串联。
 - [x] 翻译 provider loop 和默认 NLLB/CTranslate2 翻译模型 manifest。
 - [x] 翻译 benchmark，详见 `FAST_SUB_PARALLEL_ROUND7_5.md`：新增独立 `fast-sub bench-translate`，不塞进现有 `fast-sub bench`；复用 `translate_srt_v1`，使用 reference SRT/TXT 计算 BLEU、chrF、exact match、耗时和失败率；默认无 sacreBLEU 时记录 `fast_sub_lightweight_v1` 口径。
-- [ ] Python maintainability cleanup，详见 `FAST_SUB_PARALLEL_ROUND7_75.md`：在启动 Go migration foundation 前，用一轮小重构收敛 `cli.py` 和命令 handler 边界，不改变 CLI 行为、JSON schema、退出码或 provider/model/worker contract。
+- [x] Python maintainability cleanup，详见 `FAST_SUB_PARALLEL_ROUND7_75.md` 和 `FAST_SUB_ROUND7_75_IMPLEMENTATION.md`：已完成 `cli.py` 命令 handler 拆分、轻量分包和 `mypy src` baseline。
+- [x] Go migration foundation，新增并行 `fast-sub-go` CLI，详见 `go-docs/specs/round8-go-foundation.md`。
+- [x] Go transcribe/auto main path，Go 已能调度本地 faster-whisper worker 生成字幕，详见 `go-docs/specs/round9-go-transcribe-auto.md`。
+- [x] Go product core before UI，Go 已实现模型下载、provider runtime、OpenAI STT 和 whisper.cpp native backend，详见 `go-docs/specs/round10-go-product-core.md`。
+- [x] Go daemon/job API gate，新增 `fast-sub-go serve/daemon`、REST job API、SSE events、job store 和 cancel/restart 语义，详见 `go-docs/specs/round10-5-go-daemon-job-api.md` 和 `go-docs/specs/daemon-api.md`。
 - [ ] 更完整 provider 统一、Electron UI 和 Web 版均放到后续轮次。
 
 第二轮并行组合已完成：
@@ -337,7 +341,7 @@ api-custom-http-translate
 
 第 7.75 轮计划：
 
-- [ ] `codex/fast-sub-python-cleanup`：Python Maintainability Cleanup Before Go。只做安全网、`cli.py` 命令 handler 拆分和轻量边界整理；不改用户命令、参数、JSON schema、退出码、模型安装、转写、翻译或 benchmark 行为；不开始 Go 代码。详见 `FAST_SUB_PARALLEL_ROUND7_75.md`。
+- [x] `codex/fast-sub-python-cleanup`：Python Maintainability Cleanup Before Go。已完成安全网、`cli.py` 命令 handler 拆分和轻量边界整理；未改变用户命令、参数、JSON schema、退出码、模型安装、转写、翻译或 benchmark 行为。详见 `FAST_SUB_PARALLEL_ROUND7_75.md` 和 `FAST_SUB_ROUND7_75_IMPLEMENTATION.md`。
 
 第五轮和 5.5 轮已完成：
 
@@ -358,13 +362,14 @@ v0 剩余迭代预估：
 
 后续建议路线：
 
-- 第 7 轮：Translation Provider Loop + 翻译模型安装。已完成 Python CLI 内的 `fast-sub translate`、web/API/local translation providers、默认翻译模型 manifest、`models install nllb-200-distilled-600m-ct2-int8` 和 checkpoint/resume。
-- 第 7.5 轮：Translation Benchmark。已新增独立 `fast-sub bench-translate`，使用 reference SRT/TXT 计算 BLEU、chrF、exact match、耗时和失败率，让用户对当前翻译方案质量有可复现的粗略判断；现有 `fast-sub bench` 继续专注媒体转写 benchmark。
-- 第 7.75 轮：Python Maintainability Cleanup Before Go。计划先做一轮小重构，主要拆分 `cli.py` 命令 handler、补足 characterization tests、保持所有 CLI/JSON/退出码/provider/model/worker contract 不变，让第 8 轮 Go foundation 不被 Python 可读性问题拖住。
-- 第 8 轮：Go migration foundation，新增并行 Go CLI 骨架，先实现 `doctor/probe/extract`。
-- 第 9 轮：Go 接管 `transcribe/auto` 主链路，继续调用 Python faster-whisper worker。
-- 第 10 轮：Go provider runtime 与 native backend 准备，优先验证 `whisper.cpp` 一类 native worker。
-- 第 11 轮：桌面 UI，调用 Go CLI 或 Go daemon。
+- 第 7 轮：Translation Provider Loop + 翻译模型安装。已完成。
+- 第 7.5 轮：Translation Benchmark。已完成。
+- 第 7.75 轮：Python Maintainability Cleanup Before Go。已完成。
+- 第 8 轮：Go migration foundation。已完成。
+- 第 9 轮：Go 接管 `transcribe/auto` 主链路，继续调用 Python faster-whisper worker。已完成。
+- 第 10 轮：Go provider runtime 与 native backend 准备，含 Go 模型下载、OpenAI STT 和 whisper.cpp native backend。已完成。
+- 第 10.5 轮：Go daemon/job API gate，提供 UI 可接入的 HTTP REST + SSE job API。已完成。
+- 第 11 轮：桌面 UI bridge/shell，启动 Go daemon、读取 ready JSON、保存 token、调用 REST、订阅 SSE、退出时关闭 daemon。
 - 第 12 轮：Web 版，复用 job/provider/model contract。
 
 ### Milestone 0: CLI 骨架
@@ -1008,8 +1013,9 @@ compute_type
 15. Go migration foundation。
 16. Go transcribe/auto main path。
 17. Go provider runtime + API/native provider。
-18. Electron UI。
-19. Web 版。
+18. Go daemon/job API gate。
+19. Electron UI bridge/shell。
+20. Web 版。
 
 ## Assumptions
 

@@ -454,6 +454,26 @@ Translation remains Python CLI/provider functionality for now. Round 10.5 may re
 
 Desktop UI should call the daemon/job API, not reimplement model/provider/subtitle logic.
 
+Round 10.5 implementation status:
+
+- [x] `fast-sub-go serve` and `fast-sub-go daemon` added.
+- [x] Ready JSON includes `schema_version`, `base_url`, ephemeral token, and pid.
+- [x] Business REST APIs require bearer token; health/version remain public.
+- [x] Default host is loopback-only and CORS is disabled.
+- [x] REST job API supports create/list/get/cancel/result/logs/delete.
+- [x] `GET /v1/models` and `GET /v1/providers` expose Go model/provider state.
+- [x] SSE job event stream supports replay, heartbeat, and `events_lost`.
+- [x] Job store persists metadata, requests, events, logs, and terminal state.
+- [x] Default queue uses `max_running_jobs=1`.
+- [x] Daemon shutdown cancels running jobs; restart marks stale running/canceling jobs interrupted.
+- [x] Transcribe jobs reuse the Round 10 providers: `local-faster-whisper`, `local-whisper-cpp`, and `api-openai-transcription`.
+
+Stable UI contract:
+
+```text
+go-docs/specs/daemon-api.md
+```
+
 ## Round 11: Desktop UI
 
 Goal: build the desktop shell after the Go product core is stable enough to call.
