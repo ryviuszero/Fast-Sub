@@ -18,7 +18,7 @@ Round 7.5: translation benchmark report design
 Round 7.75: Go 迁移前的 Python 可维护性整理
 Round 8: Go migration foundation
 Round 9: Go transcribe/auto main path
-Round 10: Go provider runtime and native backend preparation
+Round 10: Go product core before UI
 Round 11: desktop UI
 Round 12: Web version
 ```
@@ -336,42 +336,57 @@ Go parity gate before making Go the default:
 - JSON purity tests pass for success and common failures.
 - Python fallback remains documented until at least one release after Go default switch.
 
-## Round 10: Go Provider Runtime And Native Backend Preparation
+## Round 10: Go Product Core Before UI
 
-Goal: move provider orchestration to Go and prepare native backends.
+Goal: finish the Go product core enough that the next desktop UI round can call Go for model download, provider status, local STT, API STT, native whisper.cpp STT, and the main auto/transcribe path.
 
-Recommended branch:
+Detailed spec:
 
 ```text
+go-docs/specs/round10-go-product-core.md
+```
+
+Recommended parallel branches:
+
+```text
+codex/fast-sub-go-models-download
 codex/fast-sub-go-provider-runtime
+codex/fast-sub-go-openai-stt
+codex/fast-sub-go-whisper-cpp
+```
+
+Recommended merge order:
+
+```text
+1. codex/fast-sub-go-models-download
+2. codex/fast-sub-go-provider-runtime
+3. codex/fast-sub-go-openai-stt
+4. codex/fast-sub-go-whisper-cpp
 ```
 
 Key work:
 
-- Implement Go-side provider registry.
-- Support provider categories:
-  - local worker provider
-  - native binary provider
-  - API provider
-- Make `providers list/test` stable in Go.
-- Move legacy Python `run` provider behavior out of the main product path.
-- Prepare one native STT backend candidate, preferably `whisper.cpp`, as an experimental proof only if provider runtime lands cleanly.
-- Keep API provider behavior explicitly opt-in.
-- Add model install locking before Go owns downloads:
-  - lock file per model id
-  - `.part` file convention
-  - checksum verification
-  - concurrent install protection
-  - resume behavior
+- Move all model/binary download capability to Go.
+- Implement Go `models list/install/verify` with `.part`, resume, sha256, per-model lock, checksum mismatch cleanup, and directory/multi-file verification.
+- Implement Go provider registry and `providers list/test`.
+- Make Round 9 `transcribe/auto` support `--model <id>` through the Go model resolver while preserving `--model-path`.
+- Make `auto --yes` able to install local models, but never silently enable API upload.
+- Implement real `api-openai-transcription` through explicit provider selection, explicit model, explicit API key/config, mock HTTP tests, and secret redaction.
+- Implement `local-whisper-cpp` as a native backend by calling an external whisper.cpp binary through argv, not CGo.
+- Keep Python as worker / AI adapter only; Python should not own download or provider decision logic going forward.
 
 Acceptance:
 
-- Provider states are consistent: `available`, `missing_dependency`, `missing_model`, `missing_api_key`, `not_implemented`.
-- Python workers and native workers share the same high-level request/response semantics.
-- `auto --yes` never enables API upload silently.
-- Local/API privacy boundary is visible in CLI output and docs.
-- Required scope: Go provider registry and local/API privacy boundary.
-- Optional scope: experimental `whisper.cpp` worker proof. Native backend proof should not block provider runtime if it becomes large.
+- `fast-sub-go models list/install/verify --json` works with fake HTTP tests and does not require real network by default.
+- `fast-sub-go providers list/test --json` reports `local-faster-whisper`, `local-whisper-cpp`, and `api-openai-transcription`.
+- Provider states are consistent: `available`, `missing_dependency`, `missing_model`, `missing_api_key`, `disabled`, `not_implemented`.
+- `fast-sub-go transcribe input.mp4 --provider local-faster-whisper --model whisper-small --json` works in default tests with fakes.
+- `fast-sub-go transcribe input.mp4 --provider local-whisper-cpp --model whisper-small --json` works in default tests with a fake whisper.cpp binary.
+- `fast-sub-go transcribe input.mp4 --provider api-openai-transcription --model <model> --json` works in default tests with a mock HTTP server.
+- `fast-sub-go auto input.mp4 --model whisper-small --yes --json` can trigger local model install but never API upload.
+- JSON output remains parseable on success and failure.
+- API keys, Authorization headers, raw secrets, model download URLs with credentials, and sensitive request bodies are redacted.
+- Default automated tests do not require real models, GPU, real ffmpeg, real whisper.cpp, real OpenAI, or real network.
 
 ## Round 10.5: Go Daemon / Job API Gate
 
