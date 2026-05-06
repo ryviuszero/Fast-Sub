@@ -14,14 +14,27 @@ const (
 	ExitMissingDependency = 3
 	// ExitProcessFailed means ffmpeg or ffprobe returned a failure.
 	ExitProcessFailed = 7
+	// ExitWorkerFailed means a worker process or worker protocol failed.
+	ExitWorkerFailed = 8
 )
 
 const (
 	CodeInvalidInput      = "invalid_input"
 	CodeInvalidUsage      = "invalid_usage"
 	CodeMissingDependency = "missing_dependency"
+	CodeMissingWorker     = "missing_worker"
+	CodeMissingModel      = "missing_model"
+	CodeNotImplemented    = "not_implemented"
+	CodeOutputExists      = "output_exists"
 	CodeFFmpegFailed      = "ffmpeg_failed"
 	CodeFFprobeFailed     = "ffprobe_failed"
+	CodeWorkerFailed      = "worker_failed"
+	CodeWorkerTimeout     = "worker_timeout"
+	CodeWorkerCanceled    = "worker_canceled"
+	CodeWorkerProtocol    = "worker_protocol_error"
+	CodeCanceled          = "canceled"
+	CodePermissionDenied  = "permission_denied"
+	CodeDiskFull          = "disk_full"
 )
 
 // AppError is the stable error payload used by JSON CLI output.
@@ -65,12 +78,16 @@ func ExitCode(err *AppError) int {
 		return ExitOK
 	}
 	switch err.Code {
-	case CodeInvalidInput, CodeInvalidUsage:
+	case CodeInvalidInput, CodeInvalidUsage, CodeOutputExists, CodeNotImplemented:
 		return ExitInvalidInput
-	case CodeMissingDependency:
+	case CodeMissingDependency, CodeMissingWorker:
 		return ExitMissingDependency
+	case CodeMissingModel:
+		return 4
 	case CodeFFmpegFailed, CodeFFprobeFailed:
 		return ExitProcessFailed
+	case CodeWorkerProtocol, CodeWorkerTimeout, CodeWorkerCanceled, CodeCanceled:
+		return ExitWorkerFailed
 	default:
 		return ExitGeneral
 	}

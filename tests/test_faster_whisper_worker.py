@@ -136,6 +136,7 @@ def test_success_consumes_generator_and_writes_response(
     assert calls["kwargs"] == {
         "beam_size": 1,
         "vad_filter": False,
+        "word_timestamps": False,
         "language": "en",
     }
 
@@ -171,6 +172,7 @@ def test_batch_size_uses_batched_inference_pipeline(
     assert calls["kwargs"] == {
         "beam_size": 5,
         "vad_filter": True,
+        "word_timestamps": False,
         "language": "zh",
         "batch_size": 4,
     }
@@ -217,10 +219,24 @@ def test_vad_and_mode_mapping() -> None:
     assert aggressive == {
         "beam_size": 5,
         "vad_filter": True,
+        "word_timestamps": False,
         "vad_parameters": {"min_silence_duration_ms": 300},
     }
     assert aggressive_warnings == ["quality mode currently uses balanced beam settings."]
-    assert normal == {"beam_size": 5, "vad_filter": True}
+    assert normal == {"beam_size": 5, "vad_filter": True, "word_timestamps": False}
+
+
+def test_word_timestamps_mapping() -> None:
+    kwargs, warnings = worker._build_transcribe_kwargs(
+        SttWorkerRequest(
+            audio_path=Path("audio.wav"),
+            model_path=Path("model"),
+            word_timestamps=True,
+        )
+    )
+
+    assert kwargs["word_timestamps"] is True
+    assert warnings == []
 
 
 def test_empty_segments_is_worker_failure(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:

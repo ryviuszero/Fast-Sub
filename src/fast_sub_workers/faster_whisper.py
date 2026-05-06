@@ -219,6 +219,7 @@ def _build_transcribe_kwargs(request: SttWorkerRequest) -> tuple[dict[str, Any],
     kwargs: dict[str, Any] = {
         "beam_size": 1 if request.mode == "fast" else 5,
         "vad_filter": request.vad != "off",
+        "word_timestamps": request.word_timestamps,
     }
     if request.language != "auto":
         kwargs["language"] = request.language

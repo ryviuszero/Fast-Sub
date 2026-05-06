@@ -27,6 +27,7 @@ class SttWorkerRequest(BaseModel):
     batch_size: int = Field(default=8, gt=0)
     vad: str = "normal"
     mode: str = "balanced"
+    word_timestamps: bool = False
 
 
 class SttWorkerResponse(SttProviderResponse):
