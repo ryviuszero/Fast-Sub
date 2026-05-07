@@ -60,7 +60,9 @@ function SidebarSettings({active='general'}) {
     {id:'general', icon:'◎', label:'通用'},
     {id:'models',  icon:'◇', label:'模型管理'},
     {id:'api', icon:'◈', label:'API 服务'},
+    {id:'providers', icon:'◌', label:'Provider'},
     {id:'diag',    icon:'⚙', label:'诊断'},
+    {id:'benchmark', icon:'▣', label:'Benchmark'},
   ];
   return (
     <div className="col shrink-0 pad-10 gap-2" style={{width:130, borderRight:'1.2px solid var(--ink)', background:'var(--paper-2)'}}>

@@ -313,8 +313,65 @@ function SetupDone({clean}) {
   );
 }
 
+// Setup: model download failed / offline
+function SetupModelDownloadFailed({clean}) {
+  return (
+    <div className={"wf "+(clean?"clean":"")}>
+      <V2Chrome right={<span className="t-xs">首次启动 · 下载失败</span>}/>
+      <div className="grow col pad-16 gap-10" style={{overflow:'auto'}}>
+        <div className="col gap-2">
+          <div className="h0">模型暂时无法下载</div>
+          <div className="t-sm">网络连接不可用或下载中断。可以重试，也可以先进入主界面。</div>
+        </div>
+
+        <div className="b pad-12 col gap-8" style={{borderColor:'var(--warn)', background:'var(--warn-soft)'}}>
+          <div className="row between mid">
+            <div className="col">
+              <div className="h2">whisper-small</div>
+              <div className="t-xs">默认 ASR 模型 · 466 MB</div>
+            </div>
+            <StatusPill status="install-fail"/>
+          </div>
+          <div className="t-sm">下载到 177 MB 后中断。当前无法进行本地转写。</div>
+          <div className="row gap-6">
+            <div className="btn sm primary">重试下载</div>
+            <div className="btn sm">更换网络后继续</div>
+            <div className="btn sm ghost">选择更小模型</div>
+          </div>
+        </div>
+
+        <div className="b pad-12 col gap-6">
+          <div className="row between mid">
+            <div className="col">
+              <div className="h2">通用翻译模型</div>
+              <div className="t-xs">820 MB · 等待 ASR 模型完成后下载</div>
+            </div>
+            <StatusPill status="pending"/>
+          </div>
+          <div className="t-xs">跳过后，主界面会显示“翻译未准备”。</div>
+        </div>
+
+        <div className="b-dash pad-10 col gap-4" style={{background:'var(--paper-2)'}}>
+          <div className="h3">进入主界面后的状态</div>
+          <CheckItem label="本地转写" detail="未准备 · 需要下载 ASR 模型" status="missing"/>
+          <CheckItem label="本地翻译" detail="未准备 · 可稍后下载" status="skip"/>
+          <CheckItem label="FFmpeg" detail="可用" status="ready"/>
+        </div>
+
+        <div className="row gap-8" style={{marginTop:'auto'}}>
+          <div className="btn ghost">查看诊断</div>
+          <div className="grow"/>
+          <div className="btn ghost">稍后下载</div>
+          <div className="btn primary">进入主界面</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 window.SetupCheck = SetupCheck;
 window.SetupInstall = SetupInstall;
 window.SetupASR = SetupASR;
 window.SetupTranslation = SetupTranslation;
 window.SetupDone = SetupDone;
+window.SetupModelDownloadFailed = SetupModelDownloadFailed;

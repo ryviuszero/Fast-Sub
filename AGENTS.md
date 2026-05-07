@@ -1,93 +1,143 @@
-# Fast Sub Agent Guide
+# Fast Sub Agent 指南
 
-## Project Summary
+## 项目概览
 
-Fast Sub is a local-first subtitle tool for video and audio files.
+Fast Sub 是一个本地优先的视频和音频字幕工具。
 
-Current product shape:
-
-```text
-Python v0 CLI today
-Go product core next
-Python model workers / AI adapters long term
-Native binaries for ffmpeg, whisper.cpp, CTranslate2, ONNX/TensorRT later
-Desktop UI and Web after CLI/daemon contracts stabilize
-```
-
-Primary user-facing goals:
-
-- Generate local source-language subtitles quickly.
-- Translate SRT subtitles through explicit local, web, or API providers.
-- Keep local workflows private by default.
-- Provide reproducible benchmark tooling for STT and translation quality/performance.
-- Preserve stable CLI, JSON, exit-code, provider, model, worker, and benchmark contracts while migrating to Go.
-
-## Current Progress
-
-Completed on `master`:
-
-- Project renamed to `fast-sub`, package path is `src/fast_sub`.
-- Python v0 CLI is functional.
-- `auto`, bare command, and `run` route to the local subtitle pipeline.
-- `transcribe` uses the local faster-whisper worker path.
-- `translate` supports `web-bing`, `web-google`, `api-openai-chat`, and `local-nllb-ct2`.
-- `models list/install/verify` supports ASR and translation models.
-- `bench` benchmarks media transcription.
-- `bench-translate` benchmarks subtitle translation quality/runtime.
-- Round 7.75 Python layering cleanup has landed:
-  - CLI command shell split into `fast_sub.cli.commands`.
-  - Service/client/provider/model-store/benchmark/STT/translation package boundaries clarified.
-  - `mypy src` baseline is clean.
-
-Next planned phase:
+当前产品形态：
 
 ```text
-Round 8: Go migration foundation
+当前：Python v0 CLI
+下一步：Go 产品核心
+长期：Python 模型 worker / AI adapter
+后续：ffmpeg、whisper.cpp、CTranslate2、ONNX/TensorRT 等 native binary
+最后：CLI / daemon contract 稳定后再做桌面 UI 和 Web
 ```
 
-Round 8 should add a parallel Go CLI foundation and must not replace the Python CLI yet.
+主要用户目标：
 
-## Key Documents
+- 快速生成本地原语音字幕。
+- 通过显式选择的本地、网页或 API provider 翻译 SRT 字幕。
+- 默认保护本地工作流隐私。
+- 提供可复现的 STT 和翻译质量/性能 benchmark 工具。
+- 在迁移到 Go 的过程中，保持 CLI、JSON、退出码、provider、model、worker 和 benchmark contract 稳定。
 
-- `FAST_SUB_PLAN.md`: overall product and milestone plan.
-- `FAST_SUB_GO_MIGRATION_PLAN.md`: Go migration roadmap.
-- `FAST_SUB_PARALLEL_ROUND7_75.md`: Python layering cleanup plan.
-- `FAST_SUB_ROUND7_75_IMPLEMENTATION.md`: completed Round 7.75 implementation notes.
-- `FAST_SUB_ARCHITECTURE.md`: current Python architecture map.
-- `go-docs/project-standards.md`: project standards and code style for the Go migration era.
-- `docs/development.md`: Python development notes.
-- `docs/project-standards.md`: Python package/code style standards.
+## 当前进度
 
-## Working Rules
+主线 Round 1 到 Round 10.5 基本完成：
 
-- Prefer planning and review in the PM thread; implement code in dedicated feature branches or worktrees.
-- Keep public behavior stable unless the user explicitly approves a contract change.
-- Do not silently change CLI command names, options, defaults, JSON schema, exit codes, report schema, or worker/provider contracts.
-- Do not make API or web provider behavior implicit. Any remote upload of audio/text must be explicit.
-- Do not commit large local media, real benchmark outputs, model files, API keys, or local paths.
-- Respect dirty worktrees. Never revert unrelated user changes.
-- Use `rg` for searching when available; fall back to PowerShell commands if `rg` is blocked.
-- Use `apply_patch` for manual file edits.
-- Keep edits scoped to the current request.
+- 项目已重命名为 `fast-sub`，包路径为 `src/fast_sub`。
+- Python v0 CLI 可用。
+- `auto`、裸命令和 `run` 都进入本地字幕 pipeline。
+- `transcribe` 使用本地 faster-whisper worker 路径。
+- `translate` 支持 `web-bing`、`web-google`、`api-openai-chat` 和 `local-nllb-ct2`。
+- `models list/install/verify` 支持 ASR 和翻译模型。
+- `bench` 支持媒体转写 benchmark。
+- `bench-translate` 支持字幕翻译质量和运行时间 benchmark。
+- Round 7.75 Python 分层清理已完成：
+  - CLI command shell 已拆到 `fast_sub.cli.commands`。
+  - service、client、provider、model-store、benchmark、STT、translation 包边界已明确。
+  - `mypy src` baseline 已清理。
+- Round 8 Go migration foundation 已完成。
+- Round 9 Go transcribe/auto main path 已完成。
+- Round 10 Go product core before UI 已完成。
+- Round 10.5 Go daemon/job API gate 已完成。
 
-## Branching And Merge Style
+`ui-docs` 当前进度：
 
-- Default branch prefix for Codex work is `codex/`.
-- Prefer one clear branch per implementation round.
-- For large rounds, squash implementation work into one reviewable commit before merging to `master`.
-- Prefer fast-forward merges into `master` when possible.
-- Document verification results in the final response.
+- 已建立 Electron UI 规划入口：`ui-docs/project-overview.md`。
+- 已将 Electron 项目范围写入 `ui-docs/project-overview.md`。
+- 已将 Electron 应用架构写入 `ui-docs/architecture.md`。
+- 已从 prototype 提取 UI token 并写入 `ui-docs/ui-context.md`。
+- 已写入 Electron 客户端代码标准：`ui-docs/code-standards.md`。
+- 已写入 AI 编码代理工作规则：`ui-docs/ai-workflow-rules.md`。
+- 已建立 Electron 进度跟踪器：`ui-docs/project-tracker.md`。
+- `ui-docs/prototype/` 已覆盖首次启动、主界面、子功能、任务队列和设置等主要 UI 状态。
+- 已确认 `ui-docs` 后续实现从 Round 11 开始，收敛为 Round 11、Round 12 和 Round 13 三轮。
 
-## Python Development
+后续 UI 阶段收敛为三轮：
 
-Python package entry points:
+```text
+Round 11: Electron Mock-first Shell
+Round 12: Electron 接入 Go Daemon
+Round 13: 产品化与发布准备
+```
+
+Round 11 应基于 `ui-docs` 的上下文文档，先实现 Electron shell、mock client 和完整 mock-first UI 流程，不接真实 Go daemon。Round 12 再实现 `DaemonFastSubClient` 并接入 daemon 启动、健康检查、任务创建、进度订阅、取消和结果查看。Round 13 聚焦 Electron 打包、本地依赖检查、诊断、隐私提示、基础 smoke/E2E 和发布检查清单。
+
+## 关键文档
+
+- `ui-docs/prototype/desktop-ui-functional-plan.md`：桌面 UI 功能规划和原型范围。
+- `ui-docs/project-overview.md`：Electron 产品定义、目标、功能和范围。
+- `ui-docs/architecture.md`：Electron 应用结构、边界、存储模型和不变式。
+- `ui-docs/ui-context.md`：Electron UI 主题、颜色、排版和组件约定。
+- `ui-docs/code-standards.md`：Electron 实现规则和代码约定。
+- `ui-docs/ai-workflow-rules.md`：Electron 开发工作流、范围规则和交付方式。
+- `ui-docs/project-tracker.md`：Electron 当前阶段、决策清单、进度和下一步。
+- `FAST_SUB_PLAN.md`：整体产品和里程碑计划。
+- `FAST_SUB_GO_MIGRATION_PLAN.md`：Go 迁移路线图。。
+- `FAST_SUB_PARALLEL_ROUND7_75.md`：Python 分层清理计划。
+- `FAST_SUB_ROUND7_75_IMPLEMENTATION.md`：Round 7.75 已完成实现记录。
+- `FAST_SUB_ARCHITECTURE.md`：当前 Python 架构图。
+- `go-docs/project-standards.md`：Go 迁移阶段的项目标准和代码风格。
+- `docs/development.md`：Python 开发说明。
+- `docs/project-standards.md`：Python 包和代码风格标准。
+
+## 工作规则
+
+- 优先在 PM 线程中做规划和审查；代码实现放到专门 feature branch 或 worktree。
+- 除非用户明确批准 contract 变更，否则保持公开行为稳定。
+- 不要静默修改 CLI 命令名、参数、默认值、JSON schema、退出码、报告 schema 或 worker/provider contract。
+- 不要让 API 或网页 provider 行为变成隐式行为。任何远程上传音频或文本都必须显式发生。
+- 不要提交大型本地媒体、真实 benchmark 输出、模型文件、API key 或本机路径。
+- 尊重 dirty worktree。不要回滚无关的用户改动。
+- 搜索时优先使用 `rg`；如果 `rg` 被阻止，使用 PowerShell 等替代命令。
+- 手动文件编辑使用 `apply_patch`。
+- 修改范围保持在当前请求内。
+
+## 应用构建上下文
+
+在实现 Electron 应用或做任何架构决策前，按顺序阅读以下文件：
+
+1. `ui-docs/project-overview.md`：产品定义、目标、功能和范围。
+2. `ui-docs/architecture.md`：Electron 应用结构、边界、存储模型和不变式。
+3. `ui-docs/code-standards.md`：实现规则和代码约定。
+4. `ui-docs/ui-context.md`：主题、颜色、排版和组件约定。
+5. `ui-docs/ai-workflow-rules.md`：开发工作流、范围规则和交付方式。
+6. `ui-docs/project-tracker.md`：当前阶段、决策清单、进度和下一步。
+
+每次进行有意义的 Electron 实现更改后，更新 `ui-docs/project-tracker.md`。
+
+如果实现更改了上下文文件中记录的架构、范围、UI 设计上下文或代码标准，先更新对应文档，再继续实现。
+
+后续 Electron 开发采用 specs-driven 方式推进。每个主要实现单元开始前，先确认对应 spec 或补充 spec；每个主要实现单元完成后，将进度、结果、未决问题和下一步同步更新到 `ui-docs/project-tracker.md`。
+
+## 分支和合并风格
+
+- Codex 工作的默认分支前缀是 `codex/`。
+- 每个实现轮次优先使用一个清晰分支。
+- 大轮次合并到 `master` 前，优先 squash 成一个可审查提交。
+- 可能时优先 fast-forward merge 到 `master`。
+- 最终回复中记录验证结果。
+
+## Python 开发
+
+当前定位：
+
+- Python v0 CLI 已经可用，并继续作为稳定入口保留。
+- Python 仍负责 `fast-sub` CLI、翻译、benchmark、model store、provider contract 和本地 worker 生态中的一部分能力。
+- Python 长期定位是模型 worker / AI adapter / 生态适配层，不再承担未来桌面 UI 的主业务编排。
+- Go 侧已经接管并行 CLI、product core 和 daemon/job API；Electron UI 不直接调用 Python 内部模块。
+- 新增 Python 改动应优先服务于 worker、adapter、contract、测试 fixture 或兼容修复，不要绕过 Go daemon/UI client 边界。
+
+Python 包入口：
 
 ```text
 fast-sub = fast_sub.app:main
 fast-sub-worker-faster-whisper = fast_sub_workers.faster_whisper:main
 ```
 
-Default Python checks:
+默认 Python 检查：
 
 ```bash
 uv run ruff format --check src\fast_sub tests
@@ -96,68 +146,116 @@ uv run mypy src
 uv run pytest
 ```
 
-Known local note:
+已知本地说明：
 
-- On Windows, pytest may warn that `.pytest_cache` cannot be written. This warning does not by itself indicate test failure.
+- Windows 上 pytest 可能提示 `.pytest_cache` 无法写入。这个 warning 本身不代表测试失败。
 
-Python package ownership:
+Python 包职责：
 
-- `fast_sub/cli/`: Typer commands, JSON/stdout/stderr policy, redaction, exit codes.
-- `fast_sub/clients/`: network and third-party service clients.
-- `fast_sub/infrastructure/`: ffmpeg, ffprobe, worker subprocess, local runtime adapters.
-- `fast_sub/providers/`: provider registry, metadata, availability, resolution.
-- `fast_sub/stt/`: transcription options/results, worker orchestration, STT errors/constants.
-- `fast_sub/translation/`: translation options/results, language mapping, parsing, service.
-- `fast_sub/subtitles/`: subtitle models, SRT parse/render, refine.
-- `fast_sub/media/`: probe/extract/analyze and media rules.
-- `fast_sub/model_store/`: model manifest, install, verify, download, status.
-- `fast_sub/output/`: output paths and burn-in behavior.
-- `fast_sub/pipeline/`: cross-module auto/run orchestration.
-- `fast_sub/benchmark/`: benchmark options, metrics, reports, execution.
-- `fast_sub/contracts/`: stable provider/worker/error contracts.
+- `fast_sub/cli/`：Typer 命令、JSON/stdout/stderr 策略、redaction、退出码。
+- `fast_sub/clients/`：网络和第三方服务 client。
+- `fast_sub/infrastructure/`：ffmpeg、ffprobe、worker subprocess、本地 runtime adapter。
+- `fast_sub/providers/`：provider registry、metadata、availability、resolution。
+- `fast_sub/stt/`：转写 options/results、worker orchestration、STT errors/constants。
+- `fast_sub/translation/`：翻译 options/results、语言映射、解析、service。
+- `fast_sub/subtitles/`：字幕 model、SRT parse/render、refine。
+- `fast_sub/media/`：probe/extract/analyze 和媒体规则。
+- `fast_sub/model_store/`：model manifest、install、verify、download、status。
+- `fast_sub/output/`：输出路径和字幕烧录行为。
+- `fast_sub/pipeline/`：跨模块 auto/run orchestration。
+- `fast_sub/benchmark/`：benchmark options、metrics、reports、execution。
+- `fast_sub/contracts/`：稳定 provider/worker/error contract。
 
-## Go Migration Rules
+Python 修改规则：
 
-Round 8 should start with a parallel Go CLI, likely under:
+- 不要因为 Electron UI 需求而让 UI 直接调用 Python CLI 或 Python 内部函数。
+- 不要在 Python worker 中读取主配置、下载模型、决定输出路径或直接写最终 SRT/ASS/MP4。
+- 不要把 API key 传给本地模型 worker，除非 worker 是明确命名的 API worker。
+- 修改 worker request/response/error schema 时，同步更新 Go contract、daemon client 和相关文档。
+- 修改 Python CLI 公开行为时，保持命令名、参数、默认值、JSON schema 和退出码兼容，除非用户明确批准。
+
+## Go 迁移规则
+
+当前定位：
+
+- Round 8 Go migration foundation 已完成。
+- Round 9 Go transcribe/auto main path 已完成。
+- Round 10 Go product core before UI 已完成，Go 已负责模型下载、provider runtime、OpenAI STT 和 whisper.cpp native backend。
+- Round 10.5 Go daemon/job API gate 已完成，Go 已提供 `serve/daemon`、REST job API、SSE events、job store、cancel/restart 语义和 loopback auth。
+- 下一阶段是 Round 11 Electron Mock-first Shell；Go 不再只是迁移试验，而是 Electron UI 的本机产品核心和 daemon 边界。
+
+Go 代码主要目录包括：
 
 ```text
 cmd/fast-sub-go/
 internal/cli/
+internal/contracts/
+internal/daemon/
+internal/downloads/
+internal/events/
 internal/errors/
-internal/media/
 internal/ffmpeg/
+internal/jobs/
+internal/logging/
+internal/media/
+internal/models/
 internal/paths/
-internal/worker/
+internal/providers/
+internal/runtime/fasterwhisper/
+internal/runtime/openai/
+internal/runtime/whispercpp/
 internal/subtitle/
-internal/bench/
 internal/testutil/
+internal/worker/
 ```
 
-Round 8 boundaries:
+当前 Go 边界：
 
-- Add `fast-sub-go` as a parallel CLI; do not replace `fast-sub`.
-- Start with low-risk commands such as `version`, `doctor`, `probe`, and `extract`.
-- Match Python v0 JSON, exit-code, path, and stderr/stdout behavior.
-- Use `exec.CommandContext` for `ffmpeg` / `ffprobe`; do not use CGo ffmpeg bindings.
-- Do not run model inference in Go.
-- Python edits during Round 8 should be limited to fixtures, golden outputs, or contract documentation needed by Go tests.
+- `fast-sub-go` 作为并行 Go CLI 和本机 daemon；不要在未明确批准前替换 Python `fast-sub`。
+- Go 负责 product core、下载、provider runtime、job orchestration、daemon API、UI contract 和本机进程控制。
+- Go daemon 默认只监听 `127.0.0.1`，非 health/version API 需要 ready token。
+- Go daemon REST/SSE contract 是 Electron `DaemonFastSubClient` 的真实后端边界。
+- 匹配并稳定 JSON、错误码、路径、stdout/stderr、redaction 和 provider/model/job contract。
+- 使用 `exec.CommandContext` 调用 `ffmpeg` / `ffprobe`；不要使用 CGo ffmpeg binding。
+- 不要在 Go 中直接运行 faster-whisper 推理；继续通过 Python worker 或 native binary provider 边界调用。
+- 不要让 Go runtime 包依赖 Electron UI、renderer、preload 或页面代码。
+- 不要默认启用 API provider，不要静默上传音频或字幕文本。
+- 默认测试不得访问真实网络、真实 OpenAI、真实模型、真实 ffmpeg、真实 whisper.cpp 或 GPU。
 
-Go checks once Go code exists:
+Go 检查命令：
 
 ```bash
 gofmt -w <changed-go-files>
 go test ./...
 ```
 
-## Review Priorities
+Go 修改规则：
 
-Review in this order:
+- 修改 daemon API、event schema、job status、provider metadata 或 model metadata 时，同步更新 `go-docs/specs/daemon-api.md`、`ui-docs/architecture.md` 或相关 client contract 文档。
+- 修改 Electron 依赖的 JSON contract 时，同步更新 `ui-docs/project-tracker.md` 的会议记录或未解决问题。
+- 保持 JSON stdout 纯净，日志和第三方输出不能混入 JSON。
+- 所有 secret、Authorization、ready token、signed URL 和 proxy credential 必须 redacted。
 
-1. Public behavior compatibility.
-2. JSON purity and exit-code stability.
-3. Privacy and secret redaction.
-4. Whether new side effects were introduced.
-5. Test coverage for high-risk paths.
-6. Correct package ownership and dependency direction.
-7. Naming, types, errors, comments/docstrings, and formatting.
+## 桌面 UI 和 Electron
 
+- 将 `ui-docs/project-overview.md` 作为 Electron 规划和实现顺序的入口文档。
+- Round 8 到 Round 10.5 已完成；Electron 相关后续实现从 Round 11 开始。
+- Round 11 做 Electron mock-first shell：项目骨架、`FastSubClient` MVP contract、`MockFastSubClient`、首次启动、主界面、任务队列和设置页 mock 流程。
+- Round 12 接入 Go daemon：`DaemonFastSubClient`、daemon 生命周期、健康检查、任务创建、事件订阅、取消、结果查看和异常恢复。
+- Round 13 做产品化与发布准备：打包、本地依赖检查、诊断、隐私提示、基础 smoke/E2E 和发布检查清单。
+- Electron 客户端采用 mock-first：先完成 UI 流程和状态管理，再接入真实 daemon。
+- 保持后端 client 边界，让 UI 可以从 `MockFastSubClient` 切换到 `DaemonFastSubClient`，避免页面级重写。
+- 不要因为当前 daemon API 尚未暴露某些能力就删除 UI 原型功能；按需要补充小范围 daemon API。
+- 远程 API 使用必须对用户显式、可见。
+
+## 审查优先级
+
+按以下顺序审查：
+
+1. 公开行为兼容性。
+2. JSON 纯净性和退出码稳定性。
+3. 隐私和 secret redaction。
+4. 是否引入了新的副作用。
+5. 高风险路径的测试覆盖。
+6. 包职责和依赖方向是否正确。
+7. 命名、类型、错误、注释/docstring 和格式。
