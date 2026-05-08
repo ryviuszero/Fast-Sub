@@ -31,6 +31,8 @@ type CreateRequest struct {
 	Model          string            `json:"model"`
 	ModelPath      string            `json:"model_path"`
 	Language       string            `json:"language"`
+	TargetLanguage string            `json:"target_language"`
+	OutputFormat   string            `json:"output_format"`
 	WordTimestamps string            `json:"word_timestamps"`
 	Options        map[string]any    `json:"options"`
 	Extra          map[string]string `json:"-"`

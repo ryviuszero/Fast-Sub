@@ -251,6 +251,8 @@ FastSubClient
   listModels()
   installModel(modelId)
   verifyModel(modelId)
+  createModelInstallJob(modelId)
+  removeModel(modelId)
   listProviders()
   testProvider(providerId, mode)
   createJob(request)

@@ -32,7 +32,6 @@ export const debugScreens: { id: Screen; label: string }[] = [
   { id: "queue-failed", label: "失败详情" },
   { id: "settings-general", label: "通用设置" },
   { id: "settings-models", label: "模型管理" },
-  { id: "settings-api", label: "API 服务" },
   { id: "settings-providers", label: "Provider" },
   { id: "settings-diagnostics", label: "诊断" },
   { id: "settings-benchmark", label: "Benchmark" },

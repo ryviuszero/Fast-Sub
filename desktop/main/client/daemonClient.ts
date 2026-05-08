@@ -148,6 +148,8 @@ function mapJob(value: unknown): JobDetail {
   const inputPath = str(item.input_path, "");
   const outputPath = str(item.output_path, "");
   const result = mapResult(item.result, outputPath);
+  const provider = str(item.provider, "");
+  const model = str(item.model, "");
   return {
     id: str(item.job_id, str(item.id, "job")),
     displayId: "任务",
@@ -159,10 +161,12 @@ function mapJob(value: unknown): JobDetail {
     progressPercent: percentFrom(item.progress),
     stageLabel: stageLabel(str(item.stage, "queued"), type),
     createdAt: str(item.created_at, "刚刚"),
+    completedAt: str(item.finished_at, ""),
+    language: result?.language || str(item.language, ""),
     inputPaths: inputPath ? [inputPath] : [],
     outputDirectory: outputPath ? outputPath.replace(/[\\/][^\\/]*$/, "") : "",
-    providerName: providerName(str(item.provider, "")),
-    modelName: str(item.model, ""),
+    providerName: providerName(provider),
+    modelName: model,
     result,
     error: mapError(item.error),
     logs: []
@@ -176,12 +180,13 @@ function mapResult(value: unknown, fallbackOutput = ""): JobResult | undefined {
   }
   const outputs = Array.isArray(item.outputs) ? item.outputs.map(record) : [];
   const firstOutput = outputs[0];
-  const outputPath = str(item.output_path, str(firstOutput?.path, fallbackOutput));
+  const outputPath = str(item.subtitle_path, str(item.output_path, str(firstOutput?.path, fallbackOutput)));
   return {
     subtitlePath: outputPath,
     outputFolder: outputPath ? outputPath.replace(/[\\/][^\\/]*$/, "") : "",
     summary: str(item.summary, outputs.length > 0 ? "任务已完成" : "已生成输出"),
-    durationLabel: item.elapsed_sec ? `${Math.round(num(item.elapsed_sec))} 秒` : ""
+    durationLabel: item.elapsed_sec ? `${Math.round(num(item.elapsed_sec))} 秒` : "",
+    language: str(item.language, "")
   };
 }
 
@@ -303,6 +308,11 @@ export class MainDaemonFastSubClient {
     return mapModel(result);
   }
 
+  async removeModel(modelId: string): Promise<ModelStatus> {
+    const result = record(await this.request(`/v1/models/${encodeURIComponent(modelId)}`, { method: "DELETE" }));
+    return mapModel(result);
+  }
+
   async listProviders(): Promise<ProviderStatus[]> {
     try {
       const result = record(await this.request("/v1/providers"));
@@ -329,15 +339,17 @@ export class MainDaemonFastSubClient {
       input_path: first,
       subtitle_path: request.type === "burn_in" ? request.inputPaths[1] ?? "" : undefined,
       output_path: outputPathFor(request),
+      output_format: request.outputFormat,
       provider: request.providerId,
       model: request.modelId,
       language: request.language,
-      target_language: request.language === "auto" ? "zh" : request.language,
+      target_language: request.targetLanguage ?? "zh",
       word_timestamps: request.outputType === "original_srt" ? "off" : "auto",
       options: {
         yes: request.remoteUploadConfirmed,
         overwrite: request.outputConflict === "overwrite",
         output_conflict: request.outputConflict ?? "ask",
+        target_language: request.targetLanguage ?? "zh",
         keep_temp: false,
         device: "auto"
       }
@@ -350,7 +362,7 @@ export class MainDaemonFastSubClient {
       const result = record(await this.request("/v1/jobs"));
       const jobs = Array.isArray(result.jobs) ? result.jobs : [];
       return jobs.map((job) => {
-        const { logs: _logs, inputPaths: _inputPaths, outputDirectory: _outputDirectory, providerName: _providerName, modelName: _modelName, result: _result, error: _error, estimatedRemaining: _estimatedRemaining, ...summary } = mapJob(job);
+        const { logs: _logs, inputPaths: _inputPaths, result: _result, error: _error, estimatedRemaining: _estimatedRemaining, ...summary } = mapJob(job);
         return summary;
       });
     } catch (error) {
@@ -535,14 +547,16 @@ function mapConfig(value: unknown): ConfigViewModel {
   const openai = record(item.openai_compatible);
   return {
     defaultLanguage: str(item.language, "auto"),
+    targetLanguage: str(item.target_language, "zh"),
     outputLocation: str(item.output_directory, "source") === "source" ? "source" : "custom",
     outputConflict: (str(item.output_conflict, "ask") as ConfigViewModel["outputConflict"]),
+    outputFormat: (str(item.output_format, "srt") as ConfigViewModel["outputFormat"]),
     device: normalizeDevice(str(item.device, "auto")),
-    outputType: "original_srt",
+    outputType: (str(item.output_type, "original_srt") as ConfigViewModel["outputType"]),
     asrProvider: str(item.default_asr_provider, "local-faster-whisper"),
     translationProvider: str(item.default_translation_provider, "local-nllb-ct2"),
     asrModel: str(item.default_asr_model, "whisper-small"),
-    translationModel: str(item.default_translation_model, "nllb-ct2-base"),
+    translationModel: str(item.default_translation_model, "nllb-200-distilled-600m-ct2-int8"),
     keepTempFiles: bool(item.keep_temp, false),
     wordTimestamps: bool(item.word_timestamps, false),
     apiKeyAlias: str(openai.api_key_alias, "openai-default"),
@@ -556,8 +570,11 @@ function mapConfig(value: unknown): ConfigViewModel {
 function configPatch(patch: Partial<ConfigViewModel>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (patch.defaultLanguage !== undefined) out.language = patch.defaultLanguage;
+  if (patch.targetLanguage !== undefined) out.target_language = patch.targetLanguage;
   if (patch.outputLocation !== undefined) out.output_directory = patch.outputLocation === "source" ? "source" : "custom";
   if (patch.outputConflict !== undefined) out.output_conflict = patch.outputConflict;
+  if (patch.outputFormat !== undefined) out.output_format = patch.outputFormat;
+  if (patch.outputType !== undefined) out.output_type = patch.outputType;
   if (patch.device !== undefined) out.device = patch.device === "gpu" ? "cuda" : patch.device;
   if (patch.asrProvider !== undefined) out.default_asr_provider = patch.asrProvider;
   if (patch.translationProvider !== undefined) out.default_translation_provider = patch.translationProvider;
@@ -589,9 +606,13 @@ function mapModel(value: unknown): ModelStatus {
   return {
     id,
     name: str(item.name, id),
-    kind: id.includes("nllb") || str(item.kind, "") === "translation" ? "translation" : "asr",
+    kind: id.includes("nllb") || str(item.kind, str(item.type, "")) === "translation" || str(item.type, "") === "translate" ? "translation" : "asr",
     state: status === "available" || status === "installed" || status === "ready" ? "ready" : status === "installing" ? "installing" : status === "failed" ? "failed" : "missing",
     sizeLabel: str(item.size_label, item.size_bytes ? `${Math.round(num(item.size_bytes) / 1024 / 1024)} MB` : "未知大小"),
+    backend: str(item.backend, ""),
+    compatibleProviders: stringArray(item.compatible_providers),
+    defaultFor: stringArray(item.default_for),
+    recommendation: modelRecommendation(id, str(item.type, ""), str(item.backend, "")),
     progressPercent: typeof item.progress_percent === "number" ? item.progress_percent : undefined,
     requiredForMainFlow: id.includes("whisper-small"),
     diagnostic: str(item.diagnostic, "")
@@ -601,8 +622,10 @@ function mapModel(value: unknown): ModelStatus {
 function mapProvider(value: unknown): ProviderStatus {
   const item = record(value);
   const id = str(item.id, "");
-  const kind = (str(item.kind, id.startsWith("api-") ? "api" : id.startsWith("web-") ? "web" : id.includes("whisper-cpp") ? "native" : "local") as ProviderStatus["kind"]);
-  const capability = (str(item.capability, id.includes("transcription") || id.includes("whisper") ? "stt" : "translation") as ProviderStatus["capability"]);
+  const location = str(item.location, "");
+  const kind = (str(item.kind, location === "api" || id.startsWith("api-") ? "api" : location === "web" || id.startsWith("web-") ? "web" : location === "native" || id.includes("whisper-cpp") ? "native" : "local") as ProviderStatus["kind"]);
+  const type = str(item.type, "");
+  const capability = (str(item.capability, type === "translation" || type === "translate" || id.includes("nllb") || id.startsWith("web-") || id === "api-openai-chat" ? "translation" : "stt") as ProviderStatus["capability"]);
   const state = str(item.status, str(item.state, "available")) as ProviderStatus["state"];
   return {
     id,
@@ -613,8 +636,28 @@ function mapProvider(value: unknown): ProviderStatus {
     enabled: state === "available",
     privacyNote: str(item.privacy_note, kind === "api" ? "会上传内容，可能产生费用。" : kind === "web" ? "会把字幕文本发送到第三方网页翻译服务。" : "本地处理，不上传。"),
     requiresUploadConfirmation: kind === "api" || kind === "web",
+    requiresApiKey: bool(item.requires_api_key, kind === "api"),
+    requiresModel: bool(item.requires_model, false),
+    supportsBatch: bool(item.supports_batch, false),
+    supportsWordTimestamps: bool(item.supports_word_timestamps, false),
+    supportedLanguages: stringArray(item.supported_languages),
+    capabilities: stringArray(item.capabilities),
+    compatibleModelTypes: stringArray(item.compatible_model_types),
     maskedCredential: str(item.masked_credential, state === "missing_api_key" ? "未配置" : "")
   };
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function modelRecommendation(id: string, type: string, backend: string): string {
+  if (id === "whisper-base") return "快速预览、低内存机器和短音频。";
+  if (id === "whisper-small") return "默认推荐，速度和准确率比较均衡。";
+  if (id.includes("large-v3-turbo")) return "更高准确率，适合长音频和更好的硬件。";
+  if (backend === "whisper.cpp") return "Native 本地路径，适合轻依赖和 CPU 场景。";
+  if (type === "translate" || id.includes("nllb")) return "本地离线翻译，适合隐私优先的字幕文本。";
+  return "可用于兼容 Provider 的本地任务。";
 }
 
 function outputPathFor(request: CreateJobRequest): string {
@@ -626,9 +669,9 @@ function outputPathFor(request: CreateJobRequest): string {
   const stem = base.replace(/\.[^.]+$/, "");
   const directory = request.outputDirectory || first.replace(/[\\/][^\\/]*$/, "");
   const sep = directory.includes("/") && !directory.includes("\\") ? "/" : "\\";
-  if (request.type === "translate_srt") return `${directory}${sep}${stem}.translated.srt`;
+  if (request.type === "translate_srt") return `${directory}${sep}${stem}.translated.${request.outputFormat}`;
   if (request.type === "burn_in") return `${directory}${sep}${stem}.burned.mp4`;
-  return `${directory}${sep}${stem}.srt`;
+  return `${directory}${sep}${stem}.${request.outputFormat}`;
 }
 
 function bodyKind(value: unknown): string {

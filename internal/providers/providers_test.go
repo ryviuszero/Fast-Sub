@@ -13,10 +13,10 @@ func TestListShape(t *testing.T) {
 
 	items := List(context.Background(), cfg)
 
-	if len(items) != 3 {
+	if len(items) != 7 {
 		t.Fatalf("providers len = %d", len(items))
 	}
-	want := []string{"local-faster-whisper", "local-whisper-cpp", "api-openai-transcription"}
+	want := []string{"local-faster-whisper", "local-whisper-cpp", "api-openai-transcription", "local-nllb-ct2", "web-bing", "web-google", "api-openai-chat"}
 	for index, id := range want {
 		if items[index].ID != id {
 			t.Fatalf("provider[%d] id = %q, want %q", index, items[index].ID, id)
@@ -24,6 +24,32 @@ func TestListShape(t *testing.T) {
 		if items[index].CheckMode != CheckModeStatic {
 			t.Fatalf("provider[%d] check mode = %q", index, items[index].CheckMode)
 		}
+	}
+}
+
+func TestTranslationProvidersAreListedWithMetadata(t *testing.T) {
+	items := List(context.Background(), fakeRuntime(nil, true, nil))
+	byID := map[string]ListedProvider{}
+	for _, item := range items {
+		byID[item.ID] = item
+	}
+	for _, id := range []string{"local-nllb-ct2", "web-bing", "web-google", "api-openai-chat"} {
+		item, ok := byID[id]
+		if !ok {
+			t.Fatalf("missing provider %s", id)
+		}
+		if item.Type != typeTranslation {
+			t.Fatalf("%s type = %q", id, item.Type)
+		}
+		if !hasString(item.Capabilities, "translate_srt") {
+			t.Fatalf("%s capabilities = %#v", id, item.Capabilities)
+		}
+	}
+	if byID["web-bing"].Status != StatusAvailable {
+		t.Fatalf("web-bing status = %q", byID["web-bing"].Status)
+	}
+	if byID["api-openai-chat"].Status != StatusMissingAPIKey {
+		t.Fatalf("api-openai-chat status = %q", byID["api-openai-chat"].Status)
 	}
 }
 

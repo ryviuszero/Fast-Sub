@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions, SaveDialogOptions } from "electron";
 import type { Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
@@ -108,8 +108,12 @@ ipcMain.handle("fast-sub:select-subtitle-output-path", async (event, defaultPath
   return result.canceled ? null : result.filePath ?? null;
 });
 
-ipcMain.handle("fast-sub:open-path-mock", (_event, path: unknown) => {
-  return typeof path === "string" && path.length > 0;
+ipcMain.handle("fast-sub:open-path-mock", async (_event, path: unknown) => {
+  if (typeof path !== "string" || path.length === 0 || /^https?:\/\//i.test(path)) {
+    return false;
+  }
+  const error = await shell.openPath(path);
+  return error.length === 0;
 });
 
 ipcMain.handle("fast-sub:security-snapshot", () => ({

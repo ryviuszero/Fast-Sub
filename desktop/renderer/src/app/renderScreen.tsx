@@ -36,7 +36,7 @@ export function renderScreen(props: RenderProps) {
     case "settings-models":
       return <SettingsPage {...props} tab="models" />;
     case "settings-api":
-      return <SettingsPage {...props} tab="api" />;
+      return <SettingsPage {...props} tab="providers" />;
     case "settings-providers":
       return <SettingsPage {...props} tab="providers" />;
     case "settings-diagnostics":

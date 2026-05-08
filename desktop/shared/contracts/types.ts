@@ -66,6 +66,10 @@ export interface ModelStatus {
   kind: ModelKind;
   state: ModelState;
   sizeLabel: string;
+  backend?: string;
+  compatibleProviders?: string[];
+  defaultFor?: string[];
+  recommendation?: string;
   progressPercent?: number;
   installJobId?: string;
   requiredForMainFlow: boolean;
@@ -81,13 +85,22 @@ export interface ProviderStatus {
   enabled: boolean;
   privacyNote: string;
   requiresUploadConfirmation: boolean;
+  requiresApiKey?: boolean;
+  requiresModel?: boolean;
+  supportsBatch?: boolean;
+  supportsWordTimestamps?: boolean;
+  supportedLanguages?: string[];
+  capabilities?: string[];
+  compatibleModelTypes?: string[];
   maskedCredential?: string;
 }
 
 export interface ConfigViewModel {
   defaultLanguage: string;
+  targetLanguage: string;
   outputLocation: "source" | "custom";
   outputConflict: "ask" | "overwrite" | "skip";
+  outputFormat: "srt" | "vtt" | "txt" | "json";
   device: "auto" | "cpu" | "gpu";
   outputType: "original_srt" | "translated_srt" | "bilingual_srt" | "burned_video";
   asrProvider: string;
@@ -109,8 +122,10 @@ export interface CreateJobRequest {
   outputDirectory: string;
   outputPath?: string;
   outputType: ConfigViewModel["outputType"];
+  outputFormat: ConfigViewModel["outputFormat"];
   outputConflict?: ConfigViewModel["outputConflict"];
   language: string;
+  targetLanguage?: string;
   providerId: string;
   modelId: string;
   remoteUploadConfirmed: boolean;
@@ -121,6 +136,7 @@ export interface JobResult {
   outputFolder: string;
   summary: string;
   durationLabel: string;
+  language?: string;
 }
 
 export interface JobLogEntry {
@@ -140,6 +156,11 @@ export interface JobSummary {
   progressPercent: number;
   stageLabel: string;
   createdAt: string;
+  completedAt?: string;
+  language?: string;
+  providerName?: string;
+  modelName?: string;
+  outputDirectory?: string;
 }
 
 export interface JobDetail extends JobSummary {
@@ -181,6 +202,7 @@ export interface FastSubClient {
   installModel(modelId: string): Promise<ModelStatus>;
   createModelInstallJob(modelId: string): Promise<JobDetail>;
   verifyModel(modelId: string): Promise<ModelStatus>;
+  removeModel(modelId: string): Promise<ModelStatus>;
   listProviders(): Promise<ProviderStatus[]>;
   testProvider(providerId: string, mode: "static" | "live"): Promise<ProviderStatus>;
   createJob(request: CreateJobRequest): Promise<JobDetail>;

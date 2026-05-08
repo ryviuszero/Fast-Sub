@@ -30,7 +30,8 @@ const (
 )
 
 const (
-	typeSTT = "stt"
+	typeSTT         = "stt"
+	typeTranslation = "translation"
 )
 
 // Metadata is the UI-facing provider description.
@@ -118,7 +119,7 @@ func DefaultRuntimeConfig() RuntimeConfig {
 func List(ctx context.Context, cfg RuntimeConfig) []ListedProvider {
 	cfg = normalizeConfig(cfg)
 	registry := registry(cfg)
-	ids := []string{"local-faster-whisper", "local-whisper-cpp", "api-openai-transcription"}
+	ids := []string{"local-faster-whisper", "local-whisper-cpp", "api-openai-transcription", "local-nllb-ct2", "web-bing", "web-google", "api-openai-chat"}
 	items := make([]ListedProvider, 0, len(ids))
 	for _, id := range ids {
 		provider := registry[id]
@@ -225,6 +226,68 @@ func defaultRegistry() map[string]Provider {
 			},
 			Check: checkOpenAI,
 		},
+		"local-nllb-ct2": {
+			Metadata: Metadata{
+				ID:                     "local-nllb-ct2",
+				Type:                   typeTranslation,
+				Location:               "local",
+				Backend:                "nllb-ct2",
+				Offline:                true,
+				RequiresAPIKey:         false,
+				RequiresModel:          true,
+				PrivacyNote:            "Runs subtitle translation locally through the NLLB CTranslate2 provider. Subtitle text is not uploaded.",
+				SupportedLanguages:     []string{"en", "zh", "ja", "ko"},
+				SupportsWordTimestamps: false,
+				SupportsBatch:          true,
+				Capabilities:           []string{"translate_srt", "offline"},
+				CompatibleModelTypes:   []string{"translation"},
+			},
+			Check: checkLocalNLLB,
+		},
+		"web-bing": {
+			Metadata: translationWebMetadata("web-bing", "bing-web-translate", "Uploads subtitle text to Bing web translation only when explicitly selected."),
+			Check:    checkAlwaysAvailable,
+		},
+		"web-google": {
+			Metadata: translationWebMetadata("web-google", "google-web-translate", "Uploads subtitle text to Google web translation only when explicitly selected."),
+			Check:    checkAlwaysAvailable,
+		},
+		"api-openai-chat": {
+			Metadata: Metadata{
+				ID:                     "api-openai-chat",
+				Type:                   typeTranslation,
+				Location:               "api",
+				Backend:                "openai-compatible-chat",
+				Offline:                false,
+				RequiresAPIKey:         true,
+				RequiresModel:          true,
+				PrivacyNote:            "Uploads subtitle text to the configured OpenAI-compatible chat API only when explicitly selected.",
+				SupportedLanguages:     []string{"auto", "en", "zh", "ja", "ko"},
+				SupportsWordTimestamps: false,
+				SupportsBatch:          true,
+				Capabilities:           []string{"translate_srt", "remote_api"},
+				CompatibleModelTypes:   []string{"api"},
+			},
+			Check: checkOpenAIChat,
+		},
+	}
+}
+
+func translationWebMetadata(id, backend, note string) Metadata {
+	return Metadata{
+		ID:                     id,
+		Type:                   typeTranslation,
+		Location:               "web",
+		Backend:                backend,
+		Offline:                false,
+		RequiresAPIKey:         false,
+		RequiresModel:          false,
+		PrivacyNote:            note,
+		SupportedLanguages:     []string{"auto", "en", "zh", "ja", "ko"},
+		SupportsWordTimestamps: false,
+		SupportsBatch:          true,
+		Capabilities:           []string{"translate_srt", "web"},
+		CompatibleModelTypes:   []string{},
 	}
 }
 
@@ -267,11 +330,26 @@ func checkOpenAI(_ context.Context, cfg RuntimeConfig, metadata Metadata) CheckR
 	}
 	if !check.OK {
 		check.Status = StatusMissingAPIKey
-		check.Message = "No OpenAI-compatible transcription API key is configured."
+		check.Message = "No OpenAI-compatible API key is configured."
 		check.ActionHint = "Set FAST_SUB_OPENAI_API_KEY or OPENAI_API_KEY, or set api_key_env in fast-sub-go.toml before selecting this provider."
 	}
 	details["api_key_env"] = keyName
 	return summarize(metadata, []Check{check}, details)
+}
+
+func checkLocalNLLB(_ context.Context, cfg RuntimeConfig, metadata Metadata) CheckResult {
+	checks := []Check{
+		checkModel(cfg, metadata.ID, envFirst(cfg, "FAST_SUB_NLLB_MODEL_PATH", "FAST_SUB_TRANSLATION_MODEL_PATH"), false, "Install a compatible model with `fast-sub-go models install nllb-200-distilled-600m-ct2-int8`, or set FAST_SUB_NLLB_MODEL_PATH."),
+	}
+	return summarize(metadata, checks, nil)
+}
+
+func checkOpenAIChat(ctx context.Context, cfg RuntimeConfig, metadata Metadata) CheckResult {
+	return checkOpenAI(ctx, cfg, metadata)
+}
+
+func checkAlwaysAvailable(_ context.Context, _ RuntimeConfig, metadata Metadata) CheckResult {
+	return summarize(metadata, []Check{{Name: "static", OK: true, Status: StatusAvailable, Message: "Provider metadata is available. Live use requires explicit upload confirmation."}}, map[string]any{"live_network": false})
 }
 
 func loadProviderConfig(cfg RuntimeConfig) (appconfig.OpenAIProviderConfig, string, error) {

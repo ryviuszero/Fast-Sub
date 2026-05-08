@@ -20,6 +20,7 @@ export function registerFastSubClientIpc(): void {
   handle("fast-sub-client:install-model", (_event, modelId: unknown) => client.installModel(String(modelId)));
   handle("fast-sub-client:create-model-install-job", (_event, modelId: unknown) => client.createModelInstallJob(String(modelId)));
   handle("fast-sub-client:verify-model", (_event, modelId: unknown) => client.verifyModel(String(modelId)));
+  handle("fast-sub-client:remove-model", (_event, modelId: unknown) => client.removeModel(String(modelId)));
   handle("fast-sub-client:list-providers", () => client.listProviders());
   handle("fast-sub-client:test-provider", (_event, providerId: unknown, mode: unknown) => client.testProvider(String(providerId), mode === "live" ? "live" : "static"));
   handle("fast-sub-client:create-job", (_event, request: unknown) => client.createJob(request as CreateJobRequest));

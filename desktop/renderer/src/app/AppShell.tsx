@@ -5,7 +5,7 @@ import { defaultConfig, mockPaths } from "../client/mockFixtures";
 import { AppMenu, DebugPanel, RemoteConfirmDialog } from "./components";
 import { createClient, makeFile, makeFilesFromList } from "./fixtures";
 import { renderScreen } from "./renderScreen";
-import type { MediaFile, Screen, UiLanguage } from "./types";
+import type { MediaFile, QueueFilter, Screen, UiFontStyle, UiLanguage } from "./types";
 
 export function App({ client: providedClient }: { client?: FastSubClient }) {
   const [scenario, setScenario] = useState<MockScenario>("setupReady");
@@ -17,10 +17,14 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const [providers, setProviders] = useState<ProviderStatus[]>([]);
   const [config, setConfig] = useState<ConfigViewModel>(defaultConfig);
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>("system");
+  const [uiFontStyle, setUiFontStyle] = useState<UiFontStyle>("system");
+  const [queueInitialFilter, setQueueInitialFilter] = useState<QueueFilter>("all");
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [modelInstallJobs, setModelInstallJobs] = useState<Record<string, JobDetail>>({});
   const [activeBatchJobIds, setActiveBatchJobIds] = useState<string[]>([]);
   const [activeJob, setActiveJob] = useState<JobDetail | null>(null);
+  const [completedBatchJobs, setCompletedBatchJobs] = useState<JobDetail[]>([]);
   const [remoteConfirmOpen, setRemoteConfirmOpen] = useState(false);
   const [outputDirectoryLabel, setOutputDirectoryLabel] = useState("与源视频相同目录");
   const [outputDirectoryPath, setOutputDirectoryPath] = useState(mockPaths.output);
@@ -31,11 +35,19 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const outputInputRef = useRef<HTMLInputElement | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const modelInstallUnsubscribeRef = useRef<Map<string, () => void>>(new Map());
   const activeJobRef = useRef<JobDetail | null>(null);
+  const activeBatchJobIdsRef = useRef<string[]>([]);
+  const completedBatchJobsRef = useRef<JobDetail[]>([]);
+  const backgroundQueueOpenRef = useRef(false);
 
   useEffect(() => {
     activeJobRef.current = activeJob;
   }, [activeJob]);
+
+  useEffect(() => {
+    activeBatchJobIdsRef.current = activeBatchJobIds;
+  }, [activeBatchJobIds]);
 
   const navigateScreen = useCallback((target: Screen) => {
     setScreen((current) => {
@@ -125,6 +137,10 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     return () => {
       window.removeEventListener("keydown", onKey);
       unsubscribeRef.current?.();
+      for (const unsubscribe of modelInstallUnsubscribeRef.current.values()) {
+        unsubscribe();
+      }
+      modelInstallUnsubscribeRef.current.clear();
     };
   }, [loadBaseData]);
 
@@ -136,29 +152,77 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     if (event.type === "snapshot" && event.job) {
       const snapshot = event.job;
       setActiveJob((job) => mergeJobSnapshot(job, snapshot));
-      setScreen("main-generating");
+      if (!backgroundQueueOpenRef.current) {
+        setScreen("main-generating");
+      }
     }
     if (event.type === "progress" && event.progress) {
       setActiveJob((job) => job ? { ...job, ...event.progress, statusLabel: "正在生成" } : job);
-      setScreen("main-generating");
+      if (!backgroundQueueOpenRef.current) {
+        setScreen("main-generating");
+      }
     }
     if (event.type === "log_tail" && event.logs) {
       setActiveJob((job) => job ? { ...job, logs: event.logs ?? job.logs } : job);
     }
     if (event.type === "succeeded" && event.result) {
-      setActiveJob((job) => job ? { ...job, status: "succeeded", statusLabel: "已完成", progressPercent: 100, stageLabel: "已完成", result: event.result } : job);
-      setScreen("main-done");
+      const completedJob = activeJobRef.current ? { ...activeJobRef.current, status: "succeeded" as const, statusLabel: "已完成", progressPercent: 100, stageLabel: "已完成", result: event.result } : null;
+      if (completedJob) {
+        activeJobRef.current = completedJob;
+        const nextCompletedJobs = mergeJobDetails(completedBatchJobsRef.current, [completedJob]);
+        completedBatchJobsRef.current = nextCompletedJobs;
+        setCompletedBatchJobs(nextCompletedJobs);
+        setActiveJob(completedJob);
+      }
       unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+      const batchIds = activeBatchJobIdsRef.current;
+      if (batchIds.length <= 1) {
+        if (!backgroundQueueOpenRef.current) {
+          setScreen("main-done");
+        }
+        await refreshJobs();
+        return;
+      }
+      const nextJobs = mergeJobSummaries(await client.listJobs(), completedJob ? [completedJob] : []);
+      setJobs(nextJobs);
+      const batchJobs = nextJobs.filter((job) => batchIds.includes(job.id));
+      const completedIds = new Set(completedBatchJobsRef.current.map((job) => job.id));
+      const nextJob = batchJobs.find((job) => job.status === "running" || job.status === "queued" || job.status === "canceling");
+      if (batchIds.every((id) => completedIds.has(id)) || (!nextJob && batchJobs.length === batchIds.length && batchJobs.every((job) => job.status === "succeeded"))) {
+        if (!backgroundQueueOpenRef.current) {
+          setScreen("main-done");
+        }
+        return;
+      }
+      if (nextJob) {
+        const detail = await client.getJob(nextJob.id);
+        activeJobRef.current = detail;
+        setActiveJob(detail);
+        if (!backgroundQueueOpenRef.current) {
+          setScreen("main-generating");
+        }
+        unsubscribeRef.current = client.subscribeJobEvents(detail.id, { onEvent: updateFromEvent });
+        return;
+      }
+      if (!backgroundQueueOpenRef.current) {
+        setScreen("main-generating");
+      }
+      return;
     }
     if (event.type === "failed" && event.error) {
       const error = event.error;
       setActiveJob((job) => job ? { ...job, status: "failed", statusLabel: "已失败", error, stageLabel: error.title } : job);
-      setScreen(error.code === "output_exists" && config.outputConflict === "ask" ? "main-conflict" : "queue-failed");
+      if (!backgroundQueueOpenRef.current) {
+        setScreen(error.code === "output_exists" && config.outputConflict === "ask" ? "main-conflict" : "queue-failed");
+      }
       unsubscribeRef.current?.();
     }
     if (event.type === "canceled") {
       setActiveJob((job) => job ? { ...job, status: "canceled", statusLabel: "已取消", stageLabel: "已取消" } : job);
-      setScreen("queue-detail");
+      if (!backgroundQueueOpenRef.current) {
+        setScreen("queue-detail");
+      }
       unsubscribeRef.current?.();
     }
     if (event.type === "events_lost") {
@@ -169,6 +233,51 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     }
     await refreshJobs();
   }, [client, config.outputConflict, refreshJobs]);
+
+  const updateModelInstallFromEvent = useCallback(async (modelId: string, event: JobEvent) => {
+    if (event.type === "snapshot" && event.job) {
+      const snapshot = event.job;
+      setModelInstallJobs((current) => ({ ...current, [modelId]: snapshot }));
+      return;
+    }
+    if (event.type === "progress" && event.progress) {
+      setModelInstallJobs((current) => {
+        const existing = current[modelId];
+        return existing ? { ...current, [modelId]: { ...existing, ...event.progress, statusLabel: "下载中" } } : current;
+      });
+      setModels((current) => current.map((model) => model.id === modelId ? { ...model, state: "installing", progressPercent: event.progress?.progressPercent ?? model.progressPercent } : model));
+      return;
+    }
+    if (event.type === "succeeded") {
+      setModelInstallJobs((current) => {
+        const existing = current[modelId];
+        return existing ? { ...current, [modelId]: { ...existing, status: "succeeded", statusLabel: "已完成", progressPercent: 100, stageLabel: "模型已可用", result: event.result } } : current;
+      });
+      setModels((current) => current.map((model) => model.id === modelId ? { ...model, state: "ready", progressPercent: 100, diagnostic: undefined } : model));
+      modelInstallUnsubscribeRef.current.get(modelId)?.();
+      modelInstallUnsubscribeRef.current.delete(modelId);
+      await loadBaseData();
+      return;
+    }
+    if (event.type === "failed" && event.error) {
+      setModelInstallJobs((current) => {
+        const existing = current[modelId];
+        return existing ? { ...current, [modelId]: { ...existing, status: "failed", statusLabel: "已失败", stageLabel: event.error?.title ?? "下载失败", error: event.error } } : current;
+      });
+      setModels((current) => current.map((model) => model.id === modelId ? { ...model, state: "failed", diagnostic: event.error?.diagnostic ?? event.error?.message } : model));
+      modelInstallUnsubscribeRef.current.get(modelId)?.();
+      modelInstallUnsubscribeRef.current.delete(modelId);
+      return;
+    }
+    if (event.type === "canceled") {
+      setModelInstallJobs((current) => {
+        const existing = current[modelId];
+        return existing ? { ...current, [modelId]: { ...existing, status: "canceled", statusLabel: "已取消", stageLabel: "已取消" } } : current;
+      });
+      modelInstallUnsubscribeRef.current.get(modelId)?.();
+      modelInstallUnsubscribeRef.current.delete(modelId);
+    }
+  }, [loadBaseData]);
 
   const addFiles = async () => {
     const picked = await window.fastSubSystem?.selectMediaFiles();
@@ -243,7 +352,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   };
 
   const asrReady = models.some((model) => model.id === config.asrModel && model.kind === "asr" && model.state === "ready");
-  const translationReady = models.some((model) => model.id === config.translationModel && model.kind === "translation" && model.state === "ready");
+  const translationReady = environment?.localTranslationReady !== false && models.some((model) => model.id === config.translationModel && model.kind === "translation" && model.state === "ready");
 
   const startJob = async (options: { conflictResolved?: boolean; outputConflict?: ConfigViewModel["outputConflict"]; outputPath?: string; remoteUploadConfirmed?: boolean } = {}) => {
     const conflictResolved = options.conflictResolved ?? false;
@@ -276,8 +385,10 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
         outputDirectory: effectiveOutputDirectory([path], config, outputDirectoryPath),
         outputPath: options.outputPath,
         outputType: config.outputType,
+        outputFormat: config.outputFormat,
         outputConflict,
         language: config.defaultLanguage,
+        targetLanguage: config.targetLanguage,
         providerId: config.asrProvider,
         modelId: config.asrModel,
         remoteUploadConfirmed
@@ -288,11 +399,15 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     if (!job) {
       return;
     }
-    setActiveBatchJobIds(createdJobs.map((createdJob) => createdJob.id));
+    const batchJobIds = createdJobs.map((createdJob) => createdJob.id);
+    backgroundQueueOpenRef.current = false;
+    activeBatchJobIdsRef.current = batchJobIds;
+    completedBatchJobsRef.current = [];
+    setCompletedBatchJobs([]);
+    setActiveBatchJobIds(batchJobIds);
     setJobs((currentJobs) => mergeCreatedJobs(currentJobs, createdJobs));
     activeJobRef.current = job;
     setActiveJob(job);
-    setActiveBatchJobIds([job.id]);
     setScreen("main-generating");
     unsubscribeRef.current?.();
     unsubscribeRef.current = client.subscribeJobEvents(job.id, { onEvent: updateFromEvent });
@@ -305,8 +420,10 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       inputPaths,
       outputDirectory: effectiveOutputDirectory(inputPaths, config, outputDirectoryPath),
       outputType: type === "burn_in" ? "burned_video" : "translated_srt",
+      outputFormat: config.outputFormat,
       outputConflict: config.outputConflict,
       language: config.defaultLanguage,
+      targetLanguage: config.targetLanguage,
       providerId: type === "burn_in" ? config.asrProvider : config.translationProvider,
       modelId: type === "burn_in" ? config.asrModel : config.translationModel,
       remoteUploadConfirmed: true
@@ -344,20 +461,27 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   };
 
   const openJob = async (jobId: string, target: Screen) => {
+    backgroundQueueOpenRef.current = false;
     const summary = jobs.find((job) => job.id === jobId);
     if (summary) {
       setActiveJob({
         ...summary,
         currentFile: summary.title,
         inputPaths: [],
-        outputDirectory: outputDirectoryPath,
-        providerName: "Fast Sub",
-        modelName: config.asrModel,
+        outputDirectory: summary.outputDirectory || outputDirectoryPath,
+        providerName: summary.providerName || "Fast Sub",
+        modelName: summary.modelName || config.asrModel,
         logs: []
       });
     }
     navigateScreen(target);
     setActiveJob(await client.getJob(jobId));
+  };
+
+  const openRunningQueue = () => {
+    backgroundQueueOpenRef.current = true;
+    setQueueInitialFilter("running");
+    navigateScreen("queue-list");
   };
 
   const cancelActiveJob = async () => {
@@ -389,12 +513,12 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
 
   const openMock = async (path: string) => {
     const opened = await window.fastSubSystem?.openPathMock(path);
-    setOpenNotice(opened ? { message: `已模拟打开：${path}`, tone: "ok" } : { message: "无法打开该路径", tone: "warn" });
+    setOpenNotice(opened ? null : { message: "无法打开该路径", tone: "warn" });
   };
 
   return (
     <div className="app-stage">
-      <div className="prototype-window">
+    <div className={`prototype-window font-${uiFontStyle}`}>
         <input
           ref={mediaInputRef}
           aria-label="选择视频文件"
@@ -443,20 +567,26 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
           setConfig,
           uiLanguage,
           setUiLanguage,
+          uiFontStyle,
+          setUiFontStyle,
           files,
           setFiles,
           outputDirectoryLabel,
           asrReady,
           translationReady,
           jobs,
+          modelInstallJobs,
+          queueInitialFilter,
           activeBatchJobIds,
           activeJob,
+          completedBatchJobs,
           addFiles,
           addFolder,
           addDroppedFiles,
           chooseOutputDirectory,
           chooseSubtitleOutputPath,
           openJob,
+          openRunningQueue,
           startJob,
           startToolJob,
           retryJob,
@@ -466,12 +596,29 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
           deleteJob: deleteActiveJob,
           installModel: async (id) => {
             const job = await client.createModelInstallJob(id);
-            activeJobRef.current = job;
-            setActiveJob(job);
-            unsubscribeRef.current?.();
+            setModelInstallJobs((current) => ({ ...current, [id]: job }));
+            setModels((current) => current.map((model) => model.id === id ? {
+              ...model,
+              state: job.status === "failed" ? "failed" : job.status === "succeeded" ? "ready" : "installing",
+              installJobId: job.id,
+              progressPercent: job.progressPercent
+            } : model));
+            modelInstallUnsubscribeRef.current.get(id)?.();
             if (job.status === "queued" || job.status === "running" || job.status === "canceling") {
-              unsubscribeRef.current = client.subscribeJobEvents(job.id, { onEvent: updateFromEvent });
+              const unsubscribe = client.subscribeJobEvents(job.id, { onEvent: (event) => void updateModelInstallFromEvent(id, event) });
+              modelInstallUnsubscribeRef.current.set(id, unsubscribe);
             }
+            await loadBaseData();
+          },
+          removeModel: async (id) => {
+            modelInstallUnsubscribeRef.current.get(id)?.();
+            modelInstallUnsubscribeRef.current.delete(id);
+            setModelInstallJobs((current) => {
+              const { [id]: _removed, ...rest } = current;
+              return rest;
+            });
+            const removed = await client.removeModel(id);
+            setModels((current) => current.map((model) => model.id === id ? removed : model));
             await loadBaseData();
           },
           repairDaemon: async () => {
@@ -554,10 +701,22 @@ function mergeJobSnapshot(current: JobDetail | null, snapshot: JobDetail): JobDe
 }
 
 function mergeCreatedJobs(currentJobs: JobSummary[], createdJobs: JobDetail[]): JobSummary[] {
+  return mergeJobSummaries(currentJobs, createdJobs);
+}
+
+function mergeJobSummaries(currentJobs: JobSummary[], details: JobDetail[]): JobSummary[] {
   const next = new Map(currentJobs.map((job) => [job.id, job]));
-  for (const job of createdJobs) {
-    const { logs: _logs, inputPaths: _inputPaths, outputDirectory: _outputDirectory, providerName: _providerName, modelName: _modelName, result: _result, error: _error, estimatedRemaining: _estimatedRemaining, ...summary } = job;
+  for (const job of details) {
+    const { logs: _logs, inputPaths: _inputPaths, result: _result, error: _error, estimatedRemaining: _estimatedRemaining, ...summary } = job;
     next.set(job.id, summary);
+  }
+  return Array.from(next.values());
+}
+
+function mergeJobDetails(currentJobs: JobDetail[], details: JobDetail[]): JobDetail[] {
+  const next = new Map(currentJobs.map((job) => [job.id, job]));
+  for (const job of details) {
+    next.set(job.id, job);
   }
   return Array.from(next.values());
 }

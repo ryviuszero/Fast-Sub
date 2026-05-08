@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../renderer/src/App";
 import { MainGenerating } from "../renderer/src/app/screens/main";
@@ -37,6 +37,11 @@ function dropFileOn(label: string, file: File) {
   fireEvent.drop(target, { dataTransfer: { files: [file] } });
 }
 
+function progressCardPercent(): number {
+  const text = document.querySelector(".progress-card strong")?.textContent ?? "0%";
+  return Number(text.replace("%", ""));
+}
+
 describe("Fast Sub renderer flow", () => {
   async function enterMainScreen() {
     const enterButton = await screen.findByRole("button", { name: "进入主界面" });
@@ -67,8 +72,17 @@ describe("Fast Sub renderer flow", () => {
     const queueTabs = document.querySelector(".tabs") as HTMLElement;
     fireEvent.click(within(queueTabs).getByRole("button", { name: "已完成 1" }));
     expect(screen.getByText("a b.mp4")).toBeInTheDocument();
+    expect(screen.getByText("完成 今天 10:18")).toBeInTheDocument();
+    expect(screen.getByText("自动识别")).toBeInTheDocument();
+    expect(screen.queryByText(/输出 C:\\Users\\Example\\Videos/)).not.toBeInTheDocument();
     expect(screen.queryByText("sample-meeting.mp4")).not.toBeInTheDocument();
-    fireEvent.click(within(queueTabs).getByRole("button", { name: "失败 1" }));
+    fireEvent.click(screen.getByText("a b.mp4"));
+    expect(await screen.findByRole("heading", { name: "a b.mp4" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "详情" }));
+    expect(screen.getByText("语言")).toBeInTheDocument();
+    expect(screen.getByText("自动识别")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+    fireEvent.click(within(document.querySelector(".tabs") as HTMLElement).getByRole("button", { name: "失败 1" }));
     expect(screen.getByText("raw-cam.mov")).toBeInTheDocument();
     expect(screen.queryByText("a b.mp4")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "通用设置" }));
@@ -83,12 +97,20 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
     fireEvent.click(screen.getByRole("button", { name: "简体中文" }));
     expect(screen.getByRole("button", { name: "简体中文" })).toHaveClass("on");
+    fireEvent.click(screen.getByRole("button", { name: "手绘字体" }));
+    expect(document.querySelector(".prototype-window")).toHaveClass("font-sketch");
     fireEvent.click(screen.getByRole("button", { name: "双语字幕" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "双语字幕" })).toHaveClass("on"));
+    fireEvent.click(screen.getByRole("button", { name: "VTT" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "VTT" })).toHaveClass("on"));
+    fireEvent.change(screen.getByDisplayValue("简体中文"), { target: { value: "en" } });
+    await waitFor(() => expect(screen.getByDisplayValue("English")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "跳过" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "跳过" })).toHaveClass("on"));
-    fireEvent.click(screen.getByRole("button", { name: "远程" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "远程" })).toHaveClass("on"));
+    fireEvent.change(screen.getByLabelText("默认转写 Provider"), { target: { value: "api-openai-transcription" } });
+    await waitFor(() => expect(screen.getByLabelText("默认转写 Provider")).toHaveValue("api-openai-transcription"));
+    fireEvent.change(screen.getByLabelText("默认翻译 Provider"), { target: { value: "web-bing" } });
+    await waitFor(() => expect(screen.getByLabelText("默认翻译 Provider")).toHaveValue("web-bing"));
     fireEvent.click(screen.getByRole("button", { name: "GPU" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "GPU" })).toHaveClass("on"));
     const wordToggle = screen.getByRole("button", { name: "设置词级时间戳" });
@@ -96,23 +118,16 @@ describe("Fast Sub renderer flow", () => {
     await waitFor(() => expect(wordToggle).toHaveAttribute("aria-pressed", "true"));
   });
 
-  it("updates API and provider settings mock controls", async () => {
+  it("updates provider settings mock controls", async () => {
     render(<App />);
     await enterMainScreen();
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
-    fireEvent.click(screen.getByRole("button", { name: /API 服务/ }));
-    const apiToggle = screen.getByRole("button", { name: "启用 API 服务" });
-    fireEvent.click(apiToggle);
-    expect(apiToggle).toHaveAttribute("aria-pressed", "true");
-    const uploadToggle = screen.getByRole("button", { name: "上传前确认" });
-    fireEvent.click(uploadToggle);
-    expect(uploadToggle).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(screen.getByRole("button", { name: "静态检查" }));
-    expect(screen.getByText("静态检查通过")).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole("button", { name: /Provider/ }));
-    expect(screen.getByText("未配置密钥")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "转写 Provider" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "翻译 Provider" })).toBeInTheDocument();
+    expect(screen.getAllByText("未配置密钥").length).toBeGreaterThan(0);
     expect(screen.queryByText("missing_api_key")).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "静态检查" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "刷新状态" }));
     await waitFor(() => expect(screen.getByText("刷新完成")).toBeInTheDocument());
   });
@@ -143,7 +158,7 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "日志" }));
     expect(screen.getByText("任务：sample-meeting.mp4", { exact: false })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "详情" }));
-    expect(screen.getByText("whisper-small")).toBeInTheDocument();
+    expect(screen.getByText("Whisper Small")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
     expect(screen.getByText("全部 5")).toBeInTheDocument();
   });
@@ -264,6 +279,10 @@ describe("Fast Sub renderer flow", () => {
         requests.push(request);
         return super.createJob(request);
       }
+
+      subscribeJobEvents(_jobId: string, _handlers: JobEventHandlers): () => void {
+        return () => undefined;
+      }
     }
     window.fastSubSystem = {
       selectMediaFiles: async () => [],
@@ -286,6 +305,114 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
     await waitFor(() => expect(requests).toHaveLength(3));
     expect(requests.map((request) => request.inputPaths)).toEqual([["F:\\game\\others\\a.mp4"], ["F:\\game\\others\\b.wav"], ["F:\\game\\others\\c.mov"]]);
+    expect(await screen.findByText("任务 1 / 3")).toBeInTheDocument();
+    expect(screen.getByText("b.wav")).toBeInTheDocument();
+    expect(screen.getByText("c.mov")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "后台运行" }));
+    expect(await screen.findByText("正在生成 6")).toHaveClass("on");
+    expect(screen.getByText("a.mp4")).toBeInTheDocument();
+    expect(screen.getByText("b.wav")).toBeInTheDocument();
+    expect(screen.getByText("c.mov")).toBeInTheDocument();
+  });
+
+  it("keeps a folder batch on the generating screen until every job succeeds", async () => {
+    const handlers = new Map<string, JobEventHandlers>();
+    const succeeded = new Set<string>();
+    const resultFor = (name: string) => ({
+      subtitlePath: `F:\\game\\others\\${name}.srt`,
+      outputFolder: "F:\\game\\others",
+      summary: "已生成字幕",
+      durationLabel: "5 秒"
+    });
+    class BatchClient extends MockFastSubClient {
+      async listJobs() {
+        const jobs = await super.listJobs();
+        return jobs.map((job) => succeeded.has(job.id) ? { ...job, status: "succeeded" as const, statusLabel: "已完成", progressPercent: 100, stageLabel: "已完成" } : job);
+      }
+
+      subscribeJobEvents(jobId: string, eventHandlers: JobEventHandlers): () => void {
+        handlers.set(jobId, eventHandlers);
+        return () => undefined;
+      }
+    }
+    window.fastSubSystem = {
+      selectMediaFiles: async () => [],
+      selectMediaFolder: async () => ["F:\\game\\others\\a.mp4", "F:\\game\\others\\b.wav", "F:\\game\\others\\c.mov"],
+      selectFolder: async () => null,
+      selectSubtitleOutputPath: async () => null,
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
+      openPathMock: async () => true,
+      getSecuritySnapshot: async () => ({
+        contextIsolation: true,
+        nodeIntegration: false,
+        csp: true,
+        exposesRawIpc: false
+      })
+    };
+    render(<App client={new BatchClient("jobSuccess")} />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "添加文件夹" }));
+    expect(await screen.findByText("a.mp4")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    expect(await screen.findByText("任务 1 / 3")).toBeInTheDocument();
+
+    const firstJobId = Array.from(handlers.keys())[0];
+    succeeded.add(firstJobId);
+    await handlers.get(firstJobId)?.onEvent({ type: "succeeded", result: resultFor("a") });
+    await waitFor(() => expect(screen.getByText("任务 2 / 3")).toBeInTheDocument());
+    expect(screen.queryByRole("heading", { name: "字幕生成完成" })).not.toBeInTheDocument();
+
+    const secondJobId = Array.from(handlers.keys())[1];
+    succeeded.add(secondJobId);
+    await handlers.get(secondJobId)?.onEvent({ type: "succeeded", result: resultFor("b") });
+    await waitFor(() => expect(screen.getByText("任务 3 / 3")).toBeInTheDocument());
+    expect(screen.queryByRole("heading", { name: "字幕生成完成" })).not.toBeInTheDocument();
+
+    const thirdJobId = Array.from(handlers.keys())[2];
+    succeeded.add(thirdJobId);
+    await handlers.get(thirdJobId)?.onEvent({ type: "succeeded", result: resultFor("c") });
+    expect(await screen.findByRole("heading", { name: "字幕生成完成" })).toBeInTheDocument();
+    expect(screen.getByText("已完成 3 个文件")).toBeInTheDocument();
+    expect(screen.getByText("a.srt")).toBeInTheDocument();
+    expect(screen.getByText("b.srt")).toBeInTheDocument();
+    expect(screen.getByText("c.srt")).toBeInTheDocument();
+  });
+
+  it("does not jump back from the running queue when background jobs emit progress", async () => {
+    const handlers = new Map<string, JobEventHandlers>();
+    class BackgroundClient extends MockFastSubClient {
+      subscribeJobEvents(jobId: string, eventHandlers: JobEventHandlers): () => void {
+        handlers.set(jobId, eventHandlers);
+        return () => undefined;
+      }
+    }
+    window.fastSubSystem = {
+      selectMediaFiles: async () => [],
+      selectMediaFolder: async () => ["F:\\game\\others\\a.mp4", "F:\\game\\others\\b.wav"],
+      selectFolder: async () => null,
+      selectSubtitleOutputPath: async () => null,
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
+      openPathMock: async () => true,
+      getSecuritySnapshot: async () => ({
+        contextIsolation: true,
+        nodeIntegration: false,
+        csp: true,
+        exposesRawIpc: false
+      })
+    };
+    render(<App client={new BackgroundClient("jobSuccess")} />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "添加文件夹" }));
+    expect(await screen.findByText("a.mp4")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    expect(await screen.findByText("任务 1 / 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "后台运行" }));
+    expect(await screen.findByText("正在生成 5")).toHaveClass("on");
+
+    const firstJobId = Array.from(handlers.keys())[0];
+    await handlers.get(firstJobId)?.onEvent({ type: "progress", progress: { status: "running", progressPercent: 34, stageLabel: "正在转写音频", currentFile: "a.mp4" } });
+    expect(screen.getByText("正在生成 5")).toHaveClass("on");
+    expect(screen.queryByRole("heading", { name: "正在生成字幕..." })).not.toBeInTheDocument();
   });
 
   it("does not show global mock queue items as upcoming jobs for a single file", async () => {
@@ -332,6 +459,29 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.queryByText("sample-lecture.mov")).not.toBeInTheDocument();
   });
 
+  it("smooths the generating progress while the daemon progress is unchanged", () => {
+    vi.useFakeTimers();
+    try {
+      const props = {
+        activeJob: { id: "job-smooth", displayId: "S", type: "transcribe", status: "running", statusLabel: "正在生成", title: "smooth.mp4", currentFile: "smooth.mp4", progressPercent: 0, stageLabel: "正在转写音频", createdAt: "now", inputPaths: ["F:\\game\\others\\smooth.mp4"], outputDirectory: "F:\\game\\others", providerName: "Fast Sub", modelName: "whisper-small", logs: [] },
+        activeBatchJobIds: ["job-smooth"],
+        jobs: [
+          { id: "job-smooth", displayId: "S", type: "transcribe", status: "running", statusLabel: "正在生成", title: "smooth.mp4", currentFile: "smooth.mp4", progressPercent: 0, stageLabel: "正在转写音频", createdAt: "now" }
+        ],
+        cancelJob: async () => undefined,
+        cancelAllJobs: async () => undefined,
+        openRunningQueue: () => undefined
+      } as unknown as Parameters<typeof MainGenerating>[0];
+      render(<MainGenerating {...props} />);
+      expect(progressCardPercent()).toBe(0);
+      act(() => vi.advanceTimersByTime(2000));
+      expect(progressCardPercent()).toBeGreaterThan(0);
+      expect(progressCardPercent()).toBeLessThan(100);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("removes media from the selected file list", async () => {
     render(<App />);
     await enterMainScreen();
@@ -363,7 +513,7 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "去下载模型" }));
     expect(screen.getByRole("heading", { name: "模型管理" })).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "下载" }).at(0) as HTMLElement);
-    await waitFor(() => expect(screen.getByText("可用")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("可用").length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole("button", { name: "空状态" }));
     expect(await screen.findByText("本地转写就绪")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "添加视频" })).toBeEnabled();
@@ -487,7 +637,7 @@ describe("Fast Sub renderer flow", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "字幕生成完成" })).toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: "文件夹" }).at(0) as HTMLElement);
     expect(openPathMock).toHaveBeenCalledWith("C:\\Users\\Example\\Videos");
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("已模拟打开：C:\\Users\\Example\\Videos"));
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
   });
 
   it("selects files in translate and burn-in tools", async () => {
@@ -511,6 +661,20 @@ describe("Fast Sub renderer flow", () => {
     expect(await screen.findByRole("heading", { name: "烧录完成" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "任务列表" }));
     expect(screen.getByText("clip.burned.mp4")).toBeInTheDocument();
+  });
+
+  it("blocks translate tool jobs when the translation environment is not ready", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByLabelText("打开调试面板"));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "nllbInstallFailed" } });
+    await enterMainScreen();
+    fireEvent.click(screen.getByRole("menuitem", { name: "翻译SRT" }));
+
+    expect(await screen.findByRole("heading", { name: "翻译环境未准备好" })).toBeInTheDocument();
+    expect(screen.getByText(/当前默认翻译模型未准备好/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "开始翻译" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "配置翻译 Provider" }));
+    expect(await screen.findByRole("heading", { name: "Provider" })).toBeInTheDocument();
   });
 
   it("lets users choose a custom output directory", async () => {
@@ -625,9 +789,49 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(await screen.findByLabelText("打开调试面板"));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "modelInstalling" } });
     fireEvent.click(await screen.findByRole("button", { name: "模型管理" }));
-    expect(await screen.findByText(/安装中 63%/)).toBeInTheDocument();
+    expect((await screen.findByLabelText("Whisper Small 下载进度")).textContent).toContain("63%");
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "modelInstallFailed" } });
     await waitFor(() => expect(screen.getAllByRole("button", { name: "重试下载" }).length).toBeGreaterThan(0));
-    expect(screen.getByText(/Whisper Small/).closest("article")?.textContent).toContain("安装失败");
+    expect(screen.getAllByText(/Whisper Small/)[0].closest("article")?.textContent).toContain("安装失败");
+  });
+
+  it("keeps model install progress inside the model management tab", async () => {
+    class SlowInstallClient extends MockFastSubClient {
+      async createModelInstallJob(modelId: string): Promise<JobDetail> {
+        const job = await super.createModelInstallJob(modelId);
+        return { ...job, status: "queued", statusLabel: "等待中", progressPercent: 0, stageLabel: "等待下载" };
+      }
+
+      subscribeJobEvents(_jobId: string, handlers: JobEventHandlers): () => void {
+        const timer = setTimeout(() => {
+          handlers.onEvent({ type: "progress", progress: { status: "running", progressPercent: 33, stageLabel: "正在下载模型", currentFile: "Whisper Large v3 Turbo" } });
+        }, 0);
+        return () => clearTimeout(timer);
+      }
+    }
+
+    render(<App client={new SlowInstallClient("setupReady")} />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: /模型管理/ }));
+    fireEvent.click(screen.getAllByRole("button", { name: "下载" }).at(0) as HTMLElement);
+
+    expect(await screen.findByRole("heading", { name: "模型管理" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "正在生成字幕..." })).not.toBeInTheDocument();
+    expect((await screen.findByLabelText(/下载进度/)).textContent).toContain("33%");
+    expect(screen.getByLabelText(/下载进度/)).toBeInTheDocument();
+  });
+
+  it("removes models from the model management tab", async () => {
+    render(<App />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: /模型管理/ }));
+
+    const whisperSmall = screen.getAllByText("Whisper Small")[0].closest("article") as HTMLElement;
+    fireEvent.click(within(whisperSmall).getByRole("button", { name: "移除" }));
+
+    await waitFor(() => expect(within(whisperSmall).getByText("未安装")).toBeInTheDocument());
+    expect(within(whisperSmall).getByRole("button", { name: "下载" })).toBeInTheDocument();
   });
 });

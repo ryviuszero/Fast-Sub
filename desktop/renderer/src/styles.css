@@ -13,6 +13,7 @@
   --warn-soft: #f4dccd;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sketch: Kalam, "Architects Daughter", "Comic Sans MS", cursive;
 }
 
 * { box-sizing: border-box; }
@@ -376,6 +377,26 @@ label { display: grid; gap: 4px; color: var(--ink-2); font-size: 11px; font-weig
 .progress.accent i {
   background: repeating-linear-gradient(45deg, var(--accent) 0 4px, #4988e6 4px 7px);
 }
+.model-install-progress {
+  display: grid;
+  gap: 5px;
+  max-width: 420px;
+  padding-top: 3px;
+}
+.model-install-progress .bar {
+  width: 100%;
+  height: 9px;
+  border: 1.2px solid var(--ink);
+  border-radius: 99px;
+  background: var(--paper);
+  overflow: hidden;
+}
+.model-install-progress .bar span {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(45deg, var(--accent) 0 4px, #4988e6 4px 7px);
+}
+.warn-text { color: var(--warn); }
 .setup-next { align-self: flex-start; }
 .success-mark {
   width: 48px;
@@ -477,8 +498,66 @@ label { display: grid; gap: 4px; color: var(--ink-2); font-size: 11px; font-weig
   color: var(--ink-3);
   font-size: 11px;
 }
+.prototype-window.font-sketch {
+  font-family: var(--sketch);
+}
+.prototype-window.font-system {
+  font-family: var(--sans);
+}
+.job-card { cursor: pointer; }
+.job-card .chip {
+  display: inline-flex;
+  margin-top: 0;
+  font-size: 10.5px;
+}
+.job-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
 .ok-card { border-color: var(--ok); background: #f4faf3; }
 .warn-card, .failed { border-color: var(--warn); background: var(--warn-soft); }
+.warn-card-soft { border-color: var(--warn); background: #fff8f2; }
+.selected-card { box-shadow: inset 0 0 0 1px var(--accent); }
+.model-card-rich, .provider-card-rich {
+  align-items: flex-start;
+}
+.model-main, .provider-main {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.provider-section {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+.provider-config {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+.provider-config label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.provider-config label.inline-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+}
+.provider-config input,
+.provider-config select {
+  min-width: 0;
+}
+.wrap { flex-wrap: wrap; }
+.end { justify-content: flex-end; }
+.no-margin { margin: 0; }
 .running { border-color: var(--accent); background: var(--accent-soft); }
 .compact-settings { display: grid; gap: 9px; }
 .settings-grid {

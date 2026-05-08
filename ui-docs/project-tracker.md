@@ -84,7 +84,7 @@
 - 已扩展 `FastSubClient` contract：`JobKind` 增加 `model_install`，`ModelStatus.installJobId`，`createModelInstallJob(modelId)`；`MockFastSubClient` 和 renderer 模型管理入口已改为独立模型安装 job 语义。
 - 已完成 12.4 的基础 adapter：main process 增加 Electron `safeStorage` secret store fallback 和 transient secret reference map；renderer 仍只看到 alias/masked/status，不接触 raw secret。
 - 已完成 Go daemon 的最小 Round 12 API 扩展：`POST /v1/jobs` 接受 `model_install`、`translate_srt`、`burn_in`，新增 `GET/PATCH /v1/config` 和 `POST /v1/models/{model_id}/verify`。
-- 已接入 Go daemon Round 12 job bridge：`model_install` 复用现有 Go model installer 并通过 job/SSE/cancel/result/logs/delete 展示进度；`translate_srt`、`burn_in` 当前仍使用受控 placeholder bridge，真实 Python CLI resolver 和 ffmpeg bridge 仍需后续完善。
+- 已接入 Go daemon Round 12 job bridge：`model_install` 复用现有 Go model installer 并通过 job/SSE/cancel/result/logs/delete 展示进度；`translate_srt` 已使用受控 Python CLI bridge；`burn_in` 当前仍使用受控 placeholder bridge，真实 ffmpeg bridge 仍需后续完善。
 - 已修复 Electron dev 启动找不到 `fast-sub-go.exe` 的问题：未打包模式下如果找不到显式二进制，会从仓库根目录用 `go run ./cmd/fast-sub-go` 启动本地 daemon；初始化列表请求在 daemon 不可用时返回空状态，由环境检查页显示可恢复服务错误，避免 main process 连续输出 IPC handler 错误。
 - 已新增 dev-only daemon transport log：设置 `FAST_SUB_DEBUG_DAEMON=1`，或创建 `desktop/local/daemon-debug.json` 后，Electron main process 会输出/写入 redacted daemon spawn/ready、REST method/path/status、SSE connect/event/error 摘要；日志不包含 token、Authorization、raw secret 或完整 request body。示例配置见 `desktop/daemon-debug.example.json`。
 - 已修复 Desktop 真实转写请求的 source 输出目录推导：当配置为“与源视频相同目录”时，renderer 会用真实输入文件父目录作为 `outputDirectory`，避免把 mock fixture 输出目录带入 daemon 请求；同时在 dev-only transport log 中增加 `job.request` 摘要，记录 job type、input/output path、inputExists、provider/model/language 和失败事件中的 daemon error 摘要，方便定位 Desktop 与 Go 直测参数差异。
@@ -141,12 +141,12 @@
 
 ## 进行中
 
-- Round 12 真实能力收口：真实 model installer job、Python CLI resolver、translate_srt/burn_in bridge、持久 atomic config writer、secret_ref 消费通道和真实小媒体 smoke。
+- Round 12 真实能力收口：真实 model installer job、translate_srt Python CLI bridge、burn_in bridge、持久 atomic config writer、secret_ref 消费通道和真实小媒体 smoke。
 
 ## 接下来
 
 - 确保模型页/首次启动页在真实 `model_install` job 完成后从 `listModels()` 重新同步真实状态。
-- 实现 Python CLI resolver 和参数白名单 runner，替换 `translate_srt` / `burn_in` 当前 placeholder bridge。
+- 为 `burn_in` 补齐真实 ffmpeg bridge；`translate_srt` 已有 Python CLI resolver 和参数白名单 runner，后续补真实 smoke 与更多 provider 配置校验。
 - 将 daemon config PATCH 落到 validate + atomic write + corrupt recovery 的真实持久实现。
 - 补齐 transient `secret_ref` 的 daemon/job runner 消费端；当前 main process 已有引用生成/消费结构，但 daemon 还未通过该通道取 secret。
 - 准备 `local_tests/round12/` 手动真实 smoke 资产并记录真实 transcribe/translate/burn 结果。
@@ -234,3 +234,21 @@
 - Round 12 二次审阅反馈：Goals 不应写死 keytar，应改成 main process 管理的 secret storage；Workstream 顺序应与 12.1-12.8 对齐；transient secret channel 必须在 daemon API contract 中明确；12.8 验收时才切真实 daemon 为默认。
 - Round 12 三次审阅反馈：配置边界必须二选一，最终确定为 daemon config API；`secret_ref` 不能作为可重放秘密引用落盘；`FastSubClient` 类型变更必须显式写入；12.1 未完成前不得创建真实 adapter 或切默认模式。
 - Round 12 四次审阅反馈：config API shape 和 `secret_ref` 生成/消费契约必须在 12.1 前定死；fake daemon fixtures 和手动 smoke 资产需要明确推荐位置。
+- Round 12 UI 回归修复：文件夹批量添加后 `startJob()` 已保留整批创建出的 job id，不再把 `activeBatchJobIds` 覆盖为首个任务；生成页会显示真实批量进度如 `任务 1 / 3`，并列出后续等待任务。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：批量任务中的单个 job 成功时不再立即跳转“字幕生成完成”；生成页会切到下一条等待/运行任务并继续订阅，只有整批全部成功后才进入完成页。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：批量任务完成页已改为展示整批字幕结果列表，完成数量和结果卡片来自本批所有成功 job，不再只显示最后一个/当前一个任务。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：生成页“后台运行”按钮已接入任务历史，并默认打开“正在生成”筛选；该筛选现在同时展示 running/canceling 和 queued 任务，便于查看整批后台任务。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：点击“后台运行”后进入任务历史的运行中筛选，后续 job snapshot/progress/succeeded/failed/canceled 事件只更新任务数据，不再默认把页面拉回生成页或完成页。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 体验修复：生成页进度显示增加 smooth display progress 层；真实 daemon 进度仍作为事实值，UI 在低于真实进度时快速追赶，进度停滞时缓慢预估前进，未完成前封顶到 97%，避免卡住或提前显示 100%。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：结果页“打开字幕/文件夹”已从模拟打开改为 Electron main process 调用 `shell.openPath` 真实打开本机路径，renderer 只接收成功/失败布尔结果。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：真实打开字幕/文件夹成功后不再显示底部 toast，仅打开失败时保留错误提示。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：“打开字幕”路径映射改为优先使用 daemon `subtitle_path`；若结果误给视频路径，结果页会按 job 输出目录和输入文件名兜底推导字幕文件，避免打开原视频。验证：`cd desktop && npm test -- App.test.tsx daemonEventMapping.test.ts`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：任务历史卡片增加完成时间、语言、provider、模型和输出目录摘要；已完成任务卡片可点击进入任务详情，详情页展示完成状态和基础配置。验证：`cd desktop && npm test -- App.test.tsx daemonEventMapping.test.ts`、`cd desktop && npm run typecheck`。
+- Round 12 UI 体验修复：任务历史卡片摘要改为标签形式；列表不再展示完整输出路径，完成时间格式化到秒，详细输出目录仅保留在任务详情中。验证：`cd desktop && npm test -- App.test.tsx daemonEventMapping.test.ts`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：翻译 SRT 工具页接入真实翻译环境 readiness gate；当翻译 Provider 或默认翻译模型未准备好时禁用“开始翻译”，显示“翻译环境未准备好”并提供“配置翻译 Provider”入口，避免继续走 mock 翻译成功状态。验证：`cd desktop && npm test -- App.test.tsx daemonEventMapping.test.ts`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：设置 / 通用页补齐原型中的字体风格切换、输出格式和翻译目标语言；`outputFormat` 与 `targetLanguage` 已进入 `ConfigViewModel`、daemon config API mapping 和 job create request，字体风格作为 renderer UI 偏好处理。验证：`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`、`cd desktop && npm run typecheck`、`go test ./...`。
+- Round 12 UI 回归修复：设置 / 通用页“输出内容”切换接入真实 daemon config 字段 `output_type`，不再被 config API 返回值重置为原字幕；Go config view、PATCH validate/merge 和 daemon API 文档同步更新。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`、`go test ./...`。
+- Round 12 UI 回归修复：设置 / 通用页“默认转写 Provider”和“默认翻译 Provider”由本地/远程分段控件改为下拉框，选项直接来自 daemon/mock 返回的 provider 列表并按 STT/translation capability 过滤，选择后写回对应默认 provider 配置。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`。
+- Round 12 设置重规划：移除独立“API 服务”用户入口，Provider 页按“转写 Provider / 翻译 Provider”组织，并在 provider 卡片中承载默认选择、模型、设备、词级时间戳、Base URL、模型名、密钥状态、隐私和上传风险信息；模型管理页改为“转写模型 / 翻译模型”分组，展示用途、兼容 Provider、推荐场景、默认状态和下载/重试/设默认操作。Go provider registry 补齐 `local-nllb-ct2`、`web-bing`、`web-google`、`api-openai-chat` 翻译 metadata；`translate_srt` 已从 placeholder 改为受控 Python CLI bridge，覆盖参数白名单、env scrub、JSON/log 分离和 redacted errors，测试使用 fake CLI。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`、`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./...`。
+- Round 12 UI 回归修复：模型管理页下载模型不再复用全局字幕生成 `activeJob` 导航；`model_install` job 现在在设置 / 模型管理 tab 内独立订阅并显示卡片内下载进度，完成后重新同步 `listModels()`，不会跳转到“正在生成字幕”页面。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`。
+- Round 12 模型管理补齐移除能力：`FastSubClient` 新增 `removeModel(modelId)`，mock、preload、main daemon client 和 Go daemon `DELETE /v1/models/{model_id}` 已同步；模型卡片对已安装/安装中/失败模型显示“移除”，renderer 只传 model id，不传 raw path，daemon 只删除受控 model store 内的对应目录并返回 missing 状态。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`、`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./...`。

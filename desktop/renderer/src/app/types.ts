@@ -24,6 +24,8 @@ export type Screen =
 
 export type MediaFile = { path: string; name: string; size: string; duration: string };
 export type UiLanguage = "system" | "zh" | "en";
+export type UiFontStyle = "system" | "sketch";
+export type QueueFilter = "all" | "running" | "done" | "failed";
 
 export type RenderProps = {
   screen: Screen;
@@ -35,20 +37,26 @@ export type RenderProps = {
   setConfig: (config: ConfigViewModel) => void;
   uiLanguage: UiLanguage;
   setUiLanguage: (language: UiLanguage) => void;
+  uiFontStyle: UiFontStyle;
+  setUiFontStyle: (style: UiFontStyle) => void;
   files: MediaFile[];
   setFiles: (files: MediaFile[]) => void;
   outputDirectoryLabel: string;
   asrReady: boolean;
   translationReady: boolean;
   jobs: JobSummary[];
+  modelInstallJobs: Record<string, JobDetail>;
+  queueInitialFilter: QueueFilter;
   activeBatchJobIds: string[];
   activeJob: JobDetail | null;
+  completedBatchJobs: JobDetail[];
   addFiles: () => Promise<void>;
   addFolder: () => Promise<void>;
   addDroppedFiles: (files: FileList) => void;
   chooseOutputDirectory: () => Promise<boolean>;
   chooseSubtitleOutputPath: (defaultPath: string) => Promise<string | null>;
   openJob: (jobId: string, screen: Screen) => Promise<void>;
+  openRunningQueue: () => void;
   startJob: (options?: { conflictResolved?: boolean; outputConflict?: ConfigViewModel["outputConflict"]; outputPath?: string; remoteUploadConfirmed?: boolean }) => Promise<void>;
   startToolJob: (type: "translate_srt" | "burn_in", inputPaths: string[]) => Promise<JobDetail>;
   retryJob: () => Promise<void>;
@@ -57,6 +65,7 @@ export type RenderProps = {
   cancelAllJobs: () => Promise<void>;
   deleteJob: () => Promise<void>;
   installModel: (id: string) => Promise<void>;
+  removeModel: (id: string) => Promise<void>;
   repairDaemon: () => Promise<void>;
   testProvider: (id: string, mode: "static" | "live") => Promise<ProviderStatus>;
   updateConfig: (patch: Partial<ConfigViewModel>) => Promise<void>;

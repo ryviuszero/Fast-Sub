@@ -102,25 +102,7 @@ func (r DefaultRunner) runModelInstall(ctx context.Context, req CreateRequest, e
 }
 
 func (r DefaultRunner) runTranslateSRT(ctx context.Context, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
-	if strings.TrimSpace(req.InputPath) == "" {
-		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "translating", "input_path is required.", "Choose an SRT file.", nil)
-	}
-	output := req.OutputPath
-	if output == "" {
-		output = strings.TrimSuffix(req.InputPath, filepath.Ext(req.InputPath)) + ".translated.srt"
-	}
-	if err := validateOutput(output, boolOption(req, "overwrite")); err != nil {
-		return Result{}, err
-	}
-	emitProgress(emit, "translating", 40)
-	if ctx.Err() != nil {
-		return Result{}, fserrors.New(fserrors.CodeCanceled, "translating", "job was canceled.", "", nil)
-	}
-	if err := os.WriteFile(output, []byte("1\n00:00:00,000 --> 00:00:01,000\nFast Sub translation bridge placeholder\n"), 0o600); err != nil {
-		return Result{}, classifyWriteError("rendering", err.Error())
-	}
-	emitProgress(emit, "finalizing", 95)
-	return Result{InputPath: req.InputPath, OutputPath: output, Language: language(req), Segments: 1, Provider: req.Provider, Model: req.Model, Warnings: []string{"translate_srt CLI bridge placeholder used"}}, nil
+	return r.runTranslateSRTBridge(ctx, req, emit)
 }
 
 func (r DefaultRunner) runBurnIn(ctx context.Context, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {

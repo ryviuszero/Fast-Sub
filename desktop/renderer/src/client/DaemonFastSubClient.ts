@@ -27,6 +27,7 @@ export interface FastSubClientBridge {
   installModel(modelId: string): Promise<ModelStatus>;
   createModelInstallJob(modelId: string): Promise<JobDetail>;
   verifyModel(modelId: string): Promise<ModelStatus>;
+  removeModel(modelId: string): Promise<ModelStatus>;
   listProviders(): Promise<ProviderStatus[]>;
   testProvider(providerId: string, mode: "static" | "live"): Promise<ProviderStatus>;
   createJob(request: CreateJobRequest): Promise<JobDetail>;
@@ -53,6 +54,7 @@ export class DaemonFastSubClient implements FastSubClient {
   installModel(modelId: string): Promise<ModelStatus> { return this.bridge.installModel(modelId); }
   createModelInstallJob(modelId: string): Promise<JobDetail> { return this.bridge.createModelInstallJob(modelId); }
   verifyModel(modelId: string): Promise<ModelStatus> { return this.bridge.verifyModel(modelId); }
+  removeModel(modelId: string): Promise<ModelStatus> { return this.bridge.removeModel(modelId); }
   listProviders(): Promise<ProviderStatus[]> { return this.bridge.listProviders(); }
   testProvider(providerId: string, mode: "static" | "live"): Promise<ProviderStatus> { return this.bridge.testProvider(providerId, mode); }
   createJob(request: CreateJobRequest): Promise<JobDetail> { return this.bridge.createJob(request); }

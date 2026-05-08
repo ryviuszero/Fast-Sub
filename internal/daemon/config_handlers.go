@@ -11,8 +11,11 @@ import (
 type configView struct {
 	ConfigSchemaVersion        int            `json:"config_schema_version"`
 	Language                   string         `json:"language"`
+	TargetLanguage             string         `json:"target_language"`
 	OutputDirectory            string         `json:"output_directory"`
 	OutputConflict             string         `json:"output_conflict"`
+	OutputFormat               string         `json:"output_format"`
+	OutputType                 string         `json:"output_type"`
 	Device                     string         `json:"device"`
 	DefaultASRProvider         string         `json:"default_asr_provider"`
 	DefaultTranslationProvider string         `json:"default_translation_provider"`
@@ -66,13 +69,16 @@ func (s *Server) configView() configView {
 	return configView{
 		ConfigSchemaVersion:        1,
 		Language:                   "auto",
+		TargetLanguage:             "zh",
 		OutputDirectory:            "source",
 		OutputConflict:             "ask",
+		OutputFormat:               "srt",
+		OutputType:                 "original_srt",
 		Device:                     "auto",
 		DefaultASRProvider:         "local-faster-whisper",
 		DefaultTranslationProvider: "local-nllb-ct2",
 		DefaultASRModel:            "whisper-small",
-		DefaultTranslationModel:    "nllb-ct2-base",
+		DefaultTranslationModel:    "nllb-200-distilled-600m-ct2-int8",
 		WordTimestamps:             false,
 		KeepTemp:                   false,
 		OpenAICompatible:           openai,
@@ -92,6 +98,24 @@ func validateConfigPatch(patch map[string]any) *fserrors.AppError {
 			})
 		}
 	}
+	if value, ok := patch["output_format"].(string); ok {
+		switch value {
+		case "srt", "vtt", "txt", "json":
+		default:
+			return fserrors.New("invalid_config", "config", "configuration patch is invalid.", "Review the highlighted settings and try again.", map[string]any{
+				"fields": []map[string]string{{"path": "output_format", "code": "unsupported_value", "message": "output_format must be one of srt, vtt, txt, json."}},
+			})
+		}
+	}
+	if value, ok := patch["output_type"].(string); ok {
+		switch value {
+		case "original_srt", "translated_srt", "bilingual_srt", "burned_video":
+		default:
+			return fserrors.New("invalid_config", "config", "configuration patch is invalid.", "Review the highlighted settings and try again.", map[string]any{
+				"fields": []map[string]string{{"path": "output_type", "code": "unsupported_value", "message": "output_type must be one of original_srt, translated_srt, bilingual_srt, burned_video."}},
+			})
+		}
+	}
 	if openai, ok := patch["openai_compatible"].(map[string]any); ok {
 		if _, hasRaw := openai["api_key"]; hasRaw {
 			return fserrors.New("invalid_config", "config", "raw api_key is not accepted in config.", "Save API keys with the desktop secret storage.", nil)
@@ -107,6 +131,10 @@ func mergeConfigView(view configView, patch map[string]any) configView {
 			if typed, ok := value.(string); ok {
 				view.Language = typed
 			}
+		case "target_language":
+			if typed, ok := value.(string); ok {
+				view.TargetLanguage = typed
+			}
 		case "output_directory":
 			if typed, ok := value.(string); ok {
 				view.OutputDirectory = typed
@@ -114,6 +142,14 @@ func mergeConfigView(view configView, patch map[string]any) configView {
 		case "output_conflict":
 			if typed, ok := value.(string); ok {
 				view.OutputConflict = typed
+			}
+		case "output_format":
+			if typed, ok := value.(string); ok {
+				view.OutputFormat = typed
+			}
+		case "output_type":
+			if typed, ok := value.(string); ok {
+				view.OutputType = typed
 			}
 		case "device":
 			if typed, ok := value.(string); ok {

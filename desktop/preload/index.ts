@@ -34,6 +34,7 @@ const clientApi = {
   installModel: (modelId: string) => ipcRenderer.invoke("fast-sub-client:install-model", modelId),
   createModelInstallJob: (modelId: string) => ipcRenderer.invoke("fast-sub-client:create-model-install-job", modelId),
   verifyModel: (modelId: string) => ipcRenderer.invoke("fast-sub-client:verify-model", modelId),
+  removeModel: (modelId: string) => ipcRenderer.invoke("fast-sub-client:remove-model", modelId),
   listProviders: () => ipcRenderer.invoke("fast-sub-client:list-providers"),
   testProvider: (providerId: string, mode: "static" | "live") => ipcRenderer.invoke("fast-sub-client:test-provider", providerId, mode),
   createJob: (request: CreateJobRequest) => ipcRenderer.invoke("fast-sub-client:create-job", request),

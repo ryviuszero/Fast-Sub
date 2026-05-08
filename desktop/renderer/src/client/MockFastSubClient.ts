@@ -48,7 +48,7 @@ function statusLabel(status: JobDetail["status"]): string {
 function titleForRequest(request: CreateJobRequest, file: string): string {
   const base = file.split(/[\\/]/).pop() ?? "字幕任务";
   if (request.type === "translate_srt") {
-    return base.replace(/\.srt$/i, ".zh.srt");
+    return base.replace(/\.srt$/i, `.zh.${request.outputFormat}`);
   }
   if (request.type === "burn_in") {
     return base.replace(/\.[^.]+$/, ".burned.mp4");
@@ -61,7 +61,8 @@ function mockResultForJob(job: JobDetail): JobResult {
     subtitlePath: `${job.outputDirectory}\\${job.title.replace(/\.[^.]+$/, "")}.srt`,
     outputFolder: job.outputDirectory,
     summary: "已生成 mock 字幕",
-    durationLabel: "00:48"
+    durationLabel: "00:48",
+    language: job.language ?? "自动识别"
   };
 }
 
@@ -127,11 +128,13 @@ export class MockFastSubClient implements FastSubClient {
       statusLabel: "已完成",
       progressPercent: 100,
       stageLabel: "已完成",
+      completedAt: "今天 10:18",
       result: {
         subtitlePath: "D:\\资料\\视频\\片段.srt",
         outputFolder: "D:\\资料\\视频",
         summary: "已生成 118 行字幕",
-        durationLabel: "01:18"
+        durationLabel: "01:18",
+        language: "自动识别"
       }
     });
     this.jobs.set(done.id, done);
@@ -254,6 +257,27 @@ export class MockFastSubClient implements FastSubClient {
     return clone({ ...model, state: model.state === "missing" ? "missing" : "ready" });
   }
 
+  async removeModel(modelId: string): Promise<ModelStatus> {
+    const model = this.models.find((item) => item.id === modelId);
+    if (!model) {
+      throw new Error("unknown model");
+    }
+    const next: ModelStatus = {
+      ...model,
+      state: "missing",
+      progressPercent: undefined,
+      installJobId: undefined,
+      diagnostic: undefined
+    };
+    this.models = this.models.map((item) => item.id === modelId ? next : item);
+    for (const [id, job] of this.jobs) {
+      if (job.type === "model_install" && job.modelName === model.name && (job.status === "queued" || job.status === "running" || job.status === "canceling")) {
+        this.jobs.set(id, { ...job, status: "canceled", statusLabel: "已取消", stageLabel: "已移除" });
+      }
+    }
+    return clone(next);
+  }
+
   async listProviders(): Promise<ProviderStatus[]> {
     return clone(this.providers);
   }
@@ -287,6 +311,7 @@ export class MockFastSubClient implements FastSubClient {
       outputDirectory: request.outputDirectory,
       providerName,
       modelName: request.modelId,
+      language: request.language,
       status: instantToolJob ? "succeeded" : "queued",
       statusLabel: instantToolJob ? "已完成" : "等待中",
       progressPercent: instantToolJob ? 100 : 0,
@@ -295,7 +320,8 @@ export class MockFastSubClient implements FastSubClient {
         subtitlePath: request.outputPath ?? `${request.outputDirectory}\\${title}`,
         outputFolder: (request.outputPath ?? request.outputDirectory).replace(/[\\/][^\\/]*$/, ""),
         summary: "mock 工具任务已完成",
-        durationLabel: "00:03"
+        durationLabel: "00:03",
+        language: request.targetLanguage ?? request.language
       } : undefined
     });
     this.jobs.set(id, job);
@@ -303,7 +329,7 @@ export class MockFastSubClient implements FastSubClient {
   }
 
   async listJobs(): Promise<JobSummary[]> {
-    return Array.from(this.jobs.values()).map(({ logs: _logs, inputPaths: _inputPaths, outputDirectory: _outputDirectory, providerName: _providerName, modelName: _modelName, result: _result, error: _error, estimatedRemaining: _estimatedRemaining, ...summary }) => clone(summary));
+    return Array.from(this.jobs.values()).map(({ logs: _logs, inputPaths: _inputPaths, result: _result, error: _error, estimatedRemaining: _estimatedRemaining, ...summary }) => clone(summary));
   }
 
   async getJob(jobId: string): Promise<JobDetail> {
@@ -407,7 +433,7 @@ export class MockFastSubClient implements FastSubClient {
       this.models = this.models.map((model) => model.id === "whisper-small" ? { ...model, state: "missing" } : model);
     }
     if (this.scenario === "nllbInstallFailed") {
-      this.models = this.models.map((model) => model.id === "nllb-ct2-base" ? { ...model, state: "failed", diagnostic: "download URL signature=[REDACTED]" } : model);
+      this.models = this.models.map((model) => model.id === "nllb-200-distilled-600m-ct2-int8" ? { ...model, state: "failed", diagnostic: "download URL signature=[REDACTED]" } : model);
     }
     if (this.scenario === "modelInstallFailed") {
       this.models = this.models.map((model) => model.id === "whisper-small" ? { ...model, state: "failed", progressPercent: 42, diagnostic: "download URL signature=[REDACTED]" } : model);
@@ -429,7 +455,7 @@ export class MockFastSubClient implements FastSubClient {
       this.jobs.set(jobId, { ...current, logs: event.logs });
     }
     if (event.type === "succeeded" && event.result) {
-      this.jobs.set(jobId, { ...current, status: "succeeded", statusLabel: "已完成", progressPercent: 100, stageLabel: "已完成", result: event.result });
+      this.jobs.set(jobId, { ...current, status: "succeeded", statusLabel: "已完成", progressPercent: 100, stageLabel: "已完成", completedAt: "刚刚", result: event.result });
     }
     if (event.type === "failed" && event.error) {
       this.jobs.set(jobId, { ...current, status: "failed", statusLabel: "已失败", error: event.error, stageLabel: event.error.title });

@@ -162,6 +162,8 @@ Request：
   "model": "whisper-small",
   "model_path": "",
   "language": "auto",
+  "target_language": "zh",
+  "output_format": "srt",
   "word_timestamps": "off",
   "options": {
     "yes": false,
@@ -354,6 +356,13 @@ GET /v1/providers
 
 这两个 endpoint 复用 Go CLI 语义，不应触发真实转写、音频上传或模型下载。
 
+`GET /v1/providers` 当前按任务暴露 provider metadata：
+
+- ASR：`local-faster-whisper`、`local-whisper-cpp`、`api-openai-transcription`。
+- Translation：`local-nllb-ct2`、`web-bing`、`web-google`、`api-openai-chat`。
+
+Provider metadata 必须包含 `type` / `location` / `privacy` / `requires_model` / `requires_api_key` / `supports_batch` / `supports_word_timestamps` / `supported_languages` / `compatible_model_types` 等 UI 可用字段。renderer 不读取 raw secret；API key 只通过 Electron main process 和 daemon secret/config adapter 管理。
+
 Provider status vocabulary：
 
 ```text
@@ -385,7 +394,8 @@ burn_in
 当前实现说明：
 
 - `model_install` 已作为独立 job type 接入 job/SSE/cancel/result/logs/delete 通路，并复用现有 Go model installer；UI 必须在完成后通过 `GET /v1/models` 重新同步模型真实状态。
-- `translate_srt` 和 `burn_in` 已作为 daemon job type 接入，当前使用受控 placeholder bridge 写入小型输出文件，不拼 shell、不暴露 Python/ffmpeg 细节；完整 Python CLI resolver、参数白名单 runner 和真实 ffmpeg bridge 仍是 Round 12 后续收口项。
+- `translate_srt` 已通过受控 Python CLI bridge 接入现有 `fast-sub translate`：使用 `exec.CommandContext`、参数白名单、环境变量 scrub、UTF-8 replacement decode、JSON stdout/log 分离和 redacted logs；默认测试使用 fake CLI，不访问真实网络、真实 OpenAI、真实模型。
+- `burn_in` 已作为 daemon job type 接入，当前仍使用受控 placeholder bridge 写入小型输出文件，不拼 shell、不暴露 ffmpeg 细节；真实 ffmpeg bridge 仍是 Round 12 后续收口项。
 - `GET /v1/config` / `PATCH /v1/config` 已作为 daemon-owned config API 暴露；当前 PATCH validate 并返回 merge 后 view model，持久 atomic writer 后续继续完善。
 
 ### Create Model Install Job
@@ -437,10 +447,11 @@ burn_in
 
 Round 12 默认将 model verify 保留为短请求；如果后续校验耗时过长，可升级为 job。
 
-建议 endpoint：
+Endpoints：
 
 ```http
 POST /v1/models/{model_id}/verify
+DELETE /v1/models/{model_id}
 ```
 
 返回：
@@ -453,6 +464,24 @@ POST /v1/models/{model_id}/verify
     "model_id": "whisper-small",
     "status": "available",
     "verified": true,
+    "path_summary": "%FAST_SUB_HOME%/models/whisper-small",
+    "warnings": []
+  },
+  "warnings": []
+}
+```
+
+`DELETE /v1/models/{model_id}` 只删除 Go-managed model store 中该 manifest id 对应的受控模型目录，不能删除任意路径，不能接受 renderer 提供的 raw path。删除成功后返回同一模型的 missing 状态：
+
+```json
+{
+  "schema_version": 1,
+  "ok": true,
+  "result": {
+    "model_id": "whisper-small",
+    "status": "missing",
+    "verified": false,
+    "removed": true,
     "path_summary": "%FAST_SUB_HOME%/models/whisper-small",
     "warnings": []
   },
@@ -489,7 +518,9 @@ Request：
 
 Rules：
 
-- 远程 provider 必须由 UI 完成上传确认后才能创建 job。
+- 远程 provider（`web-bing`、`web-google`、`api-openai-chat`）必须由 UI 完成字幕文本上传确认后才能创建 job；daemon 也会在缺少确认时拒绝执行。
+- `local-nllb-ct2` 需要明确源语言，不建议使用 `auto`。
+- `api-openai-chat` 需要 OpenAI-compatible API key/base URL/model 配置完整；raw key 不进入 renderer state。
 - Go daemon 调 Python CLI 时必须使用 `exec.CommandContext` 和参数白名单，不拼 shell 字符串。
 - Python CLI resolver 失败返回 `missing_dependency` 或 `runtime_not_found`。
 - stdout/stderr 必须按 UTF-8 或可控 replacement 解码；JSON stdout 和 logs 必须分离。
@@ -567,13 +598,16 @@ PATCH /v1/config
   "result": {
     "config_schema_version": 1,
     "language": "auto",
+    "target_language": "zh",
     "output_directory": "source",
     "output_conflict": "ask",
+    "output_format": "srt",
+    "output_type": "original_srt",
     "device": "auto",
     "default_asr_provider": "local-faster-whisper",
     "default_translation_provider": "local-nllb-ct2",
     "default_asr_model": "whisper-small",
-    "default_translation_model": "nllb-200-distilled-600M",
+    "default_translation_model": "nllb-200-distilled-600m-ct2-int8",
     "word_timestamps": false,
     "keep_temp": false,
     "openai_compatible": {
@@ -597,6 +631,9 @@ PATCH /v1/config
   "schema_version": 1,
   "patch": {
     "output_conflict": "skip",
+    "output_format": "vtt",
+    "output_type": "bilingual_srt",
+    "target_language": "zh",
     "device": "cpu",
     "word_timestamps": true,
     "openai_compatible": {
@@ -717,6 +754,7 @@ Round 12 需要同步更新 `desktop/shared/contracts/types.ts`：
 - `ModelStatus` 增加可选 `installJobId?: string`。
 - `FastSubClient` 增加 `createModelInstallJob(modelId): Promise<JobDetail>`。
 - `installModel(modelId): Promise<ModelStatus>` 仅保留兼容语义，内部创建 `model_install` job 后返回 `installing` 状态和 `installJobId`。
+- `FastSubClient` 增加 `removeModel(modelId): Promise<ModelStatus>`，映射到 daemon `DELETE /v1/models/{model_id}`，renderer 只传 model id，不传 raw path。
 - mock client、daemon client、fake fixtures 和 tests 必须共享同一份 contract。
 
 ### Round 12 Fixture Requirements

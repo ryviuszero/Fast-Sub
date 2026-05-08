@@ -283,7 +283,7 @@ func TestProvidersListJSONSuccess(t *testing.T) {
 	payload := mustJSON(t, stdout.String())
 	result := payload["result"].(map[string]any)
 	list := result["providers"].([]any)
-	if len(list) != 3 {
+	if len(list) != 7 {
 		t.Fatalf("providers len = %d", len(list))
 	}
 }

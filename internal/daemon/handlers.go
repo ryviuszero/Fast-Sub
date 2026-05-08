@@ -46,7 +46,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleModel(w http.ResponseWriter, r *http.Request) {
 	id, action, ok := parseModelRoute(r.URL.Path)
-	if !ok || r.Method != http.MethodPost || action != "verify" {
+	if !ok || (r.Method == http.MethodPost && action != "verify") || (r.Method == http.MethodDelete && action != "") || (r.Method != http.MethodPost && r.Method != http.MethodDelete) {
 		writeError(w, http.StatusNotFound, unknownRoute())
 		return
 	}
@@ -58,6 +58,24 @@ func (s *Server) handleModel(w http.ResponseWriter, r *http.Request) {
 	entry, exists := manifest.Get(id)
 	if !exists {
 		writeError(w, http.StatusNotFound, fserrors.New("unknown_model", "models", "unknown model: "+id, "", nil))
+		return
+	}
+	if r.Method == http.MethodDelete {
+		status, appErr := models.DefaultStore().Remove(entry)
+		if appErr != nil {
+			writeAppError(w, appErr)
+			return
+		}
+		writeOK(w, map[string]any{
+			"model_id":     id,
+			"id":           id,
+			"name":         entry.Name,
+			"status":       "missing",
+			"verified":     false,
+			"path_summary": status.Path,
+			"removed":      true,
+			"warnings":     []string{},
+		})
 		return
 	}
 	status := models.DefaultStore().Verify(entry)

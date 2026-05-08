@@ -169,7 +169,7 @@ export function mapDaemonEventToJobEvent(fixture: DaemonEventFixture): JobEvent 
     }
     case "completed":
       {
-        const outputPath = stringField(record, "output_path", stringField(record, "subtitle_path", ""));
+        const outputPath = stringField(record, "subtitle_path", stringField(record, "output_path", ""));
         const outputFolder = stringField(record, "output_folder", outputFolderFor(outputPath, ""));
         return {
           type: "succeeded",
@@ -177,7 +177,8 @@ export function mapDaemonEventToJobEvent(fixture: DaemonEventFixture): JobEvent 
             subtitlePath: outputPath,
             outputFolder,
             summary: stringField(record, "summary", "字幕已生成"),
-            durationLabel: durationLabel(record)
+            durationLabel: durationLabel(record),
+            language: stringField(record, "language", "")
           }
         };
       }

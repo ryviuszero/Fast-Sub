@@ -106,6 +106,17 @@ func TestServer_AuthAndCORS(t *testing.T) {
 	}
 }
 
+func TestServer_DeleteModelRemovesManagedModel(t *testing.T) {
+	t.Setenv("FAST_SUB_MODEL_STORE_DIR", t.TempDir())
+	srv := newTestHTTPServer(t, fakeRunner{})
+	defer srv.Close()
+
+	resp, body := request(t, srv.URL, http.MethodDelete, "/v1/models/whisper-base", "test-token", nil, "")
+	if resp.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`"removed":true`)) || !bytes.Contains(body, []byte(`"status":"missing"`)) {
+		t.Fatalf("delete model status=%d body=%s", resp.StatusCode, body)
+	}
+}
+
 func TestServer_RejectsNonLoopbackHost(t *testing.T) {
 	t.Parallel()
 	_, err := New(Config{

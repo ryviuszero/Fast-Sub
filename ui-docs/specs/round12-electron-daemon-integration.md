@@ -91,10 +91,12 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
   - 推荐新增 `createModelInstallJob(modelId): Promise<JobDetail>`。
   - 保留 `installModel(modelId): Promise<ModelStatus>` 只用于兼容 UI 旧调用，内部创建 `model_install` job 后返回 `installing` 状态，并包含 `installJobId`。
   - 实现层和测试应优先使用 `createModelInstallJob()`，避免长任务被误当成短请求。
+  - 新增 `removeModel(modelId): Promise<ModelStatus>`，映射 daemon `DELETE /v1/models/{model_id}`；renderer 只传 manifest model id，不传 raw path。
 - `desktop/shared/contracts/types.ts` 需要同步更新：
   - `JobKind` 增加 `model_install`。
   - `ModelStatus` 增加可选 `installJobId?: string`。
   - `FastSubClient` 增加 `createModelInstallJob(modelId): Promise<JobDetail>`。
+  - `FastSubClient` 增加 `removeModel(modelId): Promise<ModelStatus>`。
   - mock client、daemon client、tests 和 fixtures 必须使用同一份 contract。
 - client 实现：
   - `health`
@@ -118,6 +120,7 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
   - `deleteJob`
   - `subscribeJobEvents`
   - `createModelInstallJob`
+  - `removeModel`
 - REST response envelope 统一映射为 UI view model；不把 raw HTTP response、raw JSON envelope、daemon job id、token 或 raw errors 暴露到普通主界面。
 - 401 映射为“本地服务认证失效”，提供 `repairDaemon` 恢复动作。
 - daemon disconnected 映射为“本地服务中断”，提供重新连接/一键修复。
@@ -226,6 +229,7 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
   - redacted error。
   - result 中返回 model id、status、path、size summary。
 - `verifyModel(modelId)` 可走短请求；如果后续校验变长，可升级为 job，但 Round 12 默认保留短请求。
+- `removeModel(modelId)` 可走短请求，但 daemon 只能删除 manifest 中声明的本机模型目录，不能接受 renderer 传入的任意路径。
 - 模型页和首次启动页必须使用真实 `listModels()` 状态刷新，不能只相信 install job 的本地乐观状态。
 - 模型安装失败必须提供重试和诊断入口。
 

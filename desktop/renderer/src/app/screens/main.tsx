@@ -1,9 +1,24 @@
+import { useEffect, useState } from "react";
 import type { DragEvent } from "react";
-import type { ConfigViewModel } from "../../../../shared/contracts/types";
+import type { ConfigViewModel, JobStatus } from "../../../../shared/contracts/types";
 import type { RenderProps } from "../types";
 import { CheckItem, Chip, Chrome, Divider, Footer, Segment, SettingsEntry, Toggle } from "../components";
 
-export function MainEmpty({ setScreen, addFiles, addFolder, addDroppedFiles, chooseOutputDirectory, outputDirectoryLabel, asrReady, translationReady }: RenderProps) {
+function outputFormatLabel(format: ConfigViewModel["outputFormat"]): string {
+  return format.toUpperCase();
+}
+
+function outputTypeLabel(type: ConfigViewModel["outputType"]): string {
+  const labels: Record<ConfigViewModel["outputType"], string> = {
+    original_srt: "原字幕",
+    translated_srt: "翻译字幕",
+    bilingual_srt: "双语字幕",
+    burned_video: "烧录视频"
+  };
+  return labels[type];
+}
+
+export function MainEmpty({ setScreen, addFiles, addFolder, addDroppedFiles, chooseOutputDirectory, outputDirectoryLabel, asrReady, translationReady, config }: RenderProps) {
   const handleDropZoneClick = () => {
     if (asrReady) {
       void addFiles();
@@ -42,7 +57,7 @@ export function MainEmpty({ setScreen, addFiles, addFolder, addDroppedFiles, cho
         </section>
         <div className="output-row">
           <div><span className="subtle">输出位置：</span><strong>{outputDirectoryLabel}</strong> <button className="link-button" disabled={!asrReady} onClick={() => void chooseOutputDirectory()}>修改</button></div>
-          <div><span className="subtle">格式：</span><strong>SRT</strong></div>
+          <div><span className="subtle">格式：</span><strong>{outputFormatLabel(config.outputFormat)}</strong></div>
         </div>
       </main>
       <Footer onHistory={() => setScreen("queue-list")} onSettings={() => setScreen("settings-general")} />
@@ -82,7 +97,7 @@ export function MainFiles(props: RenderProps & { advanced: boolean }) {
           <>
             <Divider />
             <div className="between">
-              <div><p>输出：原字幕 SRT · 与源视频相同目录</p><span className="caption">语言：自动识别 · 本地转写 (whisper-small)</span></div>
+              <div><p>输出：{outputTypeLabel(props.config.outputType)} {outputFormatLabel(props.config.outputFormat)} · 与源视频相同目录</p><span className="caption">语言：自动识别 · 本地转写 (whisper-small)</span></div>
               <button className="link-button" onClick={() => props.setScreen("main-advanced")}>详细设置</button>
             </div>
           </>
@@ -111,18 +126,27 @@ export function AdvancedSettings(props: RenderProps) {
     { label: "覆盖", value: "overwrite" },
     { label: "跳过", value: "skip" }
   ];
+  const outputFormats: Array<{ label: string; value: ConfigViewModel["outputFormat"] }> = [
+    { label: "SRT", value: "srt" },
+    { label: "VTT", value: "vtt" },
+    { label: "TXT", value: "txt" },
+    { label: "JSON", value: "json" }
+  ];
   const outputTypeIndex = Math.max(0, outputTypes.findIndex((item) => item.value === props.config.outputType));
+  const outputFormatIndex = Math.max(0, outputFormats.findIndex((item) => item.value === props.config.outputFormat));
   const conflictIndex = Math.max(0, conflictModes.findIndex((item) => item.value === props.config.outputConflict));
   return (
     <section className="panel paper-muted compact-settings">
       <div className="between"><h2>详细设置</h2><button className="link-button" onClick={() => props.setScreen("main-files")}>收起</button></div>
       <div className="settings-grid">
         <label>字幕语言<select value={props.config.defaultLanguage} onChange={(event) => props.setConfig({ ...props.config, defaultLanguage: event.target.value })}><option value="auto">自动识别</option><option value="zh">中文</option><option value="en">英语</option></select></label>
+        <label>目标语言<select value={props.config.targetLanguage} onChange={(event) => props.setConfig({ ...props.config, targetLanguage: event.target.value })}><option value="zh">简体中文</option><option value="en">英语</option><option value="ja">日语</option></select></label>
         <label>ASR 模型<select value={props.config.asrModel} onChange={(event) => props.setConfig({ ...props.config, asrModel: event.target.value })}>{props.models.filter((model) => model.kind === "asr").map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</select></label>
         <label>转写方式<select value={props.config.asrProvider} onChange={(event) => props.setConfig({ ...props.config, asrProvider: event.target.value })}>{props.providers.filter((provider) => provider.capability === "stt").map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}</select></label>
         <label>设备<select value={props.config.device} onChange={(event) => props.setConfig({ ...props.config, device: event.target.value as ConfigViewModel["device"] })}><option value="auto">自动</option><option value="cpu">CPU</option><option value="gpu">GPU</option></select></label>
       </div>
       <div className="between"><span>输出内容</span><Segment items={outputTypes.map((item) => item.label)} active={outputTypeIndex} onSelect={(index) => props.setConfig({ ...props.config, outputType: outputTypes[index].value })} /></div>
+      <div className="between"><span>输出格式</span><Segment items={outputFormats.map((item) => item.label)} active={outputFormatIndex} onSelect={(index) => props.setConfig({ ...props.config, outputFormat: outputFormats[index].value })} /></div>
       <div className="between"><span>输出冲突</span><Segment items={conflictModes.map((item) => item.label)} active={conflictIndex} onSelect={(index) => props.setConfig({ ...props.config, outputConflict: conflictModes[index].value })} /></div>
       <div className="between"><span>词级时间戳</span><Toggle ariaLabel="词级时间戳" on={props.config.wordTimestamps} onClick={() => props.setConfig({ ...props.config, wordTimestamps: !props.config.wordTimestamps })} /></div>
       <div className="between"><span>保留临时文件</span><Toggle ariaLabel="保留临时文件" on={props.config.keepTempFiles} onClick={() => props.setConfig({ ...props.config, keepTempFiles: !props.config.keepTempFiles })} /></div>
@@ -203,8 +227,8 @@ function conflictOutputPath(activeJob: RenderProps["activeJob"]): string {
   return "";
 }
 
-export function MainGenerating({ activeJob, jobs, activeBatchJobIds, cancelJob, cancelAllJobs }: RenderProps) {
-  const percent = activeJob?.progressPercent ?? 0;
+export function MainGenerating({ activeJob, jobs, activeBatchJobIds, cancelJob, cancelAllJobs, openRunningQueue }: RenderProps) {
+  const percent = useSmoothProgress(activeJob?.id ?? "", activeJob?.progressPercent ?? 0, activeJob?.status ?? "queued");
   const activeId = activeJob?.id;
   const batchIds = activeBatchJobIds.length > 0 ? activeBatchJobIds : activeId ? [activeId] : [];
   const batchJobs = jobs.filter((job) => batchIds.includes(job.id));
@@ -235,18 +259,58 @@ export function MainGenerating({ activeJob, jobs, activeBatchJobIds, cancelJob, 
           <button className="btn ghost" onClick={() => void cancelAllJobs()}>全部取消</button>
         </div>
       </main>
-      <div className="footer-line"><span>任务 {Math.min(activeIndex + 1, totalJobs)} / {totalJobs}</span><button className="btn sm ghost">后台运行</button></div>
+      <div className="footer-line"><span>任务 {Math.min(activeIndex + 1, totalJobs)} / {totalJobs}</span><button className="btn sm ghost" onClick={openRunningQueue}>后台运行</button></div>
     </div>
   );
 }
 
-export function MainDone({ activeJob, openMock, setScreen }: RenderProps) {
-  const result = activeJob?.result;
-  const outputPath = result?.subtitlePath ?? "";
-  const outputFolder = result?.outputFolder || activeJob?.outputDirectory || outputPath.replace(/[\\/][^\\/]*$/, "");
-  const outputName = outputPath.split(/[\\/]/).pop() || activeJob?.title || "字幕结果";
-  const detail = result?.durationLabel || result?.summary || activeJob?.stageLabel || "任务已完成";
-  const completedCount = result || activeJob ? 1 : 0;
+function useSmoothProgress(jobId: string, actualPercent: number, status: JobStatus): number {
+  const safeActual = clampProgress(actualPercent);
+  const [displayPercent, setDisplayPercent] = useState(safeActual);
+
+  useEffect(() => {
+    setDisplayPercent(status === "succeeded" ? 100 : Math.min(safeActual, 97));
+  }, [jobId]);
+
+  useEffect(() => {
+    if (status === "succeeded") {
+      setDisplayPercent(100);
+      return;
+    }
+    if (status === "failed" || status === "canceled" || status === "interrupted") {
+      setDisplayPercent((current) => Math.min(current, 99));
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setDisplayPercent((current) => {
+        const cap = status === "queued" ? Math.max(8, Math.min(18, safeActual + 8)) : 97;
+        if (current >= cap) {
+          return current;
+        }
+        const target = Math.min(safeActual, cap);
+        if (current < target) {
+          const catchUp = Math.max(0.8, (target - current) * 0.35);
+          return Math.min(cap, target, current + catchUp);
+        }
+        const drift = current > safeActual ? 0.05 : 0.16;
+        return Math.min(cap, current + drift);
+      });
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [safeActual, status]);
+
+  return Math.round(displayPercent);
+}
+
+function clampProgress(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, value));
+}
+
+export function MainDone({ activeJob, completedBatchJobs, openMock, setScreen }: RenderProps) {
+  const completedJobs = completedBatchJobs.length > 0 ? completedBatchJobs : activeJob ? [activeJob] : [];
   return (
     <div className="wf">
       <Chrome right={<Chip tone="ok">就绪</Chip>} />
@@ -254,9 +318,16 @@ export function MainDone({ activeJob, openMock, setScreen }: RenderProps) {
         <div className="center-stack">
           <div className="success-mark">✓</div>
           <h1>字幕生成完成</h1>
-          <p className="subtle">已完成 {completedCount} 个文件</p>
+          <p className="subtle">已完成 {completedJobs.length} 个文件</p>
         </div>
-        <ResultCard name={outputName} detail={detail} ok onOpen={() => void openMock(outputPath)} onOpenFolder={() => void openMock(outputFolder)} />
+        {completedJobs.map((job) => {
+          const result = job.result;
+          const outputPath = subtitleOutputPath(job);
+          const outputFolder = result?.outputFolder || job.outputDirectory || outputPath.replace(/[\\/][^\\/]*$/, "");
+          const outputName = outputPath.split(/[\\/]/).pop() || job.title || "字幕结果";
+          const detail = result?.durationLabel || result?.summary || job.stageLabel || "任务已完成";
+          return <ResultCard key={job.id} name={outputName} detail={detail} ok onOpen={() => void openMock(outputPath)} onOpenFolder={() => void openMock(outputFolder)} />;
+        })}
       </main>
       <div className="action-footer">
         <SettingsEntry onClick={() => setScreen("settings-general")} />
@@ -267,6 +338,29 @@ export function MainDone({ activeJob, openMock, setScreen }: RenderProps) {
       </div>
     </div>
   );
+}
+
+function subtitleOutputPath(job: RenderProps["activeJob"]): string {
+  if (!job) {
+    return "";
+  }
+  const path = job.result?.subtitlePath ?? "";
+  if (isSubtitlePath(path) || job.type === "burn_in" || job.type === "model_install") {
+    return path;
+  }
+  const input = job.inputPaths[0] || job.currentFile || job.title;
+  const base = input.split(/[\\/]/).pop() || job.title || "subtitle";
+  const stem = base.replace(/\.[^.]+$/, "");
+  const directory = job.outputDirectory || path.replace(/[\\/][^\\/]*$/, "");
+  if (!directory) {
+    return `${stem}.srt`;
+  }
+  const sep = directory.includes("/") && !directory.includes("\\") ? "/" : "\\";
+  return `${directory}${sep}${stem}.srt`;
+}
+
+function isSubtitlePath(path: string): boolean {
+  return /\.(srt|ass|vtt)$/i.test(path);
 }
 
 function ResultCard({ name, detail, ok, onOpen, onOpenFolder }: { name: string; detail: string; ok: boolean; onOpen: () => void; onOpenFolder: () => void }) {

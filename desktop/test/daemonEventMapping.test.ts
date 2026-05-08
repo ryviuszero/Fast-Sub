@@ -60,6 +60,22 @@ describe("daemon event mapping fixture", () => {
     expect(mapped.result.durationLabel).toBe("18 秒");
   });
 
+  it("prefers subtitle_path over output_path for completed subtitle jobs", () => {
+    const mapped = mapDaemonEventToJobEvent({
+      event: "completed",
+      data: {
+        input_path: "C:\\media\\clip.mp4",
+        subtitle_path: "C:\\media\\clip.srt",
+        output_path: "C:\\media\\clip.mp4"
+      }
+    });
+    expect(mapped?.type).toBe("succeeded");
+    if (mapped?.type !== "succeeded" || !mapped.result) {
+      throw new Error("expected succeeded result");
+    }
+    expect(mapped.result.subtitlePath).toBe("C:\\media\\clip.srt");
+  });
+
   it("does not inject placeholder paths for minimal queue events", () => {
     const mapped = mapDaemonEventToJobEvent({ event: "queued", data: { status: "queued" } });
     expect(mapped?.type).toBe("snapshot");

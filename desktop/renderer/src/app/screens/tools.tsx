@@ -2,10 +2,16 @@ import { useRef, useState, type DragEvent } from "react";
 import type { RenderProps } from "../types";
 import { Chrome, KV, Segment, SettingRow, SettingsEntry } from "../components";
 
-export function ToolTranslate({ setScreen, startToolJob }: RenderProps) {
+export function ToolTranslate({ setScreen, startToolJob, translationReady, providers, config, updateConfig }: RenderProps) {
   const srtInputRef = useRef<HTMLInputElement | null>(null);
   const [srtName, setSrtName] = useState("尚未选择 SRT");
   const [translateStatus, setTranslateStatus] = useState<"idle" | "done" | "failed">("idle");
+  const translationProvider = providers.find((provider) => provider.id === config.translationProvider && provider.capability === "translation");
+  const providerReady = Boolean(translationProvider?.enabled && translationProvider.state === "available");
+  const canTranslate = translationReady && providerReady;
+  const readinessMessage = !providerReady
+    ? "当前翻译 Provider 未配置或不可用，请先到 Provider 管理中配置翻译能力。"
+    : "当前默认翻译模型未准备好，请先配置翻译 Provider 或安装默认翻译模型。";
   const pickSrt = (files: FileList | null) => {
     const file = files?.[0];
     if (file) {
@@ -21,6 +27,10 @@ export function ToolTranslate({ setScreen, startToolJob }: RenderProps) {
     pickSrt(event.dataTransfer.files);
   };
   const startTranslate = async () => {
+    if (!canTranslate) {
+      setTranslateStatus("idle");
+      return;
+    }
     if (srtName === "尚未选择 SRT") {
       setTranslateStatus("failed");
       return;
@@ -35,7 +45,17 @@ export function ToolTranslate({ setScreen, startToolJob }: RenderProps) {
         <div><h2>翻译已有 SRT</h2><span className="caption">独立子功能：不影响一键生成主流程。</span></div>
         <input ref={srtInputRef} aria-label="选择 SRT 文件" className="native-file-picker" type="file" accept=".srt,text/plain" onChange={(event) => pickSrt(event.currentTarget.files)} />
         <section className="drop-zone small" onClick={() => srtInputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={dropSrt}><h2>拖入 .srt 文件</h2><span>{srtName}</span><div className="row gap-8"><button className="btn" onClick={(event) => { event.stopPropagation(); srtInputRef.current?.click(); }}>选择 SRT</button><button className="btn ghost" onClick={(event) => event.stopPropagation()}>粘贴字幕文本</button></div></section>
-        <section className="panel"><h3>翻译设置</h3><SettingRow label="源语言"><select><option>自动识别</option></select></SettingRow><SettingRow label="目标语言"><select><option>简体中文</option></select></SettingRow><SettingRow label="翻译方式"><Segment items={["本地", "网页", "API"]} active={0} /></SettingRow></section>
+        {!canTranslate && (
+          <section className="panel warn-panel">
+            <h2>翻译环境未准备好</h2>
+            <p>{readinessMessage}</p>
+            <div className="row gap-8">
+              <button className="btn primary" onClick={() => setScreen("settings-providers")}>配置翻译 Provider</button>
+              <button className="btn ghost" onClick={() => setScreen("settings-models")}>查看模型</button>
+            </div>
+          </section>
+        )}
+        <section className="panel"><h3>翻译设置</h3><SettingRow label="源语言"><select value={config.defaultLanguage} onChange={(event) => void updateConfig({ defaultLanguage: event.currentTarget.value })}><option value="auto">自动识别</option><option value="zh">中文</option><option value="en">英语</option></select></SettingRow><SettingRow label="目标语言"><select value={config.targetLanguage} onChange={(event) => void updateConfig({ targetLanguage: event.currentTarget.value })}><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></SettingRow><SettingRow label="翻译方式"><Segment items={["本地", "网页", "API"]} active={0} /></SettingRow></section>
         {translateStatus === "done" && (
           <section className="panel ok-card">
             <h2>翻译完成</h2>
@@ -45,7 +65,7 @@ export function ToolTranslate({ setScreen, startToolJob }: RenderProps) {
         )}
         {translateStatus === "failed" && <section className="panel warn-panel"><h2>翻译失败</h2><p>请先选择一个 SRT 文件。</p></section>}
       </main>
-      <div className="action-footer"><SettingsEntry onClick={() => setScreen("settings-general")} /><div className="row gap-8"><button className="btn ghost" onClick={() => setTranslateStatus("failed")}>查看错误记录</button><button className="btn primary" onClick={() => void startTranslate()}>开始翻译</button></div></div>
+      <div className="action-footer"><SettingsEntry onClick={() => setScreen("settings-general")} /><div className="row gap-8"><button className="btn ghost" onClick={() => setTranslateStatus("failed")}>查看错误记录</button><button className="btn primary" disabled={!canTranslate} onClick={() => void startTranslate()}>开始翻译</button></div></div>
     </div>
   );
 }
