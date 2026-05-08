@@ -44,6 +44,38 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, map[string]any{"models": models.DefaultStore().List(manifest)})
 }
 
+func (s *Server) handleModel(w http.ResponseWriter, r *http.Request) {
+	id, action, ok := parseModelRoute(r.URL.Path)
+	if !ok || r.Method != http.MethodPost || action != "verify" {
+		writeError(w, http.StatusNotFound, unknownRoute())
+		return
+	}
+	manifest, err := models.LoadManifest("")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fserrors.New(fserrors.CodeInvalidInput, "models", err.Error(), "", nil))
+		return
+	}
+	entry, exists := manifest.Get(id)
+	if !exists {
+		writeError(w, http.StatusNotFound, fserrors.New("unknown_model", "models", "unknown model: "+id, "", nil))
+		return
+	}
+	status := models.DefaultStore().Verify(entry)
+	resultStatus := "missing"
+	if status.Installed {
+		resultStatus = "available"
+	}
+	writeOK(w, map[string]any{
+		"model_id":     id,
+		"id":           id,
+		"name":         entry.Name,
+		"status":       resultStatus,
+		"verified":     status.Installed,
+		"path_summary": status.Path,
+		"warnings":     []string{},
+	})
+}
+
 func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusNotFound, unknownRoute())
@@ -124,6 +156,19 @@ func (s *Server) deleteJob(w http.ResponseWriter, id string) {
 
 func parseJobRoute(path string) (string, string, bool) {
 	rest := strings.TrimPrefix(path, "/v1/jobs/")
+	parts := strings.Split(strings.Trim(rest, "/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		return "", "", false
+	}
+	action := ""
+	if len(parts) > 1 {
+		action = parts[1]
+	}
+	return parts[0], action, true
+}
+
+func parseModelRoute(path string) (string, string, bool) {
+	rest := strings.TrimPrefix(path, "/v1/models/")
 	parts := strings.Split(strings.Trim(rest, "/"), "/")
 	if len(parts) == 0 || parts[0] == "" {
 		return "", "", false

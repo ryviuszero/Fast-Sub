@@ -41,13 +41,15 @@ export type RenderProps = {
   asrReady: boolean;
   translationReady: boolean;
   jobs: JobSummary[];
+  activeBatchJobIds: string[];
   activeJob: JobDetail | null;
   addFiles: () => Promise<void>;
   addFolder: () => Promise<void>;
   addDroppedFiles: (files: FileList) => void;
   chooseOutputDirectory: () => Promise<boolean>;
+  chooseSubtitleOutputPath: (defaultPath: string) => Promise<string | null>;
   openJob: (jobId: string, screen: Screen) => Promise<void>;
-  startJob: (options?: { conflictResolved?: boolean; remoteUploadConfirmed?: boolean }) => Promise<void>;
+  startJob: (options?: { conflictResolved?: boolean; outputConflict?: ConfigViewModel["outputConflict"]; outputPath?: string; remoteUploadConfirmed?: boolean }) => Promise<void>;
   startToolJob: (type: "translate_srt" | "burn_in", inputPaths: string[]) => Promise<JobDetail>;
   retryJob: () => Promise<void>;
   openMock: (path: string) => Promise<void>;

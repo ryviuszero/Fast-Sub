@@ -27,6 +27,10 @@ type fakeRunner struct {
 	secret  string
 }
 
+func (r fakeRunner) RunJob(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
+	return r.RunTranscribe(ctx, job, req, emit)
+}
+
 func (r fakeRunner) RunTranscribe(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
 	if r.started != nil {
 		r.started <- job.ID
@@ -56,6 +60,10 @@ func (r fakeRunner) RunTranscribe(ctx context.Context, job jobs.Job, req jobs.Cr
 type shutdownRunner struct {
 	started  chan struct{}
 	canceled chan struct{}
+}
+
+func (r shutdownRunner) RunJob(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
+	return r.RunTranscribe(ctx, job, req, emit)
 }
 
 func (r shutdownRunner) RunTranscribe(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {

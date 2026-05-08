@@ -19,7 +19,11 @@ export const defaultConfig: ConfigViewModel = {
   translationModel: "nllb-ct2-base",
   keepTempFiles: false,
   wordTimestamps: false,
-  apiKeyAlias: "openai-default (sk-****1234)"
+  apiKeyAlias: "openai-default (sk-****1234)",
+  openAIBaseUrl: "https://api.openai.com/v1",
+  openAIModel: "",
+  openAIUploadFormat: "wav",
+  apiKeyStatus: "missing"
 };
 
 export const disconnectedError: UiError = {

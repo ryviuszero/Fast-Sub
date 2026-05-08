@@ -3,7 +3,7 @@ import type { ConfigViewModel, CreateJobRequest, EnvironmentStatus, FastSubClien
 import { containsSecret } from "../../../shared/privacy/redaction";
 import { defaultConfig, mockPaths } from "../client/mockFixtures";
 import { AppMenu, DebugPanel, RemoteConfirmDialog } from "./components";
-import { createClient, makeFile, makeFilesFromList, seedFiles } from "./fixtures";
+import { createClient, makeFile, makeFilesFromList } from "./fixtures";
 import { renderScreen } from "./renderScreen";
 import type { MediaFile, Screen, UiLanguage } from "./types";
 
@@ -19,6 +19,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>("system");
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [activeBatchJobIds, setActiveBatchJobIds] = useState<string[]>([]);
   const [activeJob, setActiveJob] = useState<JobDetail | null>(null);
   const [remoteConfirmOpen, setRemoteConfirmOpen] = useState(false);
   const [outputDirectoryLabel, setOutputDirectoryLabel] = useState("与源视频相同目录");
@@ -68,13 +69,39 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   }, [screen]);
 
   const loadBaseData = useCallback(async () => {
-    const [env, cfg, modelList, providerList, jobList] = await Promise.all([
+    const [envResult, cfgResult, modelsResult, providersResult, jobsResult] = await Promise.allSettled([
       client.getEnvironmentStatus(),
       client.getConfig(),
       client.listModels(),
       client.listProviders(),
       client.listJobs()
     ]);
+    const fallbackEnv: EnvironmentStatus = {
+      health: "disconnected" as const,
+      os: "Windows",
+      arch: "x64",
+      memory: "未知",
+      disk: "未知",
+      localTranscriptionReady: false,
+      localTranslationReady: false,
+      ffmpegReady: false,
+      modelDirectoryReady: false,
+      daemonReady: false,
+      warnings: ["本地服务暂时不可用"],
+      error: {
+        code: "daemon_disconnected",
+        title: "本地服务暂时不可用",
+        message: "请尝试一键修复，或检查 fast-sub-go 是否可启动。",
+        action: "打开诊断",
+        recoveryActions: ["repair_daemon", "open_diagnostics"],
+        diagnostic: "daemon startup failed"
+      }
+    };
+    const env = envResult.status === "fulfilled" ? envResult.value : fallbackEnv;
+    const cfg = cfgResult.status === "fulfilled" ? cfgResult.value : defaultConfig;
+    const modelList = modelsResult.status === "fulfilled" ? modelsResult.value : [];
+    const providerList = providersResult.status === "fulfilled" ? providersResult.value : [];
+    const jobList = jobsResult.status === "fulfilled" ? jobsResult.value : [];
     setEnvironment(env);
     setConfig(cfg);
     setModels(modelList);
@@ -107,7 +134,8 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
 
   const updateFromEvent = useCallback(async (event: JobEvent) => {
     if (event.type === "snapshot" && event.job) {
-      setActiveJob(event.job);
+      const snapshot = event.job;
+      setActiveJob((job) => mergeJobSnapshot(job, snapshot));
       setScreen("main-generating");
     }
     if (event.type === "progress" && event.progress) {
@@ -125,7 +153,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     if (event.type === "failed" && event.error) {
       const error = event.error;
       setActiveJob((job) => job ? { ...job, status: "failed", statusLabel: "已失败", error, stageLabel: error.title } : job);
-      setScreen("queue-failed");
+      setScreen(error.code === "output_exists" && config.outputConflict === "ask" ? "main-conflict" : "queue-failed");
       unsubscribeRef.current?.();
     }
     if (event.type === "canceled") {
@@ -140,7 +168,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       }
     }
     await refreshJobs();
-  }, [client, refreshJobs]);
+  }, [client, config.outputConflict, refreshJobs]);
 
   const addFiles = async () => {
     const picked = await window.fastSubSystem?.selectMediaFiles();
@@ -165,9 +193,9 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   };
 
   const addFolder = async () => {
-    const folder = await window.fastSubSystem?.selectFolder();
-    if (folder) {
-      setFiles(seedFiles.map((file, index) => makeFile(`${folder}\\${file.name}`, index)));
+    const picked = await window.fastSubSystem?.selectMediaFolder();
+    if (picked && picked.length > 0) {
+      setFiles(picked.map((path, index) => makeFile(path, index)));
       setScreen("main-files");
       return;
     }
@@ -197,6 +225,10 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     return false;
   };
 
+  const chooseSubtitleOutputPath = async (defaultPath: string) => {
+    return await window.fastSubSystem?.selectSubtitleOutputPath(defaultPath) ?? null;
+  };
+
   const updateOutputDirectory = (selected: FileList | null) => {
     if (!selected || selected.length === 0) {
       return;
@@ -213,14 +245,15 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const asrReady = models.some((model) => model.id === config.asrModel && model.kind === "asr" && model.state === "ready");
   const translationReady = models.some((model) => model.id === config.translationModel && model.kind === "translation" && model.state === "ready");
 
-  const startJob = async (options: { conflictResolved?: boolean; remoteUploadConfirmed?: boolean } = {}) => {
+  const startJob = async (options: { conflictResolved?: boolean; outputConflict?: ConfigViewModel["outputConflict"]; outputPath?: string; remoteUploadConfirmed?: boolean } = {}) => {
     const conflictResolved = options.conflictResolved ?? false;
+    const outputConflict = options.outputConflict ?? config.outputConflict;
     const remoteUploadConfirmed = options.remoteUploadConfirmed ?? false;
     if (!asrReady) {
       setScreen("main-missing");
       return;
     }
-    if (scenario === "outputConflict" && !conflictResolved) {
+    if (scenario === "outputConflict" && outputConflict === "ask" && !conflictResolved) {
       setScreen("main-conflict");
       return;
     }
@@ -229,19 +262,37 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       setRemoteConfirmOpen(true);
       return;
     }
-    const request: CreateJobRequest = {
-      type: "transcribe",
-      inputPaths: (files.length ? files : seedFiles).map((file) => file.path),
-      outputDirectory: outputDirectoryPath,
-      outputType: config.outputType,
-      language: config.defaultLanguage,
-      providerId: config.asrProvider,
-      modelId: config.asrModel,
-      remoteUploadConfirmed
-    };
-    const job = await client.createJob(request);
+    if (files.length === 0) {
+      setScreen("main-empty");
+      return;
+    }
+    const inputPaths = files.map((file) => file.path);
+    const batchPaths = options.outputPath ? inputPaths.slice(0, 1) : inputPaths;
+    const createdJobs: JobDetail[] = [];
+    for (const path of batchPaths) {
+      const request: CreateJobRequest = {
+        type: "transcribe",
+        inputPaths: [path],
+        outputDirectory: effectiveOutputDirectory([path], config, outputDirectoryPath),
+        outputPath: options.outputPath,
+        outputType: config.outputType,
+        outputConflict,
+        language: config.defaultLanguage,
+        providerId: config.asrProvider,
+        modelId: config.asrModel,
+        remoteUploadConfirmed
+      };
+      createdJobs.push(await client.createJob(request));
+    }
+    const job = createdJobs[0];
+    if (!job) {
+      return;
+    }
+    setActiveBatchJobIds(createdJobs.map((createdJob) => createdJob.id));
+    setJobs((currentJobs) => mergeCreatedJobs(currentJobs, createdJobs));
     activeJobRef.current = job;
     setActiveJob(job);
+    setActiveBatchJobIds([job.id]);
     setScreen("main-generating");
     unsubscribeRef.current?.();
     unsubscribeRef.current = client.subscribeJobEvents(job.id, { onEvent: updateFromEvent });
@@ -252,8 +303,9 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     const job = await client.createJob({
       type,
       inputPaths,
-      outputDirectory: outputDirectoryPath,
+      outputDirectory: effectiveOutputDirectory(inputPaths, config, outputDirectoryPath),
       outputType: type === "burn_in" ? "burned_video" : "translated_srt",
+      outputConflict: config.outputConflict,
       language: config.defaultLanguage,
       providerId: type === "burn_in" ? config.asrProvider : config.translationProvider,
       modelId: type === "burn_in" ? config.asrModel : config.translationModel,
@@ -330,6 +382,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     unsubscribeRef.current?.();
     unsubscribeRef.current = null;
     setActiveJob(null);
+    setActiveBatchJobIds([]);
     setJobs(await client.cancelAllJobs());
     setScreen("queue-list");
   };
@@ -396,11 +449,13 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
           asrReady,
           translationReady,
           jobs,
+          activeBatchJobIds,
           activeJob,
           addFiles,
           addFolder,
           addDroppedFiles,
           chooseOutputDirectory,
+          chooseSubtitleOutputPath,
           openJob,
           startJob,
           startToolJob,
@@ -410,7 +465,13 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
           cancelAllJobs,
           deleteJob: deleteActiveJob,
           installModel: async (id) => {
-            await client.installModel(id);
+            const job = await client.createModelInstallJob(id);
+            activeJobRef.current = job;
+            setActiveJob(job);
+            unsubscribeRef.current?.();
+            if (job.status === "queued" || job.status === "running" || job.status === "canceling") {
+              unsubscribeRef.current = client.subscribeJobEvents(job.id, { onEvent: updateFromEvent });
+            }
             await loadBaseData();
           },
           repairDaemon: async () => {
@@ -435,7 +496,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
         {remoteConfirmOpen && (
           <RemoteConfirmDialog
           provider={providers.find((item) => item.id === config.asrProvider)}
-          files={files.length ? files : seedFiles}
+          files={files}
           onCancel={() => setRemoteConfirmOpen(false)}
           onConfirm={() => {
             setRemoteConfirmOpen(false);
@@ -455,4 +516,48 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
 
 export function renderHasSecret(text: string): boolean {
   return containsSecret(text);
+}
+
+function effectiveOutputDirectory(inputPaths: string[], config: ConfigViewModel, selectedOutputDirectory: string): string {
+  const source = sourceDirectory(inputPaths[0] ?? "");
+  if (config.outputLocation !== "source" && selectedOutputDirectory !== mockPaths.output && !selectedOutputDirectory.startsWith("mock-output://")) {
+    return selectedOutputDirectory;
+  }
+  return source ?? selectedOutputDirectory;
+}
+
+function sourceDirectory(path: string): string | null {
+  const index = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
+  if (index <= 0) {
+    return null;
+  }
+  if (index === 2 && /^[A-Za-z]:[\\/]/.test(path)) {
+    return path.slice(0, 3);
+  }
+  return path.slice(0, index);
+}
+
+function mergeJobSnapshot(current: JobDetail | null, snapshot: JobDetail): JobDetail {
+  if (!current) {
+    return snapshot;
+  }
+  return {
+    ...current,
+    status: snapshot.status,
+    statusLabel: snapshot.statusLabel,
+    progressPercent: snapshot.progressPercent || current.progressPercent,
+    stageLabel: snapshot.stageLabel || current.stageLabel,
+    currentFile: snapshot.currentFile || current.currentFile,
+    createdAt: snapshot.createdAt || current.createdAt,
+    logs: snapshot.logs.length ? snapshot.logs : current.logs
+  };
+}
+
+function mergeCreatedJobs(currentJobs: JobSummary[], createdJobs: JobDetail[]): JobSummary[] {
+  const next = new Map(currentJobs.map((job) => [job.id, job]));
+  for (const job of createdJobs) {
+    const { logs: _logs, inputPaths: _inputPaths, outputDirectory: _outputDirectory, providerName: _providerName, modelName: _modelName, result: _result, error: _error, estimatedRemaining: _estimatedRemaining, ...summary } = job;
+    next.set(job.id, summary);
+  }
+  return Array.from(next.values());
 }

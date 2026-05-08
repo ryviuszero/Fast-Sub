@@ -1,4 +1,5 @@
-import type { MockScenario } from "../../../shared/contracts/types";
+import type { FastSubClient, MockScenario } from "../../../shared/contracts/types";
+import { DaemonFastSubClient } from "../client/DaemonFastSubClient";
 import { MockFastSubClient } from "../client/MockFastSubClient";
 import type { MediaFile, Screen } from "./types";
 
@@ -45,7 +46,11 @@ export const seedFiles: MediaFile[] = [
   { path: "\\\\NAS\\data\\others\\资料\\sample-podcast.wav", name: "sample-podcast.wav", size: "120 MB", duration: "28:40" }
 ];
 
-export function createClient(scenario: MockScenario): MockFastSubClient {
+export function createClient(scenario: MockScenario): FastSubClient {
+  const viteMode = (import.meta as ImportMeta & { env?: { MODE?: string } }).env?.MODE;
+  if (window.fastSubClient && viteMode !== "test") {
+    return new DaemonFastSubClient(window.fastSubClient);
+  }
   return new MockFastSubClient(scenario);
 }
 
@@ -60,5 +65,14 @@ export function makeFile(path: string, index = 0): MediaFile {
 }
 
 export function makeFilesFromList(selected: FileList, limit = Number.POSITIVE_INFINITY): MediaFile[] {
-  return Array.from(selected).slice(0, limit).map((file, index) => makeFile(file.name, index));
+  return Array.from(selected).slice(0, limit).map((file, index) => makeFile(pathForFile(file), index));
+}
+
+function pathForFile(file: File): string {
+  const bridgePath = window.fastSubSystem?.getPathForFile?.(file);
+  if (bridgePath) {
+    return bridgePath;
+  }
+  const legacyPath = (file as File & { path?: string }).path;
+  return legacyPath || file.name;
 }

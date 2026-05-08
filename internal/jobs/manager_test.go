@@ -2,6 +2,8 @@ package jobs
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -10,6 +12,10 @@ import (
 )
 
 type testRunner struct{}
+
+func (r testRunner) RunJob(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
+	return r.RunTranscribe(ctx, job, req, emit)
+}
 
 func (testRunner) RunTranscribe(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
 	return Result{
@@ -41,6 +47,19 @@ func TestSanitizeRequestDoesNotMutateOptions(t *testing.T) {
 	}
 	if sanitized.Options["base_url"] != "http://127.0.0.1:8080" {
 		t.Fatalf("non-secret option changed: %#v", sanitized.Options)
+	}
+}
+
+func TestValidateOutputAllowsExplicitOverwrite(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "existing.srt")
+	if err := os.WriteFile(output, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if appErr := validateOutput(output, false); appErr == nil || appErr.Code != fserrors.CodeOutputExists {
+		t.Fatalf("validateOutput without overwrite = %#v, want output_exists", appErr)
+	}
+	if appErr := validateOutput(output, true); appErr != nil {
+		t.Fatalf("validateOutput with overwrite = %#v, want nil", appErr)
 	}
 }
 

@@ -56,6 +56,15 @@ function titleForRequest(request: CreateJobRequest, file: string): string {
   return base;
 }
 
+function mockResultForJob(job: JobDetail): JobResult {
+  return {
+    subtitlePath: `${job.outputDirectory}\\${job.title.replace(/\.[^.]+$/, "")}.srt`,
+    outputFolder: job.outputDirectory,
+    summary: "已生成 mock 字幕",
+    durationLabel: "00:48"
+  };
+}
+
 function jobError(code = "mock_job_failed"): UiError {
   return {
     code,
@@ -190,14 +199,54 @@ export class MockFastSubClient implements FastSubClient {
   }
 
   async installModel(modelId: string): Promise<ModelStatus> {
+    const job = await this.createModelInstallJob(modelId);
     const model = this.models.find((item) => item.id === modelId);
     if (!model) {
       throw new Error("unknown model");
     }
-    model.state = this.scenario === "modelInstallFailed" ? "failed" : "ready";
-    model.progressPercent = model.state === "ready" ? 100 : 42;
+    model.state = this.scenario === "modelInstallFailed" ? "failed" : "installing";
+    model.installJobId = job.id;
+    model.progressPercent = model.state === "installing" ? 8 : 42;
     model.diagnostic = model.state === "failed" ? "download token=[REDACTED]" : undefined;
     return clone(model);
+  }
+
+  async createModelInstallJob(modelId: string): Promise<JobDetail> {
+    await delay(10);
+    const model = this.models.find((item) => item.id === modelId);
+    if (!model) {
+      throw new Error("unknown model");
+    }
+    const id = `mock-model-install-${this.sequence++}`;
+    const failed = this.scenario === "modelInstallFailed";
+    const installing = this.scenario === "modelInstalling";
+    const job = createSeedJob({
+      id,
+      displayId: `模型任务 ${this.sequence - 1}`,
+      type: "model_install",
+      title: `${model.name} 模型安装`,
+      currentFile: model.name,
+      inputPaths: [],
+      outputDirectory: "Fast Sub 模型目录",
+      providerName: model.kind === "translation" ? "本地翻译模型" : "本地转写模型",
+      modelName: model.name,
+      status: failed ? "failed" : installing ? "queued" : "succeeded",
+      statusLabel: failed ? "已失败" : installing ? "等待中" : "已完成",
+      progressPercent: failed ? 42 : installing ? 0 : 100,
+      stageLabel: failed ? "模型下载失败" : installing ? "等待准备模型" : "已完成",
+      result: !failed && !installing ? {
+        subtitlePath: model.name,
+        outputFolder: "Fast Sub 模型目录",
+        summary: "模型已准备好",
+        durationLabel: "00:06"
+      } : undefined,
+      error: failed ? jobError("model_install_failed") : undefined
+    });
+    this.jobs.set(id, job);
+    model.state = failed ? "failed" : installing ? "installing" : "ready";
+    model.installJobId = id;
+    model.progressPercent = failed ? 42 : installing ? 0 : 100;
+    return clone(job);
   }
 
   async verifyModel(modelId: string): Promise<ModelStatus> {
@@ -243,8 +292,8 @@ export class MockFastSubClient implements FastSubClient {
       progressPercent: instantToolJob ? 100 : 0,
       stageLabel: instantToolJob ? "已完成" : "等待中",
       result: instantToolJob ? {
-        subtitlePath: `${request.outputDirectory}\\${title}`,
-        outputFolder: request.outputDirectory,
+        subtitlePath: request.outputPath ?? `${request.outputDirectory}\\${title}`,
+        outputFolder: (request.outputPath ?? request.outputDirectory).replace(/[\\/][^\\/]*$/, ""),
         summary: "mock 工具任务已完成",
         durationLabel: "00:03"
       } : undefined
@@ -289,12 +338,7 @@ export class MockFastSubClient implements FastSubClient {
 
   async getJobResult(jobId: string): Promise<JobResult> {
     const job = await this.getJob(jobId);
-    return job.result ?? {
-      subtitlePath: `${job.outputDirectory}\\${job.title.replace(/\.[^.]+$/, "")}.srt`,
-      outputFolder: job.outputDirectory,
-      summary: "已生成 mock 字幕",
-      durationLabel: "00:48"
-    };
+    return job.result ?? mockResultForJob(job);
   }
 
   async getJobLogs(jobId: string): Promise<JobLogEntry[]> {
@@ -331,11 +375,23 @@ export class MockFastSubClient implements FastSubClient {
       emit(120, () => ({ type: "progress", progress: { status: "canceling", progressPercent: 20, stageLabel: "正在取消", currentFile: mockPaths.spaced } }));
       emit(150, () => ({ type: "canceled" }));
     } else {
-      emit(70, () => ({ type: "progress", progress: { status: "running", progressPercent: 12, stageLabel: "正在检查文件", currentFile: mockPaths.spaced, estimatedRemaining: "约 2 分钟" } }));
-      emit(140, () => ({ type: "progress", progress: { status: "running", progressPercent: 48, stageLabel: "正在转写音频", currentFile: mockPaths.spaced, estimatedRemaining: "约 1 分钟" } }));
+      emit(70, () => {
+        const current = this.jobs.get(jobId);
+        return { type: "progress", progress: { status: "running", progressPercent: 12, stageLabel: "正在检查文件", currentFile: current?.currentFile ?? "", estimatedRemaining: "约 2 分钟" } };
+      });
+      emit(140, () => {
+        const current = this.jobs.get(jobId);
+        return { type: "progress", progress: { status: "running", progressPercent: 48, stageLabel: "正在转写音频", currentFile: current?.currentFile ?? "", estimatedRemaining: "约 1 分钟" } };
+      });
       emit(210, () => ({ type: "log_tail", logs: redactedLogs }));
-      emit(280, () => ({ type: "progress", progress: { status: "running", progressPercent: 86, stageLabel: "正在生成文件", currentFile: mockPaths.spaced, estimatedRemaining: "少于 30 秒" } }));
-      emit(360, () => ({ type: "succeeded", result: { subtitlePath: "C:\\Users\\Example\\Videos\\a b.srt", outputFolder: "C:\\Users\\Example\\Videos", summary: "已生成 96 行原语音字幕", durationLabel: "00:48" } }));
+      emit(280, () => {
+        const current = this.jobs.get(jobId);
+        return { type: "progress", progress: { status: "running", progressPercent: 86, stageLabel: "正在生成文件", currentFile: current?.currentFile ?? "", estimatedRemaining: "少于 30 秒" } };
+      });
+      emit(360, () => {
+        const current = this.jobs.get(jobId);
+        return { type: "succeeded", result: current ? mockResultForJob(current) : { subtitlePath: "subtitle.srt", outputFolder: "", summary: "已生成 mock 字幕", durationLabel: "00:48" } };
+      });
     }
 
     return () => {

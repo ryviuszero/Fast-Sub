@@ -4,11 +4,11 @@
 
 ## 当前阶段
 
-- Round 12 Electron Daemon Integration And Release Feature Closure 规划中
+- Round 12 Electron Daemon Integration And Release Feature Closure 实现中
 
 ## 当前目标
 
-- 按已细化的 Round 12 spec，先从 daemon API contract 扩展和 fake daemon fixtures 开始，随后再推进 daemon lifecycle、REST/SSE client、真实 job、配置写入和 secret storage。
+- 在已完成的 Round 12 contract/fake fixture 基础上，继续补齐真实 model installer、Python CLI resolver、真实 translate/burn bridge、持久 atomic config writer 和 secret channel 消费端。
 
 ## 完成的
 
@@ -79,18 +79,77 @@
 - 已更新 `go-docs/specs/daemon-api.md`，新增 Round 12 planned extensions：`model_install`、`translate_srt`、`burn_in`、model verify、job result shape、config boundary、secret boundary 和 fake daemon fixture 要求。
 - 已按第三次审阅收口 Round 12 文档：配置边界固定为 daemon `GET/PATCH /v1/config`，`secret_ref` 不得原样持久化，`FastSubClient` 类型变更写入 spec，并明确 12.1 contract 未完成前不创建真实 adapter、不切 UI 默认模式。
 - 已补齐 Round 12 contract 细节：`GET /v1/config` / `PATCH /v1/config` 的 view model、merge patch 和 validation error shape；`secret_ref` 的生成、消费、TTL、错误码和清理规则；fake daemon fixtures 和手动 smoke 测试资产位置。
+- 已完成 12.1/12.2/12.3 的 Electron 侧基础实现：新增 `DaemonFastSubClient` renderer-facing facade、preload typed allowlist、main process daemon lifecycle、ready JSON 读取、token 内存持有、REST envelope 映射和 fetch-based SSE 订阅/取消/resync。
+- 已新增 Round 12 fake daemon fixtures：`desktop/test/fixtures/daemon/round12/` 覆盖 `model_install`、`translate_srt`、`burn_in`、config view、secret_ref 错误词表和 redaction。
+- 已扩展 `FastSubClient` contract：`JobKind` 增加 `model_install`，`ModelStatus.installJobId`，`createModelInstallJob(modelId)`；`MockFastSubClient` 和 renderer 模型管理入口已改为独立模型安装 job 语义。
+- 已完成 12.4 的基础 adapter：main process 增加 Electron `safeStorage` secret store fallback 和 transient secret reference map；renderer 仍只看到 alias/masked/status，不接触 raw secret。
+- 已完成 Go daemon 的最小 Round 12 API 扩展：`POST /v1/jobs` 接受 `model_install`、`translate_srt`、`burn_in`，新增 `GET/PATCH /v1/config` 和 `POST /v1/models/{model_id}/verify`。
+- 已接入 Go daemon Round 12 job bridge：`model_install` 复用现有 Go model installer 并通过 job/SSE/cancel/result/logs/delete 展示进度；`translate_srt`、`burn_in` 当前仍使用受控 placeholder bridge，真实 Python CLI resolver 和 ffmpeg bridge 仍需后续完善。
+- 已修复 Electron dev 启动找不到 `fast-sub-go.exe` 的问题：未打包模式下如果找不到显式二进制，会从仓库根目录用 `go run ./cmd/fast-sub-go` 启动本地 daemon；初始化列表请求在 daemon 不可用时返回空状态，由环境检查页显示可恢复服务错误，避免 main process 连续输出 IPC handler 错误。
+- 已新增 dev-only daemon transport log：设置 `FAST_SUB_DEBUG_DAEMON=1`，或创建 `desktop/local/daemon-debug.json` 后，Electron main process 会输出/写入 redacted daemon spawn/ready、REST method/path/status、SSE connect/event/error 摘要；日志不包含 token、Authorization、raw secret 或完整 request body。示例配置见 `desktop/daemon-debug.example.json`。
+- 已修复 Desktop 真实转写请求的 source 输出目录推导：当配置为“与源视频相同目录”时，renderer 会用真实输入文件父目录作为 `outputDirectory`，避免把 mock fixture 输出目录带入 daemon 请求；同时在 dev-only transport log 中增加 `job.request` 摘要，记录 job type、input/output path、inputExists、provider/model/language 和失败事件中的 daemon error 摘要，方便定位 Desktop 与 Go 直测参数差异。
+- 已修复完成页仍显示 Round 11 占位结果的问题：`main-done` 现在从当前 `activeJob.result` 渲染输出文件名、耗时/摘要、打开字幕路径和输出文件夹，不再固定显示 `a b.srt`、`sample-lecture.srt` 和失败占位项。
+- 已修复 Go daemon `completed` SSE 事件到 UI 结果的字段映射：完成事件现在读取真实 `output_path`、推导 `outputFolder`，并用 `elapsed_sec` 生成耗时文案，避免因只识别旧 fixture 的 `subtitle_path` 而回退到占位 `a b.srt`。
+- 已修复失败任务详情页仍显示 Round 11 占位错误的问题：`queue-failed` 现在读取当前 `activeJob.error` 的真实 title/message/action/code/details/diagnostic；日志和配置 tab 也改为当前任务摘要，不再固定显示 `media_extract_failed`、`extracting_audio` 或 `meeting.mp4` 占位日志。
+- 已接通真实输出冲突确认流程：daemon job 因 `output_exists` 失败且 UI 配置为 `ask` 时，renderer 会显示覆盖/跳过/另存为确认；用户确认覆盖后，Electron main process 会在下一次 `POST /v1/jobs` 中传递 `options.overwrite=true`，Go job runner 仅在该显式选项存在时允许覆盖已有输出。
+- 已修复输出冲突弹窗目标路径显示错误：最小 `created/queued` SSE 事件不再用 Round 11 fallback snapshot 覆盖真实 job title/path；`output_exists` 错误会从 daemon message 中提取真实 `output_path` 到 `error.details.output_path`，弹窗优先显示该路径。
+- 已修复真实 job 默认输出目录仍可能使用 mock fixture 目录的问题：如果用户没有明确选择自定义输出目录，`C:\Users\Example\Videos` 和 `mock-output://` 这类 mock 默认值不会传给 daemon，renderer 会改用输入媒体所在目录。
+- 已修复输出冲突“另存为”语义：按钮现在打开系统保存文件对话框，让用户为字幕选择新的 `.srt` 文件名；renderer 将选择到的完整文件路径作为 `CreateJobRequest.outputPath` 传给 main process，并由 daemon client 直接作为 `output_path` 使用，不再把“另存为”当成换目录。
+- 已修复拖拽媒体文件时仍只拿到文件名的问题：preload 通过 Electron `webUtils.getPathForFile(file)` 暴露 allowlist 方法，renderer 的拖拽和 fallback 文件选择会优先使用真实本地路径，从而按输入媒体所在目录生成输出路径。
+- 已移除生成中页面的 Round 11 占位等待列表：`接下来` 区域现在从真实 `jobs` 中渲染等待/运行任务，底部任务计数也改为当前 job 在真实列表中的位置和总数；没有真实等待任务时不显示占位文件名。
+- 已修复主界面“添加文件夹”仍使用 Round 11 占位文件的问题：新增 main/preload allowlist `selectMediaFolder()`，由 Electron main process 选择目录并枚举真实媒体文件路径返回 renderer；renderer 不再用 `seedFiles` 拼接目录。
+- 已修复文件夹批量生成只创建一个真实 daemon job 的问题：renderer 现在会为每个媒体文件分别调用 `FastSubClient.createJob()`，每个 request 只包含一个 `input_path`，后续文件会真实进入 daemon job 队列并可在生成中页面的“接下来”显示。
+- 新增桌面端 Round 12 快速回归脚本 `npm run test:round12`：串行执行 typecheck、Round 12 相关 Vitest 和 preload/main smoke；需要更完整验证时可运行 `npm run test:round12 -- --full` 追加 desktop build。
+- 新增 `desktop-tests/` 手动反馈专项排查记录：`README.md` 归纳 mock/占位残留、真实 job 未贯通、路径来源错误、输出冲突、错误展示、批量队列和隐私边界等问题类型；`pics/` 保存 Electron offscreen 复现截图，`capture-round12-pages.mjs` 可重新生成关键页面截图。
+- 已按第一轮页面排查继续修复占位数据风险：`startJob()`、`MainFiles`、远程确认弹窗不再在空文件时 fallback 到 `seedFiles`；生成中“接下来”只展示本次 batch job ids，不再混入全局历史/mock 队列；`MockFastSubClient` 成功事件不再硬编码 `a b.srt`。
+- 已同步 `go-docs/specs/daemon-api.md`，将 Round 12 扩展从 planned 更新为当前接入边界，并记录 placeholder/降级路径。
+- 已通过验证：
+  - `go test ./...`（首次 sandbox 访问 Go build cache 被拒，提权重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（首次 sandbox 解析 Vitest config 被拒，提权重跑通过）
+  - `cd desktop && npm run build`
+  - `cd desktop && npm run smoke`
+- 追加验证：
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（sandbox 解析 Vitest config 被拒，提权重重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（完成页真实 job result 渲染修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（Go daemon completed event `output_path` 映射修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（失败详情真实 error/log/config 渲染修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（输出冲突确认和 request contract 修改后重跑通过）
+  - `go test ./...`（新增 `validateOutput` 显式 overwrite 测试后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（输出冲突目标路径和 SSE snapshot 合并修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（默认输出目录去 mock fixture 修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（输出冲突“另存为”改为保存字幕文件路径后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（拖拽文件真实路径解析修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（生成中等待任务列表改为真实 jobs 数据后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（添加文件夹改为真实媒体文件列表后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（文件夹批量生成每个媒体文件创建独立 job 后重跑通过）
+  - `cd desktop && npm run test:round12`
+  - `node desktop-tests\capture-round12-pages.mjs`
+  - `cd desktop && npm run test:round12`（desktop-tests 第一轮排查修复和新增 batch 队列测试后重跑通过）
 
 ## 进行中
 
-- Round 12 spec 审阅和细化。
+- Round 12 真实能力收口：真实 model installer job、Python CLI resolver、translate_srt/burn_in bridge、持久 atomic config writer、secret_ref 消费通道和真实小媒体 smoke。
 
 ## 接下来
 
-- 根据已更新的 `go-docs/specs/daemon-api.md` 开始 12.1 contract fixtures 和 fake daemon fixtures。
-- 12.1 fake fixtures 完成并通过测试边界确认后，再进入 12.2 daemon lifecycle 和 ready bridge。
-- 根据 Round 12 spec 更新 `ui-docs/architecture.md` 和 `ui-docs/code-standards.md`。
-- Round 12 实现前确定 fake daemon、fake keytar、fake CLI runner 和 fake model installer 的测试边界。
-- Round 12 实现分支推荐使用 `codex/fast-sub-round12-daemon-integration`。
+- 确保模型页/首次启动页在真实 `model_install` job 完成后从 `listModels()` 重新同步真实状态。
+- 实现 Python CLI resolver 和参数白名单 runner，替换 `translate_srt` / `burn_in` 当前 placeholder bridge。
+- 将 daemon config PATCH 落到 validate + atomic write + corrupt recovery 的真实持久实现。
+- 补齐 transient `secret_ref` 的 daemon/job runner 消费端；当前 main process 已有引用生成/消费结构，但 daemon 还未通过该通道取 secret。
+- 准备 `local_tests/round12/` 手动真实 smoke 资产并记录真实 transcribe/translate/burn 结果。
 
 ## 决策清单
 

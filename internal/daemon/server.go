@@ -98,7 +98,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/health", s.handleHealth)
 	s.mux.HandleFunc("/v1/version", s.handleVersion)
 	s.mux.HandleFunc("/v1/models", s.auth(s.handleModels))
+	s.mux.HandleFunc("/v1/models/", s.auth(s.handleModel))
 	s.mux.HandleFunc("/v1/providers", s.auth(s.handleProviders))
+	s.mux.HandleFunc("/v1/config", s.auth(s.handleConfig))
 	s.mux.HandleFunc("/v1/jobs", s.auth(s.handleJobs))
 	s.mux.HandleFunc("/v1/jobs/", s.auth(s.handleJob))
 }

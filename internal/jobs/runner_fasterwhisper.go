@@ -24,7 +24,7 @@ func (r DefaultRunner) runFasterWhisper(
 		return Result{}, appErr
 	}
 	output := outputPath(req)
-	if appErr := validateOutput(output); appErr != nil {
+	if appErr := validateOutput(output, boolOption(req, "overwrite")); appErr != nil {
 		return Result{}, appErr
 	}
 	runner := r.ffmpegRunner()

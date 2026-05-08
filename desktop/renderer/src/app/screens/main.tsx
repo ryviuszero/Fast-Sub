@@ -1,8 +1,6 @@
 import type { DragEvent } from "react";
 import type { ConfigViewModel } from "../../../../shared/contracts/types";
 import type { RenderProps } from "../types";
-import { mockPaths } from "../../client/mockFixtures";
-import { seedFiles } from "../fixtures";
 import { CheckItem, Chip, Chrome, Divider, Footer, Segment, SettingsEntry, Toggle } from "../components";
 
 export function MainEmpty({ setScreen, addFiles, addFolder, addDroppedFiles, chooseOutputDirectory, outputDirectoryLabel, asrReady, translationReady }: RenderProps) {
@@ -53,7 +51,7 @@ export function MainEmpty({ setScreen, addFiles, addFolder, addDroppedFiles, cho
 }
 
 export function MainFiles(props: RenderProps & { advanced: boolean }) {
-  const files = props.files.length ? props.files : seedFiles;
+  const files = props.files;
   const canGenerate = props.asrReady;
   const removeFile = (path: string) => {
     const nextFiles = files.filter((item) => item.path !== path);
@@ -152,15 +150,20 @@ export function MainMissing({ setScreen, installModel, translationReady }: Rende
   );
 }
 
-export function OutputConflict({ setScreen, startJob, updateConfig, chooseOutputDirectory }: RenderProps) {
+export function OutputConflict({ setScreen, startJob, updateConfig, chooseSubtitleOutputPath, activeJob }: RenderProps) {
+  const outputPath = conflictOutputPath(activeJob);
   const resolveConflict = async (mode: ConfigViewModel["outputConflict"]) => {
     await updateConfig({ outputConflict: mode });
-    await startJob({ conflictResolved: true });
+    if (mode === "skip") {
+      setScreen("main-empty");
+      return;
+    }
+    await startJob({ conflictResolved: true, outputConflict: mode });
   };
   const saveAs = async () => {
-    const selected = await chooseOutputDirectory();
+    const selected = await chooseSubtitleOutputPath(outputPath || "subtitle.srt");
     if (selected) {
-      await startJob({ conflictResolved: true });
+      await startJob({ conflictResolved: true, outputPath: selected });
     }
   };
   return (
@@ -170,7 +173,7 @@ export function OutputConflict({ setScreen, startJob, updateConfig, chooseOutput
         <section className="modal-card">
           <div className="between"><h2>字幕文件已存在</h2><span className="warn-symbol">!</span></div>
           <p>目标位置已有同名文件：</p>
-          <div className="input mono">sample-meeting.srt</div>
+          <div className="input mono">{outputPath || "字幕输出文件"}</div>
           <p className="caption">请选择如何处理。这个选择可以应用到本次批量任务。</p>
           <div className="row gap-8 wrap">
             <button className="btn primary" onClick={() => void resolveConflict("overwrite")}>覆盖</button>
@@ -184,37 +187,66 @@ export function OutputConflict({ setScreen, startJob, updateConfig, chooseOutput
   );
 }
 
-export function MainGenerating({ activeJob, cancelJob, cancelAllJobs }: RenderProps) {
-  const percent = activeJob?.progressPercent ?? 62;
+function conflictOutputPath(activeJob: RenderProps["activeJob"]): string {
+  const detailPath = activeJob?.error?.details?.output_path;
+  if (typeof detailPath === "string" && detailPath) {
+    return detailPath;
+  }
+  const resultPath = activeJob?.result?.subtitlePath;
+  if (resultPath) {
+    return resultPath;
+  }
+  if (activeJob?.outputDirectory && activeJob.inputPaths[0]) {
+    const base = activeJob.inputPaths[0].split(/[\\/]/).pop() || activeJob.title;
+    return `${activeJob.outputDirectory}\\${base.replace(/\.[^.]+$/, ".srt")}`;
+  }
+  return "";
+}
+
+export function MainGenerating({ activeJob, jobs, activeBatchJobIds, cancelJob, cancelAllJobs }: RenderProps) {
+  const percent = activeJob?.progressPercent ?? 0;
+  const activeId = activeJob?.id;
+  const batchIds = activeBatchJobIds.length > 0 ? activeBatchJobIds : activeId ? [activeId] : [];
+  const batchJobs = jobs.filter((job) => batchIds.includes(job.id));
+  const waitingJobs = batchJobs.filter((job) => job.id !== activeId && (job.status === "queued" || job.status === "running" || job.status === "canceling"));
+  const activeIndex = activeId && batchIds.length > 0 ? Math.max(0, batchIds.indexOf(activeId)) : 0;
+  const totalJobs = batchIds.length || batchJobs.length || 1;
+  const remainingLabel = activeJob?.estimatedRemaining ? `预计还需 ${activeJob.estimatedRemaining}` : "等待进度更新";
   return (
     <div className="wf">
       <Chrome right={<Chip tone="accent">正在生成</Chip>} />
       <main className="content-flow center-flow">
         <span className="spin big" />
         <h1>正在生成字幕...</h1>
-        <p className="subtle">{activeJob?.title ?? "sample-meeting.mp4"}</p>
+        <p className="subtle">{activeJob?.title ?? "等待任务同步"}</p>
         <section className="panel paper-muted progress-card">
-          <div className="between"><strong>{percent}%</strong><span>预计还需 3 分钟</span></div>
+          <div className="between"><strong>{percent}%</strong><span>{remainingLabel}</span></div>
           <div className="progress accent"><i style={{ width: `${percent}%` }} /></div>
-          <p className="center-text caption">{activeJob?.stageLabel ?? "正在转写音频..."}</p>
+          <p className="center-text caption">{activeJob?.stageLabel ?? "等待 daemon 任务事件..."}</p>
         </section>
-        <section className="next-list">
-          <h3>接下来</h3>
-          <p><Chip>等待中</Chip> sample-lecture.mov</p>
-          <p><Chip>等待中</Chip> sample-podcast.wav</p>
-        </section>
+        {waitingJobs.length > 0 && (
+          <section className="next-list">
+            <h3>接下来</h3>
+            {waitingJobs.map((job) => <p key={job.id}><Chip>{job.statusLabel}</Chip> {job.title}</p>)}
+          </section>
+        )}
         <div className="center-actions">
           <button className="btn" onClick={() => void cancelJob()}>取消当前任务</button>
           <button className="btn ghost" onClick={() => void cancelAllJobs()}>全部取消</button>
         </div>
       </main>
-      <div className="footer-line"><span>任务 1 / 3</span><button className="btn sm ghost">后台运行</button></div>
+      <div className="footer-line"><span>任务 {Math.min(activeIndex + 1, totalJobs)} / {totalJobs}</span><button className="btn sm ghost">后台运行</button></div>
     </div>
   );
 }
 
-export function MainDone({ activeJob, openMock, setScreen, retryJob }: RenderProps) {
+export function MainDone({ activeJob, openMock, setScreen }: RenderProps) {
   const result = activeJob?.result;
+  const outputPath = result?.subtitlePath ?? "";
+  const outputFolder = result?.outputFolder || activeJob?.outputDirectory || outputPath.replace(/[\\/][^\\/]*$/, "");
+  const outputName = outputPath.split(/[\\/]/).pop() || activeJob?.title || "字幕结果";
+  const detail = result?.durationLabel || result?.summary || activeJob?.stageLabel || "任务已完成";
+  const completedCount = result || activeJob ? 1 : 0;
   return (
     <div className="wf">
       <Chrome right={<Chip tone="ok">就绪</Chip>} />
@@ -222,11 +254,9 @@ export function MainDone({ activeJob, openMock, setScreen, retryJob }: RenderPro
         <div className="center-stack">
           <div className="success-mark">✓</div>
           <h1>字幕生成完成</h1>
-          <p className="subtle">已完成 3 个文件</p>
+          <p className="subtle">已完成 {completedCount} 个文件</p>
         </div>
-        <ResultCard name={result?.subtitlePath.split(/[\\/]/).pop() ?? "sample-meeting.srt"} detail={result?.durationLabel ?? "00:48"} ok onOpen={() => void openMock(result?.subtitlePath ?? "")} onOpenFolder={() => void openMock(mockPaths.output)} />
-        <ResultCard name="sample-lecture.srt" detail="耗时 3m15s" ok onOpen={() => void openMock(mockPaths.output)} onOpenFolder={() => void openMock(mockPaths.output)} />
-        <ResultCard name="sample-podcast.wav" detail="生成失败 · 音频轨无法提取" ok={false} onOpen={() => void retryJob()} onOpenFolder={() => void openMock(mockPaths.output)} />
+        <ResultCard name={outputName} detail={detail} ok onOpen={() => void openMock(outputPath)} onOpenFolder={() => void openMock(outputFolder)} />
       </main>
       <div className="action-footer">
         <SettingsEntry onClick={() => setScreen("settings-general")} />

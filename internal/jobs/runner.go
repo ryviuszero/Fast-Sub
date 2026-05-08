@@ -30,6 +30,21 @@ type DefaultRunner struct {
 	ModelLookup func(string, string) (string, error)
 }
 
+func (r DefaultRunner) RunJob(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
+	switch req.Type {
+	case "transcribe", "":
+		return r.RunTranscribe(ctx, job, req, emit)
+	case "model_install":
+		return r.runModelInstall(ctx, req, emit)
+	case "translate_srt":
+		return r.runTranslateSRT(ctx, req, emit)
+	case "burn_in":
+		return r.runBurnIn(ctx, req, emit)
+	default:
+		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "create_job", "unsupported job type: "+req.Type, "", nil)
+	}
+}
+
 func (r DefaultRunner) RunTranscribe(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
 	switch req.Provider {
 	case "", "local-faster-whisper":
@@ -41,6 +56,93 @@ func (r DefaultRunner) RunTranscribe(ctx context.Context, job Job, req CreateReq
 	default:
 		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "transcribing", "unsupported provider: "+req.Provider, "Use local-faster-whisper, local-whisper-cpp, or api-openai-transcription.", nil)
 	}
+}
+
+func (r DefaultRunner) runModelInstall(ctx context.Context, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
+	modelID := stringDefault(req.ModelID, req.Model)
+	if modelID == "" {
+		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "installing_model", "model_id is required.", "Choose a model and retry.", nil)
+	}
+	manifest, err := models.LoadManifest("")
+	if err != nil {
+		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "installing_model", "model manifest could not be loaded: "+err.Error(), "Check the model manifest.", map[string]any{"model_id": modelID})
+	}
+	entry, ok := manifest.Get(modelID)
+	if !ok {
+		return Result{}, fserrors.New("unknown_model", "installing_model", "unknown model: "+modelID, "Choose a model from the model list.", map[string]any{"model_id": modelID})
+	}
+	store := r.ModelStore
+	if store.Root == "" {
+		store = models.DefaultStore()
+	}
+	emitProgress(emit, "validating", 5)
+	installResult, appErr := store.Install(ctx, entry, models.InstallOptions{
+		Progress: func(progress models.Progress) {
+			percent := 10
+			if progress.OverallTotal > 0 {
+				percent = 10 + int((progress.OverallBytes*80)/progress.OverallTotal)
+			}
+			if percent > 90 {
+				percent = 90
+			}
+			emit(ProgressUpdate("installing_model", percent))
+		},
+	})
+	if appErr != nil {
+		return Result{}, appErr
+	}
+	emitProgress(emit, "finalizing", 95)
+	return Result{
+		InputPath:  modelID,
+		OutputPath: installResult.Status.Path,
+		Provider:   req.Provider,
+		Model:      modelID,
+		Warnings:   []string{},
+	}, nil
+}
+
+func (r DefaultRunner) runTranslateSRT(ctx context.Context, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
+	if strings.TrimSpace(req.InputPath) == "" {
+		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "translating", "input_path is required.", "Choose an SRT file.", nil)
+	}
+	output := req.OutputPath
+	if output == "" {
+		output = strings.TrimSuffix(req.InputPath, filepath.Ext(req.InputPath)) + ".translated.srt"
+	}
+	if err := validateOutput(output, boolOption(req, "overwrite")); err != nil {
+		return Result{}, err
+	}
+	emitProgress(emit, "translating", 40)
+	if ctx.Err() != nil {
+		return Result{}, fserrors.New(fserrors.CodeCanceled, "translating", "job was canceled.", "", nil)
+	}
+	if err := os.WriteFile(output, []byte("1\n00:00:00,000 --> 00:00:01,000\nFast Sub translation bridge placeholder\n"), 0o600); err != nil {
+		return Result{}, classifyWriteError("rendering", err.Error())
+	}
+	emitProgress(emit, "finalizing", 95)
+	return Result{InputPath: req.InputPath, OutputPath: output, Language: language(req), Segments: 1, Provider: req.Provider, Model: req.Model, Warnings: []string{"translate_srt CLI bridge placeholder used"}}, nil
+}
+
+func (r DefaultRunner) runBurnIn(ctx context.Context, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
+	if strings.TrimSpace(req.InputPath) == "" || strings.TrimSpace(req.SubtitlePath) == "" {
+		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "burning_in", "input_path and subtitle_path are required.", "Choose a video and subtitle file.", nil)
+	}
+	output := req.OutputPath
+	if output == "" {
+		output = strings.TrimSuffix(req.InputPath, filepath.Ext(req.InputPath)) + ".burned.mp4"
+	}
+	if err := validateOutput(output, boolOption(req, "overwrite")); err != nil {
+		return Result{}, err
+	}
+	emitProgress(emit, "burning_in", 40)
+	if ctx.Err() != nil {
+		return Result{}, fserrors.New(fserrors.CodeCanceled, "burning_in", "job was canceled.", "", nil)
+	}
+	if err := os.WriteFile(output, []byte("Fast Sub burn-in bridge placeholder\n"), 0o600); err != nil {
+		return Result{}, classifyWriteError("rendering", err.Error())
+	}
+	emitProgress(emit, "finalizing", 95)
+	return Result{InputPath: req.InputPath, OutputPath: output, Provider: req.Provider, Model: req.Model, Warnings: []string{"burn_in CLI bridge placeholder used"}}, nil
 }
 
 func finishTranscribe(input finishTranscribeInput) (Result, *fserrors.AppError) {
@@ -160,11 +262,14 @@ func validateRequest(req CreateRequest, whisperCPP bool) *fserrors.AppError {
 	return nil
 }
 
-func validateOutput(output string) *fserrors.AppError {
+func validateOutput(output string, overwrite bool) *fserrors.AppError {
 	if output == "" {
 		return fserrors.New(fserrors.CodeInvalidInput, "rendering", "output_path is required or input must have an extension.", "", nil)
 	}
 	if _, err := os.Stat(output); err == nil {
+		if overwrite {
+			return nil
+		}
 		return fserrors.New(fserrors.CodeOutputExists, "rendering", "output already exists: "+output, "Choose a different output_path.", nil)
 	}
 	if err := os.MkdirAll(filepath.Dir(output), 0o700); err != nil && filepath.Dir(output) != "." {

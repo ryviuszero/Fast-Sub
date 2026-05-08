@@ -1,8 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../renderer/src/App";
+import { MainGenerating } from "../renderer/src/app/screens/main";
 import { MockFastSubClient } from "../renderer/src/client/MockFastSubClient";
-import type { JobEventHandlers } from "../shared/contracts/types";
+import type { CreateJobRequest, JobDetail, JobEventHandlers } from "../shared/contracts/types";
 
 afterEach(() => cleanup());
 
@@ -140,7 +141,7 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getByText("sample-meeting.mp4"));
     expect(screen.getByRole("heading", { name: "sample-meeting.mp4" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "日志" }));
-    expect(screen.getByText("[12:42:01] media loaded: meeting.mp4", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("任务：sample-meeting.mp4", { exact: false })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "详情" }));
     expect(screen.getByText("whisper-small")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
@@ -148,10 +149,23 @@ describe("Fast Sub renderer flow", () => {
   });
 
   it("adds media from a folder picker", async () => {
+    window.fastSubSystem = {
+      selectMediaFiles: async () => [],
+      selectMediaFolder: async () => ["F:\\game\\others\\folder-a.mp4", "F:\\game\\others\\folder-b.wav"],
+      selectFolder: async () => null,
+      selectSubtitleOutputPath: async () => null,
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
+      openPathMock: async () => true,
+      getSecuritySnapshot: async () => ({
+        contextIsolation: true,
+        nodeIntegration: false,
+        csp: true,
+        exposesRawIpc: false
+      })
+    };
     render(<App />);
     await enterMainScreen();
     fireEvent.click(await screen.findByRole("button", { name: "添加文件夹" }));
-    await chooseFolder();
     expect(await screen.findByText("folder-a.mp4")).toBeInTheDocument();
     expect(screen.getByText("folder-b.wav")).toBeInTheDocument();
   });
@@ -161,7 +175,10 @@ describe("Fast Sub renderer flow", () => {
     const selectFolder = vi.fn(async () => "\\\\NAS\\data\\others\\资料");
     window.fastSubSystem = {
       selectMediaFiles,
+      selectMediaFolder: async () => ["\\\\NAS\\data\\others\\资料\\片段.mp4"],
       selectFolder,
+      selectSubtitleOutputPath: async () => null,
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
@@ -177,8 +194,142 @@ describe("Fast Sub renderer flow", () => {
     expect(selectMediaFiles).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
     fireEvent.click(await screen.findByRole("button", { name: "添加文件夹" }));
-    expect(await screen.findByText("sample-meeting.mp4")).toBeInTheDocument();
-    expect(selectFolder).toHaveBeenCalled();
+    expect(await screen.findByText("片段.mp4")).toBeInTheDocument();
+  });
+
+  it("uses the selected media directory when output is set to source", async () => {
+    const requests: CreateJobRequest[] = [];
+    class CaptureClient extends MockFastSubClient {
+      async createJob(request: CreateJobRequest): Promise<JobDetail> {
+        requests.push(request);
+        return super.createJob(request);
+      }
+    }
+    window.fastSubSystem = {
+      selectMediaFiles: async () => ["D:\\资料\\视频\\片段.mp4"],
+      selectMediaFolder: async () => [],
+      selectFolder: async () => null,
+      selectSubtitleOutputPath: async () => null,
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
+      openPathMock: async () => true,
+      getSecuritySnapshot: async () => ({
+        contextIsolation: true,
+        nodeIntegration: false,
+        csp: true,
+        exposesRawIpc: false
+      })
+    };
+    render(<App client={new CaptureClient("jobSuccess")} />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
+    expect(await screen.findByText("片段.mp4")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    await waitFor(() => expect(requests[0]?.outputDirectory).toBe("D:\\资料\\视频"));
+  });
+
+  it("does not send the mock output directory to real job requests", async () => {
+    const requests: CreateJobRequest[] = [];
+    class CaptureClient extends MockFastSubClient {
+      async createJob(request: CreateJobRequest): Promise<JobDetail> {
+        requests.push(request);
+        return super.createJob(request);
+      }
+    }
+    window.fastSubSystem = {
+      selectMediaFiles: async () => ["F:\\game\\others\\input.mp4"],
+      selectMediaFolder: async () => [],
+      selectFolder: async () => null,
+      selectSubtitleOutputPath: async () => null,
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
+      openPathMock: async () => true,
+      getSecuritySnapshot: async () => ({
+        contextIsolation: true,
+        nodeIntegration: false,
+        csp: true,
+        exposesRawIpc: false
+      })
+    };
+    render(<App client={new CaptureClient("jobSuccess")} />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
+    expect(await screen.findByText("input.mp4")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    await waitFor(() => expect(requests[0]?.outputDirectory).toBe("F:\\game\\others"));
+  });
+
+  it("creates one daemon job per media file in a folder batch", async () => {
+    const requests: CreateJobRequest[] = [];
+    class CaptureClient extends MockFastSubClient {
+      async createJob(request: CreateJobRequest): Promise<JobDetail> {
+        requests.push(request);
+        return super.createJob(request);
+      }
+    }
+    window.fastSubSystem = {
+      selectMediaFiles: async () => [],
+      selectMediaFolder: async () => ["F:\\game\\others\\a.mp4", "F:\\game\\others\\b.wav", "F:\\game\\others\\c.mov"],
+      selectFolder: async () => null,
+      selectSubtitleOutputPath: async () => null,
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
+      openPathMock: async () => true,
+      getSecuritySnapshot: async () => ({
+        contextIsolation: true,
+        nodeIntegration: false,
+        csp: true,
+        exposesRawIpc: false
+      })
+    };
+    render(<App client={new CaptureClient("jobSuccess")} />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "添加文件夹" }));
+    expect(await screen.findByText("a.mp4")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    await waitFor(() => expect(requests).toHaveLength(3));
+    expect(requests.map((request) => request.inputPaths)).toEqual([["F:\\game\\others\\a.mp4"], ["F:\\game\\others\\b.wav"], ["F:\\game\\others\\c.mov"]]);
+  });
+
+  it("does not show global mock queue items as upcoming jobs for a single file", async () => {
+    window.fastSubSystem = {
+      selectMediaFiles: async () => ["F:\\game\\others\\single.mp4"],
+      selectMediaFolder: async () => [],
+      selectFolder: async () => null,
+      selectSubtitleOutputPath: async () => null,
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
+      openPathMock: async () => true,
+      getSecuritySnapshot: async () => ({
+        contextIsolation: true,
+        nodeIntegration: false,
+        csp: true,
+        exposesRawIpc: false
+      })
+    };
+    render(<App client={new MockFastSubClient("jobSuccess")} />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
+    expect(await screen.findByText("single.mp4")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    expect(await screen.findByRole("heading", { name: "正在生成字幕..." })).toBeInTheDocument();
+    expect(screen.queryByText("sample-lecture.mov")).not.toBeInTheDocument();
+    expect(screen.queryByText("sample-podcast.wav")).not.toBeInTheDocument();
+  });
+
+  it("filters upcoming jobs to the current batch ids", () => {
+    const props = {
+      activeJob: { id: "job-a", displayId: "A", type: "transcribe", status: "running", statusLabel: "正在生成", title: "batch-a.mp4", currentFile: "batch-a.mp4", progressPercent: 12, stageLabel: "正在检查文件", createdAt: "now", inputPaths: ["F:\\game\\others\\batch-a.mp4"], outputDirectory: "F:\\game\\others", providerName: "Fast Sub", modelName: "whisper-small", logs: [] },
+      activeBatchJobIds: ["job-a", "job-b", "job-c"],
+      jobs: [
+        { id: "job-a", displayId: "A", type: "transcribe", status: "running", statusLabel: "正在生成", title: "batch-a.mp4", currentFile: "batch-a.mp4", progressPercent: 12, stageLabel: "正在检查文件", createdAt: "now" },
+        { id: "job-b", displayId: "B", type: "transcribe", status: "queued", statusLabel: "等待中", title: "batch-b.wav", currentFile: "batch-b.wav", progressPercent: 0, stageLabel: "等待中", createdAt: "now" },
+        { id: "job-c", displayId: "C", type: "transcribe", status: "queued", statusLabel: "等待中", title: "batch-c.mov", currentFile: "batch-c.mov", progressPercent: 0, stageLabel: "等待中", createdAt: "now" },
+        { id: "seed-b", displayId: "S", type: "transcribe", status: "queued", statusLabel: "等待中", title: "sample-lecture.mov", currentFile: "sample-lecture.mov", progressPercent: 0, stageLabel: "等待中", createdAt: "now" }
+      ],
+      cancelJob: async () => undefined,
+      cancelAllJobs: async () => undefined
+    } as unknown as Parameters<typeof MainGenerating>[0];
+    render(<MainGenerating {...props} />);
+    expect(screen.getByText("batch-b.wav")).toBeInTheDocument();
+    expect(screen.getByText("batch-c.mov")).toBeInTheDocument();
+    expect(screen.queryByText("sample-lecture.mov")).not.toBeInTheDocument();
   });
 
   it("removes media from the selected file list", async () => {
@@ -223,6 +374,36 @@ describe("Fast Sub renderer flow", () => {
     await enterMainScreen();
     dropFileOn("拖拽视频到这里", new File(["drop"], "dropped clip.mp4", { type: "video/mp4" }));
     expect(await screen.findByText("dropped clip.mp4")).toBeInTheDocument();
+  });
+
+  it("uses Electron file paths for dropped media job output", async () => {
+    const requests: CreateJobRequest[] = [];
+    class CaptureClient extends MockFastSubClient {
+      async createJob(request: CreateJobRequest): Promise<JobDetail> {
+        requests.push(request);
+        return super.createJob(request);
+      }
+    }
+    window.fastSubSystem = {
+      selectMediaFiles: async () => [],
+      selectMediaFolder: async () => [],
+      selectFolder: async () => null,
+      selectSubtitleOutputPath: async () => null,
+      getPathForFile: (file) => file.name === "input.mp4" ? "F:\\game\\others\\input.mp4" : file.name,
+      openPathMock: async () => true,
+      getSecuritySnapshot: async () => ({
+        contextIsolation: true,
+        nodeIntegration: false,
+        csp: true,
+        exposesRawIpc: false
+      })
+    };
+    render(<App client={new CaptureClient("jobSuccess")} />);
+    await enterMainScreen();
+    dropFileOn("拖拽视频到这里", new File(["drop"], "input.mp4", { type: "video/mp4" }));
+    expect(await screen.findByText("input.mp4")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    await waitFor(() => expect(requests[0]?.outputDirectory).toBe("F:\\game\\others"));
   });
 
   it("cancels the active job without later completing it", async () => {
@@ -286,7 +467,10 @@ describe("Fast Sub renderer flow", () => {
     const openPathMock = vi.fn(async () => true);
     window.fastSubSystem = {
       selectMediaFiles: async () => [],
+      selectMediaFolder: async () => [],
       selectFolder: async () => null,
+      selectSubtitleOutputPath: async () => null,
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
@@ -337,11 +521,14 @@ describe("Fast Sub renderer flow", () => {
     expect(await screen.findByText("Subtitles")).toBeInTheDocument();
   });
 
-  it("does not start output conflict save-as when folder selection is canceled", async () => {
-    const selectFolder = vi.fn(async () => null);
+  it("does not start output conflict save-as when file selection is canceled", async () => {
+    const selectSubtitleOutputPath = vi.fn(async () => null);
     window.fastSubSystem = {
       selectMediaFiles: async () => [],
-      selectFolder,
+      selectMediaFolder: async () => [],
+      selectFolder: async () => null,
+      selectSubtitleOutputPath,
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
@@ -359,9 +546,43 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
     expect(await screen.findByText("字幕文件已存在")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "另存为" }));
-    await waitFor(() => expect(selectFolder).toHaveBeenCalled());
+    await waitFor(() => expect(selectSubtitleOutputPath).toHaveBeenCalled());
     expect(screen.getByText("字幕文件已存在")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "正在生成字幕..." })).not.toBeInTheDocument();
+  });
+
+  it("uses save-as subtitle file path for output conflicts", async () => {
+    const requests: CreateJobRequest[] = [];
+    class CaptureClient extends MockFastSubClient {
+      async createJob(request: CreateJobRequest): Promise<JobDetail> {
+        requests.push(request);
+        return super.createJob(request);
+      }
+    }
+    window.fastSubSystem = {
+      selectMediaFiles: async () => [],
+      selectMediaFolder: async () => [],
+      selectFolder: async () => null,
+      selectSubtitleOutputPath: async () => "F:\\game\\others\\input-copy.srt",
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
+      openPathMock: async () => true,
+      getSecuritySnapshot: async () => ({
+        contextIsolation: true,
+        nodeIntegration: false,
+        csp: true,
+        exposesRawIpc: false
+      })
+    };
+    render(<App client={new CaptureClient("jobSuccess")} />);
+    fireEvent.click(await screen.findByLabelText("打开调试面板"));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "outputConflict" } });
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
+    await chooseVideo("F:\\game\\others\\input.mp4");
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    expect(await screen.findByText("字幕文件已存在")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "另存为" }));
+    await waitFor(() => expect(requests[0]?.outputPath).toBe("F:\\game\\others\\input-copy.srt"));
   });
 
   it("still requires remote upload confirmation after resolving an output conflict", async () => {

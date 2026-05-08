@@ -165,6 +165,8 @@ Request：
   "word_timestamps": "off",
   "options": {
     "yes": false,
+    "overwrite": false,
+    "output_conflict": "ask",
     "keep_temp": false,
     "device": "auto",
     "compute_type": "auto",
@@ -177,6 +179,9 @@ Request：
 
 ```text
 transcribe
+model_install
+translate_srt
+burn_in
 ```
 
 当前支持的 transcribe provider：
@@ -361,13 +366,13 @@ disabled
 not_implemented
 ```
 
-## Round 12 Planned Extensions
+## Round 12 Extensions
 
-以下 contract 是 Round 12 Electron daemon integration 的计划扩展。实现前应先补 golden fixtures 或 fake daemon fixtures，Electron adapter 不应猜测这些 request/response shape。
+以下 contract 是 Round 12 Electron daemon integration 的扩展。Electron adapter 以本节 request/response shape 和 fake daemon fixtures 为接入边界。
 
 ### Additional Job Types
 
-Round 12 计划在 `POST /v1/jobs` 中新增：
+Round 12 在 `POST /v1/jobs` 中新增：
 
 ```text
 model_install
@@ -376,6 +381,12 @@ burn_in
 ```
 
 `transcribe` 保持现有语义。所有新增 job type 继续复用同一套 job state machine、SSE events、cancel/result/logs/delete endpoint 和 response envelope。
+
+当前实现说明：
+
+- `model_install` 已作为独立 job type 接入 job/SSE/cancel/result/logs/delete 通路，并复用现有 Go model installer；UI 必须在完成后通过 `GET /v1/models` 重新同步模型真实状态。
+- `translate_srt` 和 `burn_in` 已作为 daemon job type 接入，当前使用受控 placeholder bridge 写入小型输出文件，不拼 shell、不暴露 Python/ffmpeg 细节；完整 Python CLI resolver、参数白名单 runner 和真实 ffmpeg bridge 仍是 Round 12 后续收口项。
+- `GET /v1/config` / `PATCH /v1/config` 已作为 daemon-owned config API 暴露；当前 PATCH validate 并返回 merge 后 view model，持久 atomic writer 后续继续完善。
 
 ### Create Model Install Job
 
@@ -392,6 +403,8 @@ burn_in
   }
 }
 ```
+
+`options.overwrite=true` 是显式覆盖开关，只能由 Electron main process 在用户确认覆盖后写入请求。默认或缺省时，如果 `output_path` 已存在，job 必须以 `output_exists` 失败；renderer 应显示覆盖/跳过/另存为确认，不得静默覆盖。
 
 规则：
 

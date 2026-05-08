@@ -55,7 +55,7 @@ func (r DefaultRunner) runOpenAI(
 	baseURL := stringDefault(stringOption(req, "base_url"), loaded.OpenAI.BaseURL)
 	format := apiUploadFormat(req)
 	output := outputPath(req)
-	if appErr := validateOutput(output); appErr != nil {
+	if appErr := validateOutput(output, boolOption(req, "overwrite")); appErr != nil {
 		return Result{}, appErr
 	}
 	runner := r.ffmpegRunner()

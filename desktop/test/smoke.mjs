@@ -74,7 +74,7 @@ child.on("exit", (code) => {
     process.exit(1);
   }
   const snapshot = JSON.parse(readyLine.replace("FAST_SUB_SMOKE_RENDERER_READY ", ""));
-  const expectedApi = ["selectMediaFiles", "selectFolder", "openPathMock", "getSecuritySnapshot"];
+  const expectedApi = ["selectMediaFiles", "selectMediaFolder", "selectFolder", "selectSubtitleOutputPath", "getPathForFile", "openPathMock", "getSecuritySnapshot"];
   const missingApi = expectedApi.filter((key) => !snapshot.apiKeys.includes(key));
   if (!snapshot.hasRoot || !snapshot.hasFastSubApi || missingApi.length > 0 || !snapshot.contextIsolation || snapshot.nodeIntegration || !snapshot.csp) {
     console.error("Electron smoke renderer snapshot failed:");

@@ -69,6 +69,15 @@ describe("MockFastSubClient", () => {
     expect(canceling.status).toBe("canceling");
   });
 
+  it("creates model installation as a job", async () => {
+    const client = new MockFastSubClient("setupReady");
+    const job = await client.createModelInstallJob("whisper-small");
+    expect(job.type).toBe("model_install");
+    expect(job.title).toContain("Whisper Small");
+    const models = await client.listModels();
+    expect(models.find((model) => model.id === "whisper-small")?.installJobId).toBe(job.id);
+  });
+
   it("blocks remote providers until upload is confirmed", async () => {
     vi.useRealTimers();
     const client = new MockFastSubClient("remoteProviderConfirmRequired");

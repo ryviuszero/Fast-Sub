@@ -4,7 +4,7 @@ export type ModelState = "ready" | "missing" | "installing" | "failed" | "verify
 export type ProviderKind = "local" | "web" | "api" | "native";
 export type ProviderCapability = "stt" | "translation";
 export type ProviderState = "available" | "missing_dependency" | "missing_model" | "missing_api_key" | "invalid_config" | "disabled" | "not_implemented";
-export type JobKind = "transcribe" | "translate_srt" | "burn_in";
+export type JobKind = "transcribe" | "model_install" | "translate_srt" | "burn_in";
 export type JobStatus = "queued" | "running" | "canceling" | "succeeded" | "failed" | "canceled" | "interrupted";
 export type JobStage =
   | "validating"
@@ -42,6 +42,7 @@ export interface UiError {
   action: string;
   recoveryActions: RecoveryAction[];
   diagnostic: string;
+  details?: Record<string, string | number | boolean>;
 }
 
 export interface EnvironmentStatus {
@@ -66,6 +67,7 @@ export interface ModelStatus {
   state: ModelState;
   sizeLabel: string;
   progressPercent?: number;
+  installJobId?: string;
   requiredForMainFlow: boolean;
   diagnostic?: string;
 }
@@ -95,13 +97,19 @@ export interface ConfigViewModel {
   keepTempFiles: boolean;
   wordTimestamps: boolean;
   apiKeyAlias?: string;
+  openAIBaseUrl?: string;
+  openAIModel?: string;
+  openAIUploadFormat?: "wav" | "mp3" | "m4a";
+  apiKeyStatus?: "missing" | "configured" | "unknown";
 }
 
 export interface CreateJobRequest {
   type: JobKind;
   inputPaths: string[];
   outputDirectory: string;
+  outputPath?: string;
   outputType: ConfigViewModel["outputType"];
+  outputConflict?: ConfigViewModel["outputConflict"];
   language: string;
   providerId: string;
   modelId: string;
@@ -171,6 +179,7 @@ export interface FastSubClient {
   updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel>;
   listModels(): Promise<ModelStatus[]>;
   installModel(modelId: string): Promise<ModelStatus>;
+  createModelInstallJob(modelId: string): Promise<JobDetail>;
   verifyModel(modelId: string): Promise<ModelStatus>;
   listProviders(): Promise<ProviderStatus[]>;
   testProvider(providerId: string, mode: "static" | "live"): Promise<ProviderStatus>;

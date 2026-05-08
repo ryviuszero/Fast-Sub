@@ -52,11 +52,22 @@ export function QueueDetail({ activeJob, setScreen, failed, retryJob, deleteJob,
   const tabs = failed ? ["问题", "日志", "配置"] : ["进度", "日志", "详情"];
   const canceled = activeJob?.status === "canceled";
   const canceling = activeJob?.status === "canceling";
+  const error = activeJob?.error;
+  const title = activeJob?.title ?? "未选择任务";
+  const subtitle = activeJob ? `${activeJob.createdAt} · ${activeJob.statusLabel}` : "请从任务列表选择一条记录";
+  const progress = activeJob?.progressPercent ?? 0;
+  const progressText = canceled
+    ? "任务已取消，可以重新生成或返回队列。"
+    : canceling
+      ? "正在取消任务..."
+      : activeJob?.estimatedRemaining
+        ? `${activeJob.stageLabel} · 预计还需 ${activeJob.estimatedRemaining}`
+        : activeJob?.stageLabel ?? "等待 daemon 任务事件...";
   return (
     <div className="wf">
       <Chrome title={failed ? "失败任务详情" : "任务详情"} back onBack={() => setScreen("queue-list")} />
       <header className="detail-head">
-        <div><h2>{activeJob?.title ?? (failed ? "raw-cam.mov" : "sample-meeting.mp4")}</h2><span>{failed ? "今天 12:58 · 生成失败" : "开始于 12:42 · 已运行 2 分钟"}</span></div>
+        <div><h2>{title}</h2><span>{subtitle}</span></div>
         <Chip tone={failed ? "warn" : canceled ? "muted" : "accent"}>{failed ? "已失败" : canceled ? "已取消" : canceling ? "正在取消" : "正在生成"}</Chip>
       </header>
       <Tabs items={tabs} active={detailTab} onSelect={setDetailTab} />
@@ -66,17 +77,19 @@ export function QueueDetail({ activeJob, setScreen, failed, retryJob, deleteJob,
             {detailTab === 0 && (
               <>
                 <section className="panel warn-panel">
-                  <h2>音频轨无法提取</h2>
-                  <p>Fast Sub 没有在这个视频里找到可用音频轨，或 FFmpeg 无法读取该轨道。</p>
+                  <h2>{error?.title ?? "任务失败"}</h2>
+                  <p>{error?.message ?? "任务没有完成，请查看日志和配置后重试。"}</p>
                   <Divider />
                   <strong>建议操作</strong>
-                  <p>确认视频有声音；尝试重新封装视频；查看诊断日志确认错误。</p>
+                  <p>{error?.action ?? "查看诊断日志确认错误。"}</p>
                 </section>
                 <section className="panel">
                   <h3>结构化错误</h3>
-                  <KV k="code" v="media_extract_failed" />
-                  <KV k="stage" v="extracting_audio" />
-                  <KV k="retryable" v="true" />
+                  <KV k="code" v={error?.code ?? "job_failed"} />
+                  {error?.details ? Object.entries(error.details).map(([key, value]) => (
+                    <KV k={key} v={String(value)} mono={key.includes("tail") || key.includes("stderr")} key={key} />
+                  )) : <KV k="stage" v={activeJob?.stageLabel ?? "unknown"} />}
+                  <KV k="diagnostic" v={error?.diagnostic ?? "未提供诊断信息"} mono />
                 </section>
                 <div className="row gap-8">
                   <button className="btn primary" onClick={() => void retryJob()}>重试任务</button>
@@ -84,15 +97,15 @@ export function QueueDetail({ activeJob, setScreen, failed, retryJob, deleteJob,
                 </div>
               </>
             )}
-            {detailTab === 1 && <LogPanel />}
-            {detailTab === 2 && <ConfigPanel />}
+            {detailTab === 1 && <LogPanel activeJob={activeJob} />}
+            {detailTab === 2 && <ConfigPanel activeJob={activeJob} />}
           </>
         ) : (
           <>
             {detailTab === 0 && (
               <>
-                <div className="progress-hero"><strong>{activeJob?.progressPercent ?? 62}%</strong><span>{canceled ? "任务已取消，可以重新生成或返回队列。" : canceling ? "正在取消任务..." : "正在转写音频 · 预计还需约 3 分钟"}</span></div>
-                <div className="progress accent"><i style={{ width: `${activeJob?.progressPercent ?? 62}%` }} /></div>
+                <div className="progress-hero"><strong>{progress}%</strong><span>{progressText}</span></div>
+                <div className="progress accent"><i style={{ width: `${progress}%` }} /></div>
                 <div className="row gap-6 wrap"><Chip tone="ok">检查文件 ✓</Chip><Chip tone="ok">分析媒体 ✓</Chip><Chip tone="ok">提取音频 ✓</Chip><Chip tone={canceled ? "muted" : "accent"}>{canceled ? "已取消" : canceling ? "正在取消" : "转写中 ●"}</Chip><Chip>生成字幕</Chip></div>
                 <div className="row gap-8">
                   {canceled ? <button className="btn primary" onClick={() => void retryJob()}>重新生成</button> : <button className="btn ghost" onClick={() => void cancelJob()}>取消任务</button>}
@@ -100,8 +113,8 @@ export function QueueDetail({ activeJob, setScreen, failed, retryJob, deleteJob,
                 </div>
               </>
             )}
-            {detailTab === 1 && <LogPanel />}
-            {detailTab === 2 && <ConfigPanel />}
+            {detailTab === 1 && <LogPanel activeJob={activeJob} />}
+            {detailTab === 2 && <ConfigPanel activeJob={activeJob} />}
           </>
         )}
       </main>
@@ -109,23 +122,26 @@ export function QueueDetail({ activeJob, setScreen, failed, retryJob, deleteJob,
   );
 }
 
-export function LogPanel() {
+export function LogPanel({ activeJob }: Pick<RenderProps, "activeJob">) {
+  const lines = activeJob?.logs.length ? activeJob.logs.map((line) => `[${line.time}] ${line.level}: ${line.message}`) : [`任务：${activeJob?.title ?? "未选择任务"}`, `状态：${activeJob?.statusLabel ?? "未知"}`, `阶段：${activeJob?.stageLabel ?? "未知"}`];
   return (
     <section className="panel">
       <h3>日志</h3>
-      <pre>[12:42:01] media loaded: meeting.mp4
-[12:42:08] audio extracted
-[12:42:16] transcription started
-[12:44:10] token=[REDACTED]</pre>
+      <pre>{lines.join("\n")}</pre>
     </section>
   );
 }
 
-export function ConfigPanel() {
+export function ConfigPanel({ activeJob }: Pick<RenderProps, "activeJob">) {
   return (
     <section className="panel">
       <h3>配置</h3>
-      <div className="summary-grid"><span>语言<strong>自动 → 中文</strong></span><span>模型<strong>whisper-small</strong></span><span>设备<strong>GPU</strong></span><span>输出<strong>SRT</strong></span></div>
+      <div className="summary-grid">
+        <span>任务<strong>{activeJob?.type ?? "unknown"}</strong></span>
+        <span>Provider<strong>{activeJob?.providerName ?? "unknown"}</strong></span>
+        <span>模型<strong>{activeJob?.modelName ?? "unknown"}</strong></span>
+        <span>输出目录<strong>{activeJob?.outputDirectory || "未设置"}</strong></span>
+      </div>
     </section>
   );
 }

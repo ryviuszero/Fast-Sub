@@ -23,7 +23,9 @@ const (
 type CreateRequest struct {
 	SchemaVersion  int               `json:"schema_version"`
 	Type           string            `json:"type"`
+	ModelID        string            `json:"model_id"`
 	InputPath      string            `json:"input_path"`
+	SubtitlePath   string            `json:"subtitle_path"`
 	OutputPath     string            `json:"output_path"`
 	Provider       string            `json:"provider"`
 	Model          string            `json:"model"`
@@ -71,6 +73,7 @@ type Job struct {
 }
 
 type Runner interface {
+	RunJob(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError)
 	RunTranscribe(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError)
 }
 

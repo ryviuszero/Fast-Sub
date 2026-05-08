@@ -43,7 +43,7 @@ func (m *Manager) schedule() {
 
 func (m *Manager) run(ctx context.Context, id string, req CreateRequest) {
 	job, _ := m.Get(id)
-	result, appErr := m.runner.RunTranscribe(ctx, *job, req, func(update Update) {
+	result, appErr := m.runner.RunJob(ctx, *job, req, func(update Update) {
 		m.appendEvent(id, update.Event.Type, update.Event.Data)
 		if update.Stage != "" {
 			m.setStage(id, update.Stage)

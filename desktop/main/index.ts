@@ -1,11 +1,15 @@
 import { app, BrowserWindow, Menu, dialog, ipcMain } from "electron";
-import type { OpenDialogOptions } from "electron";
-import { join } from "node:path";
+import type { OpenDialogOptions, SaveDialogOptions } from "electron";
+import type { Dirent } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { extname, join } from "node:path";
+import { registerFastSubClientIpc } from "./client/ipc";
 
 const DEV_SERVER_URL = process.env.ELECTRON_RENDERER_URL ?? (!app.isPackaged ? "http://localhost:5173" : "");
 const SMOKE_MODE = process.env.FAST_SUB_SMOKE === "1";
 const PROD_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
 const DEV_CSP = "default-src 'self' http://localhost:5173 ws://localhost:5173; script-src 'self' http://localhost:5173 'unsafe-inline' 'unsafe-eval'; style-src 'self' http://localhost:5173 'unsafe-inline'; img-src 'self' data: http://localhost:5173; font-src 'self' data: http://localhost:5173; connect-src 'self' http://localhost:5173 ws://localhost:5173; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+const MEDIA_EXTENSIONS = new Set([".mp4", ".mkv", ".mov", ".mp3", ".wav", ".m4a"]);
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -84,6 +88,26 @@ ipcMain.handle("fast-sub:select-folder", async (event) => {
   return result.canceled ? null : result.filePaths[0] ?? null;
 });
 
+ipcMain.handle("fast-sub:select-media-folder", async (event) => {
+  const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const options: OpenDialogOptions = { properties: ["openDirectory"] };
+  const result = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options);
+  if (result.canceled || !result.filePaths[0]) {
+    return [];
+  }
+  return listMediaFiles(result.filePaths[0]);
+});
+
+ipcMain.handle("fast-sub:select-subtitle-output-path", async (event, defaultPath: unknown) => {
+  const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+  const options: SaveDialogOptions = {
+    defaultPath: typeof defaultPath === "string" ? defaultPath : undefined,
+    filters: [{ name: "SRT Subtitles", extensions: ["srt"] }]
+  };
+  const result = parent ? await dialog.showSaveDialog(parent, options) : await dialog.showSaveDialog(options);
+  return result.canceled ? null : result.filePath ?? null;
+});
+
 ipcMain.handle("fast-sub:open-path-mock", (_event, path: unknown) => {
   return typeof path === "string" && path.length > 0;
 });
@@ -94,6 +118,36 @@ ipcMain.handle("fast-sub:security-snapshot", () => ({
   csp: true,
   exposesRawIpc: false
 }));
+
+registerFastSubClientIpc();
+
+async function listMediaFiles(root: string): Promise<string[]> {
+  const out: string[] = [];
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (depth > 2 || out.length >= 500) {
+      return;
+    }
+    let entries: Dirent[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (out.length >= 500) {
+        return;
+      }
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(path, depth + 1);
+      } else if (entry.isFile() && MEDIA_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+        out.push(path);
+      }
+    }
+  }
+  await walk(root, 0);
+  return out;
+}
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
