@@ -138,6 +138,22 @@ Fast Sub 默认本地处理。AI/API/Web provider 的颜色不能暗示默认启
 | Job Done | `#f4faf3` | `#2f7a4a` | `#1f1d1a` | 完成任务卡片 |
 | Job Failed | `#f4dccd` | `#c44a2a` | `#1f1d1a` | 失败任务卡片 |
 
+## 固定应用菜单栏
+
+Round 11 的普通用户导航采用固定应用菜单栏。它不是 Electron/Windows 默认系统菜单，也不是开发调试 tab；它只承载少量产品级跳转，并保持位置稳定。
+
+| 项目 | 约定 |
+| --- | --- |
+| 显示时机 | 首次启动 / 环境检查阶段不显示；进入主界面后显示 |
+| 固定入口 | `←`、`→`、`窗口`、`帮助`，顺序和位置不随页面变化 |
+| 窗口菜单 | 只包含 `字幕生成`、`翻译SRT`、`字幕烧录` |
+| 返回/前进 | 使用应用内历史栈；禁用态降低透明度但保留位置 |
+| 背景 | 使用 `Surface Muted`，与页面内容之间使用 `Border Divider` |
+| 按钮 | 顶栏使用透明/default menu button；hover/active 使用 Ink 反白 |
+| 文案 | 面向普通用户，不出现 daemon、SSE、job id、JSON、worker、provider runtime 等技术词 |
+| Windows 适配 | 不恢复 Electron 默认菜单栏，不复刻 macOS 三圆点或窗口标题 chrome |
+| 调试入口 | 隐藏调试面板仍可切换所有 mock 页面状态，但不作为普通用户导航 |
+
 ## 使用规则
 
 | 规则 | 说明 |

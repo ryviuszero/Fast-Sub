@@ -8,7 +8,7 @@ Round 11 不接真实 daemon，不做真实模型安装，不调用 Python worke
 
 ## Goals
 
-- 创建 Electron 应用骨架，目录使用 `electron/`。
+- 创建 Electron 应用骨架，目录使用 `desktop/`。
 - 建立 main、preload、renderer 的安全边界。
 - 建立 `FastSubClient` MVP contract。
 - 实现 `MockFastSubClient`，覆盖主要 mock 数据、进度、失败、取消和恢复状态。
@@ -29,19 +29,19 @@ Round 11 不接真实 daemon，不做真实模型安装，不调用 Python worke
 
 ## Implementation Defaults
 
-- Electron 应用目录使用 `electron/`。
-- Electron 骨架采用 `electron-vite` 风格结构：`electron/main`、`electron/preload` 和 Vite/React/TypeScript renderer 分层。
-- Electron 应用使用独立 `electron/package.json` 和独立 lockfile；Round 11 默认使用 `npm`，提交 `electron/package-lock.json`，不在仓库根目录混入 UI 依赖。
-- 推荐分支名为 `codex/fast-sub-electron-mock-shell`。Round 11 建议一个分支完成，不切并行分支，避免 Electron main/preload/renderer contract 漂移。
-- `electron/package.json` 至少提供以下 scripts：
+- Electron 应用目录使用 `desktop/`。
+- Electron 骨架采用 `electron-vite` 风格结构：`desktop/main`、`desktop/preload` 和 Vite/React/TypeScript renderer 分层。
+- Electron 应用使用独立 `desktop/package.json` 和独立 lockfile；Round 11 默认使用 `npm`，提交 `desktop/package-lock.json`，不在仓库根目录混入 UI 依赖。
+- 推荐分支名为 `codex/fast-sub-desktop-mock-shell`。Round 11 建议一个分支完成，不切并行分支，避免 Electron main/preload/renderer contract 漂移。
+- `desktop/package.json` 至少提供以下 scripts：
   - `dev`：启动 Electron/Vite 开发模式。
   - `typecheck`：检查 main、preload、renderer TypeScript 类型。
   - `test`：运行 mock client、contract、renderer flow 和安全边界单元测试。
   - `build`：构建 main、preload、renderer，不做 installer/package。
   - `smoke`：启动应用到 renderer 并验证基础窗口安全配置；不得启动真实 daemon 或访问真实网络。
-- `.gitignore` 必须覆盖 Electron 生成物：`electron/node_modules/`、`electron/dist/`、`electron/dist-electron/`、`electron/out/`、`electron/.vite/`、`electron/coverage/`、`electron/test-results/`、`electron/playwright-report/`。
+- `.gitignore` 必须覆盖 Electron 生成物：`desktop/node_modules/`、`desktop/dist/`、`desktop/dist-electron/`、`desktop/out/`、`desktop/.vite/`、`desktop/coverage/`、`desktop/test-results/`、`desktop/playwright-report/`。
 - 不提交 Electron 构建产物、运行日志、截图快照、用户配置、真实媒体、真实模型、任务产物、API key 或本机绝对路径。
-- Round 11 允许提交源代码、测试 fixtures、mock fixtures、`electron/package.json` 和 `electron/package-lock.json`。
+- Round 11 允许提交源代码、测试 fixtures、mock fixtures、`desktop/package.json` 和 `desktop/package-lock.json`。
 - UI 首轮使用 React state，不引入 Zustand、Jotai 或其他状态库。
 - 组件策略使用自定义组件，基于 `ui-docs/prototype` 的信息架构和 `ui-docs/ui-context.md` 的 token 整理。
 - Round 11 只实现 mock 安全存储，不选定真实 OS keychain 依赖。
@@ -64,7 +64,7 @@ Round 11 分支策略分成两步：
    - Round 11 实现推荐从 `master` 切出：
 
 ```text
-codex/fast-sub-electron-mock-shell
+codex/fast-sub-desktop-mock-shell
 ```
 
 实现分支策略：
@@ -86,16 +86,16 @@ codex/fast-sub-electron-mock-shell
 
 - `ui-docs/specs/round11-electron-mock-first-shell.md` 已经完成审阅。
 - `.gitignore` 已准备好 Electron 生成物规则，或 11.1 首个提交必须先补齐。
-- `electron/` 目录尚不存在时，由 11.1 创建。
+- `desktop/` 目录尚不存在时，由 11.1 创建。
 - 当前工作树中未审阅的 prototype/docs 改动不得被无意带入实现分支。
 
 实现分支合并门槛：
 
-- `cd electron && npm run typecheck`
-- `cd electron && npm test`
-- `cd electron && npm run build`
-- `cd electron && npm run smoke`
-- Review 确认没有提交 `electron/node_modules/`、构建产物、截图产物、真实媒体、真实模型、任务产物、secret 或本机私有路径。
+- `cd desktop && npm run typecheck`
+- `cd desktop && npm test`
+- `cd desktop && npm run build`
+- `cd desktop && npm run smoke`
+- Review 确认没有提交 `desktop/node_modules/`、构建产物、截图产物、真实媒体、真实模型、任务产物、secret 或本机私有路径。
 - Review 确认 renderer 不访问 Node.js、shell、文件系统、daemon token、API key 或 raw secret。
 
 ## Implementation Units
@@ -104,7 +104,7 @@ Round 11 拆成以下小单元推进。每个单元完成后都要更新 `ui-doc
 
 | 单元 | 名称 | 范围 | 验收 |
 |---|---|---|---|
-| 11.1 | Electron/Vite 骨架 | 创建 `electron/`，配置 main、preload、renderer、开发脚本和基础窗口 | 应用能启动到 renderer，窗口安全配置符合本 spec |
+| 11.1 | Electron/Vite 骨架 | 创建 `desktop/`，配置 main、preload、renderer、开发脚本和基础窗口 | 应用能启动到 renderer，窗口安全配置符合本 spec |
 | 11.2 | Contract 和 mock fixtures | 定义 `FastSubClient` MVP types、UI error model、mock scenarios 和 fixtures | mock client 可独立单测，fixtures 覆盖成功/失败/取消/缺模型/远程确认 |
 | 11.3 | 首次启动和主界面核心流 | 落地首次启动、环境检查、添加媒体、详细设置折叠、创建 mock job、进度和结果 | 用户能从首次启动进入主界面，并完成一次 mock 生成 |
 | 11.4 | 任务队列和设置入口 | 落地任务列表、任务详情、失败详情、设置页主要 tab 和配置 view model | 用户能查看、取消、重试、删除 mock job，并编辑 mock 设置 |
@@ -112,7 +112,7 @@ Round 11 拆成以下小单元推进。每个单元完成后都要更新 `ui-doc
 
 ## Deliverables
 
-- `electron/` 应用骨架。
+- `desktop/` 应用骨架。
 - Electron main process：窗口创建、应用生命周期、受控系统能力占位。
 - Electron preload：只暴露 allowlist API，不暴露 Node.js、shell、任意文件读写、token 或 raw secret。
 - React renderer：页面路由或等效导航、基础布局、共享组件和 mock 页面状态。
@@ -164,7 +164,7 @@ Round 11 至少定义以下 TypeScript 类型。可以在后续实现中用 Zod 
 | `ModelStatus` | ASR/NLLB 模型状态展示 |
 | `ProviderStatus` | provider 可用性、隐私分类和确认状态 |
 | `ConfigViewModel` | 设置页读写的 UI 配置模型 |
-| `CreateJobRequest` | 主生成、翻译 SRT、烧录入口创建任务的请求 |
+| `CreateJobRequest` | 主生成、翻译SRT、烧录入口创建任务的请求 |
 | `JobSummary` | 任务队列列表项 |
 | `JobDetail` | 任务详情、失败详情和结果展示 |
 | `JobEvent` | mock 进度和 Round 12 SSE 映射目标 |
@@ -232,6 +232,14 @@ Mock fixture 必须包含 Windows 本地路径、中文路径、空格路径和 
 
 ## UI Screens
 
+- 固定应用菜单栏：
+  - 首次启动 / 环境检查阶段不显示固定菜单，避免绕过必要检查。
+  - 进入主界面后显示固定位置的应用菜单栏，菜单项顺序固定为 `←`、`→`、`窗口`、`帮助`。
+  - `←` 和 `→` 使用应用内历史栈做返回/前进，不随页面切换改变位置。
+  - `窗口` 菜单包含 `字幕生成`、`翻译SRT`、`字幕烧录` 三个入口。
+  - `帮助` 进入用户可理解的诊断/帮助入口。
+  - 不恢复 Windows/Electron 默认系统菜单栏，不把 prototype 中的 macOS 三圆点或窗口标题作为 renderer 内部 UI。
+  - 隐藏调试面板可继续提供全页面 mock 状态跳转，但不能作为普通用户导航。
 - 首次启动 / 环境检查：
   - 检查环境、依赖、模型目录、默认 ASR、默认 NLLB。
   - 展示安装中、已就绪、缺失、失败、可稍后处理。
@@ -276,10 +284,10 @@ Mock fixture 必须包含 Windows 本地路径、中文路径、空格路径和 
 
 ## Test Plan
 
-Round 11 实现分支最终必须提供并通过以下命令。脚本名称可以在实现中等价调整，但需要在 `electron/package.json` 中固定下来：
+Round 11 实现分支最终必须提供并通过以下命令。脚本名称可以在实现中等价调整，但需要在 `desktop/package.json` 中固定下来：
 
 ```bash
-cd electron
+cd desktop
 npm run typecheck
 npm test
 npm run build
@@ -302,6 +310,10 @@ npm run smoke
   - job queued/running/succeeded/failed/canceled/interrupted。
 - Renderer/UI 测试：
   - 首次启动流程可走完。
+  - 首次启动检查页不显示固定应用菜单栏。
+  - 进入主界面后固定应用菜单栏显示 `←`、`→`、`窗口`、`帮助`，且菜单项位置不随页面变化。
+  - `窗口` 菜单可进入字幕生成、翻译SRT 和字幕烧录。
+  - 任务详情的 `返回` 回到任务队列；子功能的 `返回` 回到主界面。
   - 主界面添加文件后可创建 mock job。
   - 生成进度可推进到完成。
   - 输出冲突、缺模型、远程 provider 确认可见。
@@ -329,6 +341,9 @@ npm run smoke
 
 - Electron 应用可以启动到 renderer。
 - Mock 模式下，普通用户可以从首次启动进入主界面。
+- 首次启动检查阶段不显示固定应用菜单栏；进入主界面后可见 `←`、`→`、`窗口`、`帮助`。
+- `窗口` 菜单可快速进入字幕生成、翻译SRT 和字幕烧录，菜单项位置固定。
+- 隐藏调试面板仍可切换全部 mock 页面状态，但不替代普通用户导航。
 - 用户可以添加媒体并创建 mock 字幕生成任务。
 - 任务进度、完成、失败、取消和重试状态可见。
 - 任务队列可以展示当前任务和历史任务。

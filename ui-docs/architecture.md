@@ -40,29 +40,29 @@ Electron 应用的页面结构参考 `ui-docs/prototype/v2/app.jsx` 中的 artbo
 
 ## 建议文件夹职责
 
-以下是 Electron 应用后续实现时的建议目录。Round 11 已确定生产 Electron 应用根目录使用 `electron/`，职责边界应保持。
+以下是 Electron 应用后续实现时的建议目录。Round 11 已确定生产 Electron 应用根目录使用 `desktop/`，职责边界应保持。
 
 | 文件夹 | 职责 | 不应该做的事 |
 | --- | --- | --- |
 | `ui-docs/` | UI 规划、架构、产品流程、原型说明 | 不放真实 secret、本地报告、大文件 |
 | `ui-docs/prototype/` | 当前 Vite/React 原型和 artboards | 不作为生产代码目录直接依赖 |
-| `electron/` | Electron 应用根目录 | 不混入 Go/Python 后端实现 |
-| `electron/main/` | Electron main process、窗口、daemon lifecycle、系统菜单、系统 dialog | 不保存 UI 业务状态，不渲染页面 |
-| `electron/preload/` | 安全 IPC bridge、受控文件选择、受控 client 方法暴露 | 不暴露 Node.js 全局能力 |
-| `electron/renderer/` | React UI、页面、组件、路由、样式 | 不调用系统命令，不读取 secret |
-| `electron/renderer/pages/setup/` | 首次启动检查和默认模型准备流程 | 不展示内部 contract 细节 |
-| `electron/renderer/pages/main/` | 拖拽添加文件、一键生成、详细设置、结果状态 | 不承载任务执行逻辑 |
-| `electron/renderer/pages/jobs/` | 任务列表、任务详情、失败详情、日志摘要 | 不直接解析 job 文件夹 |
-| `electron/renderer/pages/tools/` | 翻译 SRT、字幕烧录等独立工具 | 不把次级工具塞进主路径 |
-| `electron/renderer/pages/settings/` | 通用、模型、API、Provider、诊断、Benchmark 设置页 | 不保存 raw secret |
-| `electron/renderer/components/` | 通用 UI 组件，如按钮、状态标签、进度条、文件卡片、确认弹窗 | 不发起后端请求 |
-| `electron/renderer/client/` | `FastSubClient` 类型、mock client、daemon client 的 renderer-facing facade / hooks / view-model adapter | 不实现真实 HTTP/SSE，不持有 token，不绕过 preload 安全边界 |
-| `electron/main/client/` | `DaemonFastSubClient` 的真实 daemon adapter、daemon lifecycle、auth、REST/SSE、config 写入 | 不渲染 UI，不保存页面状态 |
-| `electron/preload/client/` | 将 main process client 以受控 IPC API 暴露给 renderer | 不暴露任意 URL、Authorization、shell 或文件系统能力 |
-| `electron/renderer/state/` | UI store、view model、form state、derived state | 不成为后端 truth source |
-| `electron/shared/contracts/` | TypeScript contract types、schema adapter、错误码映射 | 不包含 React 组件 |
-| `electron/shared/privacy/` | provider privacy 文案、远程上传确认模型、redaction UI helper | 不处理 raw secret |
-| `electron/test/` | UI、client、mock flow、contract mapping 测试 | 不依赖真实模型、真实 API、真实大媒体 |
+| `desktop/` | Electron 应用根目录 | 不混入 Go/Python 后端实现 |
+| `desktop/main/` | Electron main process、窗口、daemon lifecycle、系统菜单、系统 dialog | 不保存 UI 业务状态，不渲染页面 |
+| `desktop/preload/` | 安全 IPC bridge、受控文件选择、受控 client 方法暴露 | 不暴露 Node.js 全局能力 |
+| `desktop/renderer/` | React UI、页面、组件、路由、样式 | 不调用系统命令，不读取 secret |
+| `desktop/renderer/pages/setup/` | 首次启动检查和默认模型准备流程 | 不展示内部 contract 细节 |
+| `desktop/renderer/pages/main/` | 拖拽添加文件、一键生成、详细设置、结果状态 | 不承载任务执行逻辑 |
+| `desktop/renderer/pages/jobs/` | 任务列表、任务详情、失败详情、日志摘要 | 不直接解析 job 文件夹 |
+| `desktop/renderer/pages/tools/` | 翻译 SRT、字幕烧录等独立工具 | 不把次级工具塞进主路径 |
+| `desktop/renderer/pages/settings/` | 通用、模型、API、Provider、诊断、Benchmark 设置页 | 不保存 raw secret |
+| `desktop/renderer/components/` | 通用 UI 组件，如按钮、状态标签、进度条、文件卡片、确认弹窗 | 不发起后端请求 |
+| `desktop/renderer/client/` | `FastSubClient` 类型、mock client、daemon client 的 renderer-facing facade / hooks / view-model adapter | 不实现真实 HTTP/SSE，不持有 token，不绕过 preload 安全边界 |
+| `desktop/main/client/` | `DaemonFastSubClient` 的真实 daemon adapter、daemon lifecycle、auth、REST/SSE、config 写入 | 不渲染 UI，不保存页面状态 |
+| `desktop/preload/client/` | 将 main process client 以受控 IPC API 暴露给 renderer | 不暴露任意 URL、Authorization、shell 或文件系统能力 |
+| `desktop/renderer/state/` | UI store、view model、form state、derived state | 不成为后端 truth source |
+| `desktop/shared/contracts/` | TypeScript contract types、schema adapter、错误码映射 | 不包含 React 组件 |
+| `desktop/shared/privacy/` | provider privacy 文案、远程上传确认模型、redaction UI helper | 不处理 raw secret |
+| `desktop/test/` | UI、client、mock flow、contract mapping 测试 | 不依赖真实模型、真实 API、真实大媒体 |
 
 ## 存储模型
 
@@ -282,7 +282,7 @@ FastSubClient
 
 | 问题 | Round 11 选择 | 后续需要确认 |
 | --- | --- | --- |
-| Electron 目录名 | 使用 `electron/` | 无 |
+| Electron 目录名 | 使用 `desktop/` | 无 |
 | UI 状态库 | 使用 React state，不引入 Zustand/Jotai | 复杂度上升后是否引入轻量 store |
 | UI 组件库 | 使用自定义组件，基于 prototype 和 `ui-context.md` token 整理 | Round 13 是否引入 Radix/shadcn 等组件基础 |
 | 安全存储库 | Round 11 只做 mock 安全存储 | Round 12/13 选择具体 Electron keychain 依赖 |

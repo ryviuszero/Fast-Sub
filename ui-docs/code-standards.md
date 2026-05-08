@@ -127,29 +127,29 @@
 
 - `ui-docs/` — UI 规划、项目总览、架构、代码标准和产品流程文档。
 - `ui-docs/prototype/` — 当前 Vite/React 原型和 artboards，仅作为设计参考。
-- `electron/` — Electron 应用根目录。Round 11 已确定使用此目录名。
-- `electron/main/` — Electron main process、窗口、daemon lifecycle、系统 dialog、安全存储。
-- `electron/preload/` — 安全 IPC bridge 和受控 API 暴露。
-- `electron/renderer/` — React UI、页面、组件、状态和样式。
-- `electron/renderer/pages/setup/` — 首次启动和环境检查流程。
-- `electron/renderer/pages/main/` — 主界面、一键生成、详细设置和结果状态。
-- `electron/renderer/pages/jobs/` — 任务列表、任务详情、失败详情和日志摘要。
-- `electron/renderer/pages/tools/` — 翻译已有 SRT、字幕烧录等独立工具。
-- `electron/renderer/pages/settings/` — 通用、模型、API、Provider、诊断、Benchmark 设置页。
-- `electron/renderer/components/` — 按钮、输入、状态标签、进度条、文件卡片、确认弹窗等基础组件。
-- `electron/renderer/client/` — `FastSubClient` interface、mock client、daemon client renderer-facing facade、hooks 和 view-model adapter。
-- `electron/main/client/` — 真实 daemon adapter、REST/SSE、auth、daemon lifecycle、配置文件同步。
-- `electron/preload/client/` — 受控 IPC client bridge。
-- `electron/renderer/state/` — UI store、view model、form state 和 derived state。
-- `electron/shared/contracts/` — TypeScript contract types、schema adapter、错误码映射。
-- `electron/shared/privacy/` — provider privacy 文案、远程上传确认模型、redaction UI helper。
-- `electron/test/` — UI、client、mock flow、contract mapping 和隐私测试。
+-- `desktop/` — Electron 应用根目录。Round 11 已确定使用此目录名。
+-- `desktop/main/` — Electron main process、窗口、daemon lifecycle、系统 dialog、安全存储。
+-- `desktop/preload/` — 安全 IPC bridge 和受控 API 暴露。
+-- `desktop/renderer/` — React UI、页面、组件、状态和样式。
+-- `desktop/renderer/pages/setup/` — 首次启动和环境检查流程。
+-- `desktop/renderer/pages/main/` — 主界面、一键生成、详细设置和结果状态。
+-- `desktop/renderer/pages/jobs/` — 任务列表、任务详情、失败详情和日志摘要。
+-- `desktop/renderer/pages/tools/` — 翻译已有 SRT、字幕烧录等独立工具。
+-- `desktop/renderer/pages/settings/` — 通用、模型、API、Provider、诊断、Benchmark 设置页。
+-- `desktop/renderer/components/` — 按钮、输入、状态标签、进度条、文件卡片、确认弹窗等基础组件。
+-- `desktop/renderer/client/` — `FastSubClient` interface、mock client、daemon client renderer-facing facade、hooks 和 view-model adapter。
+-- `desktop/main/client/` — 真实 daemon adapter、REST/SSE、auth、daemon lifecycle、配置文件同步。
+-- `desktop/preload/client/` — 受控 IPC client bridge。
+-- `desktop/renderer/state/` — UI store、view model、form state 和 derived state。
+-- `desktop/shared/contracts/` — TypeScript contract types、schema adapter、错误码映射。
+-- `desktop/shared/privacy/` — provider privacy 文案、远程上传确认模型、redaction UI helper。
+-- `desktop/test/` — UI、client、mock flow、contract mapping 和隐私测试。
 
 ## Round 11 Decisions And Later Choices
 
 | 决策 | Round 11 选择 | 后续需要确认 |
 | --- | --- | --- |
-| Electron 应用目录 | 使用 `electron/` | 无 |
+| Electron 应用目录 | 使用 `desktop/` | 无 |
 | UI 状态库 | 使用 React state，不引入 Zustand/Jotai | 复杂度上升后是否需要轻量 store |
 | UI 组件库 | 使用自定义组件，基于 prototype 和 `ui-context.md` token 整理 | Round 13 是否引入 Radix/shadcn |
 | 安全存储库 | Round 11 只实现 mock 安全存储 | Round 12/13 选择具体 Electron keychain 依赖 |

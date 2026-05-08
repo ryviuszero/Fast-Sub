@@ -25,3 +25,11 @@ tests/test_bench_assets.py
 fast-sub-go.toml
 ui-docs/prototype/node_modules/
 ui-docs/prototype/dist/
+desktop/node_modules/
+desktop/dist/
+desktop/dist-electron/
+desktop/out/
+desktop/.vite/
+desktop/coverage/
+desktop/test-results/
+desktop/playwright-report/

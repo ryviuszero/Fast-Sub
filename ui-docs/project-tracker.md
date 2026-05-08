@@ -4,13 +4,13 @@
 
 ## 当前阶段
 
-- Round 11 Electron Mock-first Shell 准备阶段
+- Round 11 Electron Mock-first Shell 已完成实现验证
 
 ## 当前目标
 
-- 按已细化的 Round 11 spec，从 11.1 Electron/Vite 骨架开始实现 mock-first 桌面应用。
+- 准备 Round 11 review；后续进入 Round 12 前确认真实 daemon client、安全存储、配置 adapter 和 SSE bridge 细节。
 
-## 完全的
+## 完成的
 
 - 已创建 `ui-docs/project-overview.md`，将项目范围收窄为 Fast Sub Electron 桌面客户端。
 - 已创建 `ui-docs/architecture.md`，定义 Electron main/preload/renderer、`FastSubClient`、mock client、daemon client 和页面边界。
@@ -21,6 +21,57 @@
 - 已在 `ui-docs/project-overview.md` 中同步后续三轮安排。
 - 已创建 `ui-docs/specs/round11-electron-mock-first-shell.md`，作为 Round 11 Electron Mock-first Shell 的可执行 spec。
 - 已细化 Round 11 spec，补充 implementation units、electron-vite 风格骨架、typed contract、job event contract、mock scenario matrix、路径 fixture、安全边界和 Electron smoke 验证。
+- 已完成 11.1：创建 `desktop/` Electron/Vite/React/TypeScript 骨架，包含 `desktop/main`、`desktop/preload`、`desktop/renderer`、`desktop/shared` 和 `desktop/test`。
+- 已完成 11.2：定义 `FastSubClient` MVP contract、`EnvironmentStatus`、`ModelStatus`、`ProviderStatus`、`ConfigViewModel`、job、event、result、log 和 `UiError` 类型；实现 `MockFastSubClient` 和 deterministic scenarios。
+- 已完成 daemon SSE 到 UI `JobEvent` mapping fixture 和测试，覆盖 `created/queued/started/progress/log/warning/completed/failed/canceled/interrupted/events_lost/heartbeat`，并验证 token、Authorization、API key 和 raw envelope 不泄露。
+- 已完成 11.3：落地首次启动、环境检查、添加媒体、添加文件夹、默认输出、详细设置折叠、创建 mock job、进度、成功结果、打开字幕和打开输出文件夹 mock 入口。
+- 已完成 11.4：落地任务队列、任务详情、失败/取消/重试/删除入口、redacted logs，以及设置页通用、模型管理、API 服务、Provider、诊断和 Benchmark tab。
+- 已完成 11.5：配置 Electron `contextIsolation: true`、`nodeIntegration: false`、基础 CSP、preload allowlist API、安全 smoke、renderer flow 测试、远程 provider 阻断确认和诊断 redaction。
+- 已修复 dev 模式空白窗口：当 electron-vite 未向 main process 注入 `ELECTRON_RENDERER_URL` 时，main process 会在未打包模式 fallback 到 `http://localhost:5173`，并记录 renderer load failure 诊断；dev CSP 允许 Vite/React refresh 所需的 localhost 和 websocket，生产 CSP 仍保持严格。
+- 已更新 `.gitignore`，忽略 `desktop/node_modules/`、`desktop/dist/`、`desktop/dist-electron/`、`desktop/out/`、`desktop/.vite/`、`desktop/coverage/`、`desktop/test-results/` 和 `desktop/playwright-report/`。
+- 已生成独立 `desktop/package-lock.json`，Round 11 使用 npm 管理 Electron 依赖。
+- 已从 `ui-docs/prototype` 导出 30 张 Round 11 原型视觉参考图，输出到 `ui-docs/prototype/reference/round11/`，并生成 `README.md` 索引。
+- 已新增 `ui-docs/prototype/export-artboards.mjs`，可通过本地 Vite 原型服务和 Chrome DevTools Protocol 重新导出 artboard PNG。
+- 已按 `ui-docs/prototype/reference/round11/` 视觉参考重做 renderer 主 UI：首次启动、空状态拖拽区、添加文件、详细设置、生成中、完成页、任务队列、设置页均改为原型窗口式布局；移除普通主界面的常驻左侧导航。
+- 已新增隐藏调试入口：右下角隐形按钮和 `Ctrl+D` 可打开调试面板，用于切换 mock 场景和主要页面状态，方便逐屏对照原型测试。
+- 已修正 Windows 适配：原型中的 macOS 三圆点和 `Fast Sub` 标题不再作为 renderer 内部伪窗口绘制；Electron 使用原生窗口标题栏，隐藏默认 File/Edit/View 菜单栏，内容区不再窗口套窗口。
+- 已移除首次启动检查页残留的顶部页面工具条，避免在 Windows 原生标题栏下出现空白横条。
+- 已修正 dev 模式文件选择：`添加视频` 现在通过隐藏的原生 `<input type="file">` 触发 Windows 系统文件选择器，不依赖 preload/IPC；Electron main 的 `dialog.showOpenDialog` 仍保留给文件夹选择和后续真实路径 adapter。
+- 已将 `添加文件夹` 同步改为隐藏的原生 folder input，通过 Chromium/Electron 的 `webkitdirectory` 触发 Windows 文件夹选择，并在 mock UI 中展示选中文件夹内的媒体文件。
+- 已将主界面输出位置的 `修改` 改为可交互目录选择入口，使用隐藏的原生 folder input 触发 Windows 路径选择，并在 mock UI 中回显选中的输出目录名。
+- 已将用户可见导航修正为固定应用菜单栏：进入主界面后固定显示 `←`、`→`、`窗口`、`帮助`，`窗口` 只包含 `字幕生成`、`翻译SRT`、`字幕烧录`；设置页、队列页和子功能不再重复渲染顶栏 tab。
+- 已将固定应用菜单栏与页面状态条对齐到同一顶栏高度，左侧菜单不再另占一行，右侧状态 chip 保持在同一水平线上。
+- 已修复固定应用菜单栏换行问题：`窗口`、`帮助` 保持单行显示，菜单背景不再撑出额外块状区域。
+- 已移除顶栏中的页面说明和页面级返回按钮：`任务详情`、`设置`、`翻译字幕`、`字幕烧录` 等不再显示在固定菜单栏旁，返回/前进统一使用全局 `←` / `→`。
+- 已收紧固定应用菜单栏高度，从页面标题条节奏改为更窄的菜单栏节奏。
+- 已将任务列表 tab 改为可点击筛选：`正在生成`、`已完成`、`失败` 会切换对应任务列表内容。
+- 已统一窗口功能页的设置入口：字幕生成、翻译SRT、字幕烧录在左下角显示齿轮 `设置`，字幕生成右下角不再重复显示 `设置`。
+- 已将顶部 `帮助` 从跳转诊断页改为预留文档菜单，先显示空链接位 `Fast Sub Document`，后续再接真实文档地址。
+- 已将任务详情 tab 改为可点击切换：运行中详情支持 `进度`、`日志`、`详情`，失败详情支持 `问题`、`日志`、`配置`。
+- 已修复帮助菜单文档入口换行问题，`Fast Sub Document` 保持单行显示。
+- 已修复已添加文件列表的 `移除` 行为，点击后会从当前列表删除文件并更新数量，删空时回到空状态。
+- 已实现详细设置中的输出内容、输出冲突、词级时间戳和保留临时文件交互，点击后会更新当前 mock 配置和选中态。
+- 已修复完成页结果卡片的 `文件夹` 按钮，点击后会通过 mock open path 打开输出目录。
+- 已为 mock 打开路径操作增加可见反馈，点击 `文件夹` 或 `打开字幕` 后会显示已模拟打开的路径提示。
+- 已增强 mock 打开路径提示样式：提示居中显示，字号/阴影/色彩更醒目，并区分成功与失败状态。
+- 已实现设置 / 通用页的主要选项交互：输出内容、文件冲突策略、默认转写方式、设备和词级时间戳会写入 mock 配置并更新选中态。
+- 已补全设置 / 通用页语言选项的本地 UI 状态，`跟随系统`、`简体中文`、`English` 可以切换选中态。
+- 已为翻译SRT和字幕烧录工具接入本地文件选择：选择 SRT、选择视频、选择字幕会打开文件选择器并回显选中文件名。
+- 已收紧固定应用菜单栏左侧留白，让 `←`、`→`、`窗口`、`帮助` 更靠近窗口左侧。
+- 已在缺少默认 ASR 模型的空状态提示中增加 `去下载模型` 入口，直接跳转到设置 / 模型管理页，避免用户只能阅读阻断提示。
+- 已修复 Round 11 审阅中剩余 6 个缺口：取消任务会停止订阅并保持取消态，缺 ASR 模型安装后可恢复本地转写，队列详情支持重试/删除/取消，主界面拖拽文件可进入已添加状态，翻译SRT/字幕烧录具备 mock 选择和完成/失败流，smoke 会真实启动 Electron 并验证 renderer/preload allowlist。
+- 已完成 Round 11 二次审阅收口：`events_lost` 使用当前 active job 重新同步，mock 场景补齐模型安装中/安装失败，翻译SRT和字幕烧录通过 `FastSubClient.createJob()` 创建 mock 任务，输出冲突策略会写入配置，媒体/文件夹/输出目录选择优先走 preload allowlist，诊断页只展示脱敏的产品级示例信息。
+- 已将 `desktop/renderer/src/App.tsx` 重构为轻量入口，实际 shell 迁移到 `desktop/renderer/src/app/AppShell.tsx`，为后续继续拆分页面和组件留下明确边界。
+- 已继续拆分 `desktop/renderer/src/app/AppShell.tsx`：抽出 `types.ts`、`fixtures.ts`、`components.tsx`、`renderScreen.tsx` 和 `screens/` 下的 setup/main/queue/settings/tools 页面模块；当前 app 目录内单文件均低于 500 行，最大文件为 `AppShell.tsx` 429 行。
+- 已补充 renderer 测试覆盖：preload allowlist 文件/目录选择、`events_lost` 重同步、模型安装中/失败场景、翻译SRT/字幕烧录任务创建、缺 ASR 模型阻断与模型管理跳转、设置和详细设置选项交互。
+- 已修复 Round 11 对照审阅剩余缺口：失败任务改为 `MockFastSubClient` 中的真实 job，队列失败详情可真正删除；默认 ASR 安装失败场景会阻断主转写并显示重试；取消任务进入 `canceling` 状态再完成取消；输出冲突 `另存为` 在目录选择取消时不会继续创建任务；任务队列 tab 数字改为根据 mock job 动态计算。
+- 已补齐设置页剩余 mock 交互：API 服务启用、上传前确认和连接测试具有本地状态反馈；Provider 刷新会调用 `FastSubClient.testProvider()` 的 mock 静态检查；Provider 状态从 contract enum 映射为用户可读文案，避免显示 `missing_api_key`、`disabled` 等内部状态码。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`。
+- 已修复输出冲突与远程上传确认的状态串用问题：`startJob()` 现在区分 `conflictResolved` 和 `remoteUploadConfirmed`，用户处理同名文件冲突后仍会看到远程 provider 上传确认弹窗；新增回归测试覆盖冲突 + 远程 provider 组合场景。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`。
+- 已通过验证：
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`
+  - `cd desktop && npm run build`
+  - `cd desktop && npm run smoke`
 
 ## 进行中
 
@@ -28,10 +79,11 @@
 
 ## 接下来
 
-- 开始 11.1：创建 Electron/Vite 骨架，配置 `electron/main`、`electron/preload`、React renderer、开发脚本和基础窗口安全配置。
-- 11.1 完成后更新本文件，记录启动方式、验证结果和剩余问题。
+- Round 12 前实现 `DaemonFastSubClient` main/preload controlled adapter，接入 ready JSON、REST、SSE、auth、401、events_lost 和 reconnect。
 - 确认 OS keychain 具体依赖，留给 Round 12/13 真实 secret 存储接入。
 - 确认 SSE client 具体实现方式，留给 Round 12 真实 daemon 接入。
+- 确认真实配置文件路径、格式和写入 adapter。
+- 确认默认 ASR/NLLB 真实 manifest id 和磁盘占用提示。
 
 ## 决策清单
 
@@ -48,8 +100,8 @@
 - 配置策略：用户设置直接映射到 Fast Sub 配置文件；API key 和 provider secret 只保存到安全存储，配置文件只保留 alias、环境变量名、masked 状态或 keychain reference。
 - Benchmark：第一版保留在设置 / 诊断后面的规划入口，不进入主流程。
 - Daemon client 测试：使用 fake HTTP/SSE server 和 contract fixtures，不启动真实 daemon。
-- Round 11 Electron 应用目录：使用 `electron/`。
-- Round 11 文档/原型整理分支可以继续使用 `codex/ui-prototype`；生产 Electron 实现分支从 `master` 切出 `codex/fast-sub-electron-mock-shell`。
+- Round 11 Electron 应用目录：使用 `desktop/`。
+- Round 11 文档/原型整理分支可以继续使用 `codex/ui-prototype`；生产 Electron 实现分支从 `master` 切出 `codex/fast-sub-desktop-mock-shell`。
 - Round 11 实现使用单分支推进，不拆并行 worktree；11.1 到 11.5 可作为阶段提交，合并前按用户要求 squash 或保留。
 - Round 11 UI 状态管理：使用 React state，不引入 Zustand/Jotai。
 - Round 11 组件策略：使用自定义组件，基于 prototype 和 `ui-docs/ui-context.md` token 整理。
@@ -60,6 +112,9 @@
 - Round 11 实现单元：11.1 Electron/Vite 骨架，11.2 contract 和 mock fixtures，11.3 首次启动和主界面核心流，11.4 任务队列和设置入口，11.5 安全和测试收口。
 - Round 11 job event contract：`snapshot`、`progress`、`log_tail`、`succeeded`、`failed`、`canceled`、`events_lost`。
 - Round 11 mock scenarios 必须可控、可复现，不使用随机失败作为默认行为。
+- 用户可见导航采用固定应用菜单栏方案，而不是恢复 Electron/Windows 系统菜单、复刻 macOS chrome，或只依赖隐藏调试 tab。
+- 固定应用菜单栏在首次启动检查阶段隐藏；进入主界面后提供 `←`、`→`、`窗口` 和 `帮助`，其中 `窗口` 菜单只包含 `字幕生成`、`翻译SRT`、`字幕烧录`。
+- 隐藏调试面板继续保留全页面 mock 状态跳转，但只作为开发测试工具。
 
 ### 实现前必须确认
 
@@ -92,3 +147,7 @@
 - 后续实现前需要先完成剩余技术选择，重点是真实安全存储、真实 SSE client、配置文件 adapter 和默认模型 manifest 细节。
 - 用户明确：Round 11 spec 创建后需要同步更新 `ui-docs/project-tracker.md`，不作为可选项。
 - 已根据 GitHub 调查和审查建议细化 Round 11 spec：参考 electron-vite-react 的目录骨架、Electron 官方 contextBridge/contextIsolation 安全建议、类型化 IPC/schema 思路、本地 AI 桌面应用的 daemon/client 分层和可复现 mock 场景。
+- Round 11 审阅反馈：顶部栏必须固定且不重复；菜单项位置保持为 `←`、`→`、`窗口`、`帮助`，`窗口` 只承载字幕生成、翻译SRT、字幕烧录三个页面入口。
+- Round 11 审阅反馈：缺少默认 ASR 模型时，全局状态必须显示本地转写未就绪，并阻断添加媒体、选择输出路径和开始生成等后续任务操作；隐藏调试面板切换页面也不能绕过该状态。
+- Round 11 审阅反馈修复：需要补齐任务取消/重试/删除、拖拽添加、翻译SRT/字幕烧录 mock 流和真实 Electron smoke；当前实现仍保持 mock-first，不接真实 daemon、真实网络、模型下载、ffmpeg、Python worker 或 provider runtime。
+- Round 11 review 收口修复：去除用户可见 `daemon` 文案，API 服务设置将 `Base URL` 产品化为高级服务地址；任务队列的进行中/等待中示例改为来自 `MockFastSubClient` 的 job 数据，列表计数、筛选和详情入口共用同一 mock contract。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`、`cd desktop && npm run smoke`。

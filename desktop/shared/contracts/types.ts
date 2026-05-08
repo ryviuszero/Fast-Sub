@@ -1,0 +1,186 @@
+export type HealthStatus = "ok" | "degraded" | "disconnected";
+export type ModelKind = "asr" | "translation";
+export type ModelState = "ready" | "missing" | "installing" | "failed" | "verifying";
+export type ProviderKind = "local" | "web" | "api" | "native";
+export type ProviderCapability = "stt" | "translation";
+export type ProviderState = "available" | "missing_dependency" | "missing_model" | "missing_api_key" | "invalid_config" | "disabled" | "not_implemented";
+export type JobKind = "transcribe" | "translate_srt" | "burn_in";
+export type JobStatus = "queued" | "running" | "canceling" | "succeeded" | "failed" | "canceled" | "interrupted";
+export type JobStage =
+  | "validating"
+  | "queued"
+  | "probing_media"
+  | "installing_model"
+  | "extracting_audio"
+  | "preparing_upload"
+  | "loading_model"
+  | "transcribing"
+  | "translating"
+  | "burning_in"
+  | "rendering"
+  | "finalizing"
+  | "done";
+export type JobEventType = "snapshot" | "progress" | "log_tail" | "succeeded" | "failed" | "canceled" | "events_lost";
+export type RecoveryAction = "retry" | "install_model" | "open_settings" | "open_diagnostics" | "repair_daemon" | "dismiss";
+export type MockScenario =
+  | "setupReady"
+  | "missingAsr"
+  | "nllbInstallFailed"
+  | "modelInstalling"
+  | "modelInstallFailed"
+  | "jobSuccess"
+  | "jobFailed"
+  | "jobCanceled"
+  | "outputConflict"
+  | "remoteProviderConfirmRequired"
+  | "daemonDisconnected";
+
+export interface UiError {
+  code: string;
+  title: string;
+  message: string;
+  action: string;
+  recoveryActions: RecoveryAction[];
+  diagnostic: string;
+}
+
+export interface EnvironmentStatus {
+  health: HealthStatus;
+  os: string;
+  arch: string;
+  memory: string;
+  disk: string;
+  localTranscriptionReady: boolean;
+  localTranslationReady: boolean;
+  ffmpegReady: boolean;
+  modelDirectoryReady: boolean;
+  daemonReady: boolean;
+  warnings: string[];
+  error?: UiError;
+}
+
+export interface ModelStatus {
+  id: string;
+  name: string;
+  kind: ModelKind;
+  state: ModelState;
+  sizeLabel: string;
+  progressPercent?: number;
+  requiredForMainFlow: boolean;
+  diagnostic?: string;
+}
+
+export interface ProviderStatus {
+  id: string;
+  name: string;
+  kind: ProviderKind;
+  capability: ProviderCapability;
+  state: ProviderState;
+  enabled: boolean;
+  privacyNote: string;
+  requiresUploadConfirmation: boolean;
+  maskedCredential?: string;
+}
+
+export interface ConfigViewModel {
+  defaultLanguage: string;
+  outputLocation: "source" | "custom";
+  outputConflict: "ask" | "overwrite" | "skip";
+  device: "auto" | "cpu" | "gpu";
+  outputType: "original_srt" | "translated_srt" | "bilingual_srt" | "burned_video";
+  asrProvider: string;
+  translationProvider: string;
+  asrModel: string;
+  translationModel: string;
+  keepTempFiles: boolean;
+  wordTimestamps: boolean;
+  apiKeyAlias?: string;
+}
+
+export interface CreateJobRequest {
+  type: JobKind;
+  inputPaths: string[];
+  outputDirectory: string;
+  outputType: ConfigViewModel["outputType"];
+  language: string;
+  providerId: string;
+  modelId: string;
+  remoteUploadConfirmed: boolean;
+}
+
+export interface JobResult {
+  subtitlePath: string;
+  outputFolder: string;
+  summary: string;
+  durationLabel: string;
+}
+
+export interface JobLogEntry {
+  time: string;
+  level: "info" | "warning" | "error";
+  message: string;
+}
+
+export interface JobSummary {
+  id: string;
+  displayId: string;
+  type: JobKind;
+  status: JobStatus;
+  statusLabel: string;
+  title: string;
+  currentFile: string;
+  progressPercent: number;
+  stageLabel: string;
+  createdAt: string;
+}
+
+export interface JobDetail extends JobSummary {
+  inputPaths: string[];
+  outputDirectory: string;
+  providerName: string;
+  modelName: string;
+  estimatedRemaining?: string;
+  result?: JobResult;
+  error?: UiError;
+  logs: JobLogEntry[];
+}
+
+export interface JobEvent {
+  type: JobEventType;
+  job?: JobDetail;
+  progress?: Pick<JobSummary, "status" | "progressPercent" | "stageLabel" | "currentFile"> & {
+    estimatedRemaining?: string;
+    warning?: string;
+  };
+  result?: JobResult;
+  error?: UiError;
+  logs?: JobLogEntry[];
+}
+
+export type JobEventHandlers = {
+  onEvent: (event: JobEvent) => void;
+  onError?: (error: UiError) => void;
+};
+
+export interface FastSubClient {
+  health(): Promise<HealthStatus>;
+  version(): Promise<string>;
+  getEnvironmentStatus(): Promise<EnvironmentStatus>;
+  repairDaemon(): Promise<EnvironmentStatus>;
+  getConfig(): Promise<ConfigViewModel>;
+  updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel>;
+  listModels(): Promise<ModelStatus[]>;
+  installModel(modelId: string): Promise<ModelStatus>;
+  verifyModel(modelId: string): Promise<ModelStatus>;
+  listProviders(): Promise<ProviderStatus[]>;
+  testProvider(providerId: string, mode: "static" | "live"): Promise<ProviderStatus>;
+  createJob(request: CreateJobRequest): Promise<JobDetail>;
+  listJobs(): Promise<JobSummary[]>;
+  getJob(jobId: string): Promise<JobDetail>;
+  cancelJob(jobId: string): Promise<JobDetail>;
+  cancelAllJobs(): Promise<JobSummary[]>;
+  getJobResult(jobId: string): Promise<JobResult>;
+  getJobLogs(jobId: string): Promise<JobLogEntry[]>;
+  deleteJob(jobId: string): Promise<void>;
+  subscribeJobEvents(jobId: string, handlers: JobEventHandlers): () => void;
+}
