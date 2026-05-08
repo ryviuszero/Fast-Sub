@@ -4,11 +4,11 @@
 
 ## 当前阶段
 
-- Round 11 Electron Mock-first Shell 已完成实现验证
+- Round 12 Electron Daemon Integration And Release Feature Closure 规划中
 
 ## 当前目标
 
-- 准备 Round 11 review；后续进入 Round 12 前确认真实 daemon client、安全存储、配置 adapter 和 SSE bridge 细节。
+- 按已细化的 Round 12 spec，先从 daemon API contract 扩展和 fake daemon fixtures 开始，随后再推进 daemon lifecycle、REST/SSE client、真实 job、配置写入和 secret storage。
 
 ## 完成的
 
@@ -72,18 +72,25 @@
   - `cd desktop && npm test`
   - `cd desktop && npm run build`
   - `cd desktop && npm run smoke`
+- 已创建 `ui-docs/specs/round12-electron-daemon-integration.md`，将 Round 12 定位为桌面版发布前核心功能闭环：真实 daemon client、独立 `model_install` job、真实转写、翻译 SRT、字幕烧录、配置写入和 main process secret storage。
+- 已根据 Round 12 审阅建议细化 spec：初步拆分 12.1 到 12.8，并要求先完成 daemon API contract 和 fake fixtures，避免 Electron adapter 猜测新增 job/config/secret API。
+- 已在 Round 12 spec 中明确 fetch-based SSE、Windows 进程清理限制、Python CLI bridge 安全/编码规则、配置 atomic write、keytar 风险和 safeStorage fallback、真实手动 smoke 要求。
+- 已按二次审阅调整 Round 12 spec：将 config/secret 提前到 12.4，明确真实 job 使用保存后的配置，补充 `createModelInstallJob()` 语义、CLI resolver、transient secret reference，以及 12.8 前 mock/fake daemon 的开发保留规则。
+- 已更新 `go-docs/specs/daemon-api.md`，新增 Round 12 planned extensions：`model_install`、`translate_srt`、`burn_in`、model verify、job result shape、config boundary、secret boundary 和 fake daemon fixture 要求。
+- 已按第三次审阅收口 Round 12 文档：配置边界固定为 daemon `GET/PATCH /v1/config`，`secret_ref` 不得原样持久化，`FastSubClient` 类型变更写入 spec，并明确 12.1 contract 未完成前不创建真实 adapter、不切 UI 默认模式。
+- 已补齐 Round 12 contract 细节：`GET /v1/config` / `PATCH /v1/config` 的 view model、merge patch 和 validation error shape；`secret_ref` 的生成、消费、TTL、错误码和清理规则；fake daemon fixtures 和手动 smoke 测试资产位置。
 
 ## 进行中
 
-暂无。
+- Round 12 spec 审阅和细化。
 
 ## 接下来
 
-- Round 12 前实现 `DaemonFastSubClient` main/preload controlled adapter，接入 ready JSON、REST、SSE、auth、401、events_lost 和 reconnect。
-- 确认 OS keychain 具体依赖，留给 Round 12/13 真实 secret 存储接入。
-- 确认 SSE client 具体实现方式，留给 Round 12 真实 daemon 接入。
-- 确认真实配置文件路径、格式和写入 adapter。
-- 确认默认 ASR/NLLB 真实 manifest id 和磁盘占用提示。
+- 根据已更新的 `go-docs/specs/daemon-api.md` 开始 12.1 contract fixtures 和 fake daemon fixtures。
+- 12.1 fake fixtures 完成并通过测试边界确认后，再进入 12.2 daemon lifecycle 和 ready bridge。
+- 根据 Round 12 spec 更新 `ui-docs/architecture.md` 和 `ui-docs/code-standards.md`。
+- Round 12 实现前确定 fake daemon、fake keytar、fake CLI runner 和 fake model installer 的测试边界。
+- Round 12 实现分支推荐使用 `codex/fast-sub-round12-daemon-integration`。
 
 ## 决策清单
 
@@ -115,12 +122,23 @@
 - 用户可见导航采用固定应用菜单栏方案，而不是恢复 Electron/Windows 系统菜单、复刻 macOS chrome，或只依赖隐藏调试 tab。
 - 固定应用菜单栏在首次启动检查阶段隐藏；进入主界面后提供 `←`、`→`、`窗口` 和 `帮助`，其中 `窗口` 菜单只包含 `字幕生成`、`翻译SRT`、`字幕烧录`。
 - 隐藏调试面板继续保留全页面 mock 状态跳转，但只作为开发测试工具。
+- Round 12 模型安装走独立 `model_install` job，通过同一套 job/SSE/取消/失败/结果模型展示进度。
+- Round 12 真实翻译 SRT 和字幕烧录通过 Go daemon 新增 job type 接入；本轮允许 Go daemon 受控调用现有 `fast-sub` Python CLI，后续再逐步 Go 原生化。
+- Round 12 API key 和 provider secret 使用 Electron main process 管理的 secret storage；首选 `keytar`，实现前必须确认 Electron/Node ABI 兼容性，必要时使用 Electron `safeStorage` + 本地加密 secret store fallback。
+- Round 12 SSE 固定使用 main process fetch-based SSE，不使用 renderer 原生 `EventSource`。
+- Round 12 实现顺序：12.1 daemon API contract，12.2 daemon lifecycle，12.3 REST/SSE client，12.4 config/secret 基础 adapter，12.5 transcribe，12.6 model_install，12.7 translate/burn bridge，12.8 UI 回归收口。
+- Round 12 `model_install` 应新增 `createModelInstallJob(modelId): Promise<JobDetail>`；旧 `installModel(modelId)` 只保留兼容语义，返回带 install job id 的 installing 状态。
+- Round 12 secret 从 Electron 到 daemon 必须使用 main-controlled transient secret channel，推荐一次性 secret reference / handle；如果该 channel 尚未实现，API job 只能临时继续走 `api_key_env`，但不能作为最终验收路径。
+- Round 12 Python CLI bridge 必须定义 CLI resolver：显式配置、环境变量、开发环境 `uv run fast-sub`、PATH `fast-sub`、打包内置入口；缺失时返回结构化 missing runtime 错误。
+- Round 12 Python CLI bridge 必须使用参数白名单、`exec.CommandContext`、环境变量 scrub、UTF-8/replacement 解码、JSON/log 分离和 redacted logs。
+- Round 12 配置写入必须 validate、atomic write、schema version、损坏配置恢复，并防止 masked key 被当作 raw key 写回。
+- Round 12 Fast Sub runtime 配置统一通过 daemon `GET /v1/config` 和 `PATCH /v1/config` 管理；Electron 本地只保存窗口状态、debug/mock 偏好等纯 UI 偏好。
+- Round 12 `secret_ref` 不得原样持久化到 job metadata、events、logs、stdout、stderr 或 renderer state；需要落盘时只能写入脱敏占位。
+- 生产模式不能因 daemon 失败静默切 mock；mock/fake daemon 只能通过明确开发/测试入口启用。
+- Round 12 配置读写真实落地，普通设置通过 daemon config API 写入 Fast Sub runtime 配置。
 
 ### 实现前必须确认
 
-- OS keychain 具体依赖。
-- SSE client 具体实现方式：EventSource 代理、fetch-based SSE，或 main process stream bridge。
-- 配置文件路径、格式和真实写入 adapter 细节。
 - 默认 ASR 真实 manifest id，以及是否根据硬件推荐更小/更大模型。
 - 默认 NLLB 真实 manifest id、磁盘占用提示和安装失败文案。
 
@@ -151,3 +169,9 @@
 - Round 11 审阅反馈：缺少默认 ASR 模型时，全局状态必须显示本地转写未就绪，并阻断添加媒体、选择输出路径和开始生成等后续任务操作；隐藏调试面板切换页面也不能绕过该状态。
 - Round 11 审阅反馈修复：需要补齐任务取消/重试/删除、拖拽添加、翻译SRT/字幕烧录 mock 流和真实 Electron smoke；当前实现仍保持 mock-first，不接真实 daemon、真实网络、模型下载、ffmpeg、Python worker 或 provider runtime。
 - Round 11 review 收口修复：去除用户可见 `daemon` 文案，API 服务设置将 `Base URL` 产品化为高级服务地址；任务队列的进行中/等待中示例改为来自 `MockFastSubClient` 的 job 数据，列表计数、筛选和详情入口共用同一 mock contract。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`、`cd desktop && npm run smoke`。
+- Round 12 审阅反馈：当前 spec 范围较大，必须拆成 12.1 到 12.8；实现前先补 daemon API contract 和 fake fixtures，避免 Electron adapter 猜测新增 job/config/secret API。
+- Round 12 审阅反馈：SSE 采用 fetch-based SSE 以支持 Authorization header、AbortController、Last-Event-ID、heartbeat timeout、退避重连和 fatal error 分类。
+- Round 12 审阅反馈：`keytar` 是 native module 且上游已归档，仍可作为首选，但必须记录 Electron ABI 风险和 `safeStorage` fallback；Linux `basic_text` 不可静默当作安全存储。
+- Round 12 二次审阅反馈：Goals 不应写死 keytar，应改成 main process 管理的 secret storage；Workstream 顺序应与 12.1-12.8 对齐；transient secret channel 必须在 daemon API contract 中明确；12.8 验收时才切真实 daemon 为默认。
+- Round 12 三次审阅反馈：配置边界必须二选一，最终确定为 daemon config API；`secret_ref` 不能作为可重放秘密引用落盘；`FastSubClient` 类型变更必须显式写入；12.1 未完成前不得创建真实 adapter 或切默认模式。
+- Round 12 四次审阅反馈：config API shape 和 `secret_ref` 生成/消费契约必须在 12.1 前定死；fake daemon fixtures 和手动 smoke 资产需要明确推荐位置。

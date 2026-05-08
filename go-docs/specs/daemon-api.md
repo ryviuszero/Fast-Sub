@@ -361,6 +361,383 @@ disabled
 not_implemented
 ```
 
+## Round 12 Planned Extensions
+
+以下 contract 是 Round 12 Electron daemon integration 的计划扩展。实现前应先补 golden fixtures 或 fake daemon fixtures，Electron adapter 不应猜测这些 request/response shape。
+
+### Additional Job Types
+
+Round 12 计划在 `POST /v1/jobs` 中新增：
+
+```text
+model_install
+translate_srt
+burn_in
+```
+
+`transcribe` 保持现有语义。所有新增 job type 继续复用同一套 job state machine、SSE events、cancel/result/logs/delete endpoint 和 response envelope。
+
+### Create Model Install Job
+
+推荐 UI 侧新增 `createModelInstallJob(model_id)`，映射为：
+
+```json
+{
+  "schema_version": 1,
+  "type": "model_install",
+  "model_id": "whisper-small",
+  "provider": "local-faster-whisper",
+  "options": {
+    "verify_after_download": true
+  }
+}
+```
+
+规则：
+
+- `model_install` 是长任务，不能作为阻塞式短 HTTP 请求实现。
+- result 必须包含 model id、最终 status、path 或 path summary、size summary。
+- log 和 error 必须 redacted。
+- 取消时进入 `canceling`，最终进入 `canceled` 或带结构化错误的 terminal state。
+- `GET /v1/models` 是模型真实状态来源；UI 不能只相信 install job 的本地乐观状态。
+
+示例 result：
+
+```json
+{
+  "schema_version": 1,
+  "ok": true,
+  "result": {
+    "job_id": "job_model_abcdef",
+    "type": "model_install",
+    "status": "succeeded",
+    "model_id": "whisper-small",
+    "model_status": "available",
+    "path_summary": "%FAST_SUB_HOME%/models/whisper-small",
+    "size_bytes": 123456789
+  },
+  "warnings": []
+}
+```
+
+### Verify Model
+
+Round 12 默认将 model verify 保留为短请求；如果后续校验耗时过长，可升级为 job。
+
+建议 endpoint：
+
+```http
+POST /v1/models/{model_id}/verify
+```
+
+返回：
+
+```json
+{
+  "schema_version": 1,
+  "ok": true,
+  "result": {
+    "model_id": "whisper-small",
+    "status": "available",
+    "verified": true,
+    "path_summary": "%FAST_SUB_HOME%/models/whisper-small",
+    "warnings": []
+  },
+  "warnings": []
+}
+```
+
+### Translate SRT Job
+
+`translate_srt` 用于桌面端“翻译已有 SRT”工具。Round 12 允许 Go daemon 受控调用现有 `fast-sub translate` Python CLI，后续再逐步 Go 原生化。
+
+Request：
+
+```json
+{
+  "schema_version": 1,
+  "type": "translate_srt",
+  "input_path": "C:/media/input.srt",
+  "output_path": "C:/media/input.zh.srt",
+  "provider": "web-bing",
+  "model": "",
+  "source_language": "auto",
+  "target_language": "zh",
+  "mode": "bilingual",
+  "options": {
+    "bilingual_order": "original-first",
+    "batch_size": 20,
+    "timeout_seconds": 30,
+    "sleep_seconds": 0.2,
+    "secret_ref": ""
+  }
+}
+```
+
+Rules：
+
+- 远程 provider 必须由 UI 完成上传确认后才能创建 job。
+- Go daemon 调 Python CLI 时必须使用 `exec.CommandContext` 和参数白名单，不拼 shell 字符串。
+- Python CLI resolver 失败返回 `missing_dependency` 或 `runtime_not_found`。
+- stdout/stderr 必须按 UTF-8 或可控 replacement 解码；JSON stdout 和 logs 必须分离。
+- provider secret 只能通过 transient secret reference、受控环境变量或 `api_key_env` 使用；raw secret 不进入 persisted job metadata、events、logs、stdout、stderr。
+
+### Burn In Job
+
+`burn_in` 用于桌面端“字幕烧录”工具。Round 12 允许 Go daemon 受控调用现有 `fast-sub burn` 或等效 CLI 能力。
+
+Request：
+
+```json
+{
+  "schema_version": 1,
+  "type": "burn_in",
+  "input_path": "C:/media/input.mp4",
+  "subtitle_path": "C:/media/input.srt",
+  "output_path": "C:/media/input.burned.mp4",
+  "options": {
+    "font_preset": "default",
+    "font_size": 24,
+    "overwrite": false
+  }
+}
+```
+
+Rules：
+
+- 必须使用 `exec.CommandContext` 和参数白名单，不拼 shell 字符串。
+- ffmpeg/Python bridge 遵守 translate_srt 相同的编码、取消、redaction 和 JSON/log 分离规则。
+- result 返回 output path summary、duration summary、size summary；不要返回 raw ffmpeg command。
+
+### Job Result Shape
+
+新增 job type 的 result 应保持可泛化：
+
+```json
+{
+  "job_id": "job_abcdef",
+  "type": "translate_srt",
+  "status": "succeeded",
+  "outputs": [
+    {
+      "kind": "subtitle",
+      "path": "C:/media/input.zh.srt",
+      "path_summary": "input.zh.srt"
+    }
+  ],
+  "summary": {
+    "processed_items": 1,
+    "duration_ms": 1234
+  }
+}
+```
+
+### Config Boundary
+
+Round 12 需要真实配置读写。Fast Sub runtime 配置统一由 Go daemon 管理，Electron main process 不直接写 runtime 配置文件；Electron 本地只保存窗口状态、debug/mock 偏好等纯 UI 偏好。
+
+Daemon 必须暴露：
+
+```text
+GET   /v1/config
+PATCH /v1/config
+```
+
+`GET /v1/config` 返回 daemon 已解析、已脱敏、可供桌面 UI 编辑的 config view model，而不是原始配置文件文本。
+
+示例：
+
+```json
+{
+  "schema_version": 1,
+  "ok": true,
+  "result": {
+    "config_schema_version": 1,
+    "language": "auto",
+    "output_directory": "source",
+    "output_conflict": "ask",
+    "device": "auto",
+    "default_asr_provider": "local-faster-whisper",
+    "default_translation_provider": "local-nllb-ct2",
+    "default_asr_model": "whisper-small",
+    "default_translation_model": "nllb-200-distilled-600M",
+    "word_timestamps": false,
+    "keep_temp": false,
+    "openai_compatible": {
+      "base_url": "https://api.openai.com/v1",
+      "model": "",
+      "upload_format": "wav",
+      "api_key_alias": "openai-default",
+      "api_key_status": "missing"
+    }
+  },
+  "warnings": []
+}
+```
+
+`PATCH /v1/config` 使用 merge patch 语义：只更新传入字段，未传字段保持不变。daemon 必须 validate patch 后再写入配置文件。成功后返回更新后的 config view model。
+
+示例 request：
+
+```json
+{
+  "schema_version": 1,
+  "patch": {
+    "output_conflict": "skip",
+    "device": "cpu",
+    "word_timestamps": true,
+    "openai_compatible": {
+      "base_url": "http://localhost:8000/v1",
+      "model": "Systran/faster-whisper-small"
+    }
+  }
+}
+```
+
+示例 success：
+
+```json
+{
+  "schema_version": 1,
+  "ok": true,
+  "result": {
+    "config_schema_version": 1,
+    "output_conflict": "skip",
+    "device": "cpu",
+    "word_timestamps": true,
+    "openai_compatible": {
+      "base_url": "http://localhost:8000/v1",
+      "model": "Systran/faster-whisper-small",
+      "upload_format": "wav",
+      "api_key_alias": "openai-default",
+      "api_key_status": "missing"
+    }
+  },
+  "warnings": []
+}
+```
+
+示例 validation error：
+
+```json
+{
+  "schema_version": 1,
+  "ok": false,
+  "error": {
+    "code": "invalid_config",
+    "message": "configuration patch is invalid.",
+    "action_hint": "Review the highlighted settings and try again.",
+    "details": {
+      "fields": [
+        {
+          "path": "device",
+          "code": "unsupported_value",
+          "message": "device must be one of auto, cpu, cuda."
+        }
+      ]
+    }
+  },
+  "warnings": []
+}
+```
+
+要求：
+
+- 配置写入必须 validate 后再写。
+- 配置写入必须 atomic write：写临时文件，flush 成功后 rename/replace。
+- 写失败保留旧配置。
+- 配置文件包含 schema version 或等效版本字段。
+- 读取损坏配置时返回可恢复错误，并提供使用默认配置、打开配置位置或备份损坏文件的恢复动作。
+- masked key、key alias、环境变量名和 keychain reference 不能被误当作 raw API key 写回。
+- 配置文件不得保存 raw API key、Authorization、daemon token、signed URL credential 或 proxy credential。
+- `PATCH /v1/config` 成功后，daemon provider/model/job runtime 必须读取到更新后的配置或触发配置刷新。
+
+### Secret Boundary
+
+Round 12 的 provider secret 由 Electron main process 管理的 secret storage 保存。首选 keytar；如果 keytar 与当前 Electron/Node ABI 不兼容，可以 fallback 到 Electron safeStorage + 本地加密 secret store。Linux safeStorage 的 `basic_text` backend 不可静默宣称为安全存储。
+
+daemon 规则：
+
+- daemon 启动时不注入全部 provider secret。
+- renderer 永远不读取 raw secret。
+- 创建 API job 或 live provider test 时，Electron main 可以读取 secret，并通过 main-controlled transient secret channel 传给 daemon 或 job runner。
+- 推荐 transient secret 使用一次性 secret reference / handle；默认单次使用、短 TTL，建议 5 分钟，使用后立即失效。
+- raw secret 不得写入 daemon persisted config、job metadata、events、logs、stdout、stderr、errors report 或 renderer state。
+- `secret_ref` 本身也不得原样持久化到 job metadata、events、logs、stdout、stderr 或 renderer state；需要落盘时只能写入 `[REDACTED_SECRET_REF]` 或等效脱敏占位。
+- 如果 Round 12 暂不实现 daemon secret channel，API job 只能临时继续使用 `api_key_env`；这不是最终验收路径。
+
+Round 12 推荐由 Electron main process 生成和持有 `secret_ref`，daemon 只接收 opaque reference。daemon 不应提供可列出或读取 secret 的 API。实现方式：
+
+1. Electron main 从 secret storage 读取 raw provider secret。
+2. Electron main 创建一次性 `secret_ref`，例如 `secretref_<random>`。
+3. Electron main 将 `secret_ref -> raw secret` 保存到 main process 内存 map，设置短 TTL，建议 5 分钟。
+4. Electron main 创建 job 或 live provider test 时，只把 `secret_ref` 放入 daemon request。
+5. daemon job runner 需要 secret 时，通过 main-controlled transient secret channel 按 `secret_ref` 请求 secret。
+6. Electron main 验证 `secret_ref` 未过期、未消费、调用来源属于当前 daemon session，然后返回 raw secret 给 main-controlled adapter 或 job runner。
+7. `secret_ref` 成功消费后立即失效；job 取消、失败、完成、daemon repair 或 app 退出时也必须清理。
+
+失败规则：
+
+- `secret_ref` 过期：返回 `secret_ref_expired`。
+- `secret_ref` 重复使用：返回 `secret_ref_consumed`。
+- `secret_ref` 不存在：返回 `secret_ref_not_found`。
+- daemon session 不匹配：返回 `secret_ref_invalid_session`。
+- secret storage 读取失败：返回 `secret_unavailable`。
+
+请求中只允许传 secret reference：
+
+```json
+{
+  "options": {
+    "secret_ref": "secretref_opaque_once"
+  }
+}
+```
+
+`secret_ref` 是不透明、短期、一次性引用，不得可逆推出 provider secret。
+
+### Desktop Client Contract Updates
+
+Round 12 需要同步更新 `desktop/shared/contracts/types.ts`：
+
+- `JobKind` 增加 `model_install`。
+- `ModelStatus` 增加可选 `installJobId?: string`。
+- `FastSubClient` 增加 `createModelInstallJob(modelId): Promise<JobDetail>`。
+- `installModel(modelId): Promise<ModelStatus>` 仅保留兼容语义，内部创建 `model_install` job 后返回 `installing` 状态和 `installJobId`。
+- mock client、daemon client、fake fixtures 和 tests 必须共享同一份 contract。
+
+### Round 12 Fixture Requirements
+
+12.1 完成时应提供 fake daemon fixtures。建议位置：
+
+```text
+desktop/test/fixtures/daemon/round12/
+```
+
+如果 Go 侧也需要 contract fixture，可同步放置或复制到：
+
+```text
+go-docs/fixtures/daemon/round12/
+```
+
+fixtures 至少覆盖：
+
+- `model_install` queued/running/progress/succeeded/failed/canceled。
+- `translate_srt` succeeded/failed/canceled。
+- `burn_in` succeeded/failed/canceled。
+- SSE `events_lost` 后 REST job snapshot。
+- 401 unauthorized。
+- daemon disconnected。
+- config read/write success、validation failure、atomic write failure、corrupt config recovery。
+- secret configured/missing/deleted/masked 状态。
+- secret_ref success、expired、consumed、not_found、invalid_session、secret_unavailable。
+- redaction：API key、Authorization、daemon token、signed URL、proxy credential 不出现在 JSON、logs、events 或测试快照。
+
+Round 12 实现顺序规则：
+
+- 12.1 contract 和 fake fixtures 未完成前，Electron adapter 不得猜测新增 request/response shape。
+- 12.1 未完成前，不创建真实 `DaemonFastSubClient` adapter，不切换 UI 默认运行模式。
+
 ## UI Integration Notes
 
 桌面 UI 应该：
