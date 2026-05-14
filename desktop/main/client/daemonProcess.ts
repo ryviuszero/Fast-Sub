@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { redactSecretText } from "../../shared/privacy/redaction";
+import { defaultSecretStorePath, SafeStorageSecretStore } from "./secretStore";
 import { daemonTransportLog } from "./transportLog";
 import { uiError } from "./uiError";
 
@@ -79,18 +80,19 @@ export class DaemonProcessManager {
     return { sessionId: randomUUID(), baseUrl, token, pid: process.pid, owned: false };
   }
 
-  private startOwnedDaemon(): Promise<DaemonSession> {
+  private async startOwnedDaemon(): Promise<DaemonSession> {
     const daemon = resolveDaemonCommand();
     if (!daemon) {
       throw uiError("daemon_runtime_missing", "本地服务未找到", "没有找到 fast-sub-go，也无法定位开发环境 Go 入口。请先构建 Go daemon，或设置 FAST_SUB_GO 指向 fast-sub-go 可执行文件。", "打开诊断");
     }
     const args = [...daemon.argsPrefix, "serve", "--host", "127.0.0.1", "--port", "0", "--json-ready", "--max-running-jobs", "1"];
     daemonTransportLog("daemon.spawn", { command: daemon.label, cwd: daemon.cwd ?? process.cwd(), args: ["serve", "--host", "127.0.0.1", "--port", "0", "--json-ready", "--max-running-jobs", "1"] });
+    const env = await scrubbedEnv();
     const child = spawn(daemon.command, args, {
       cwd: daemon.cwd,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
-      env: scrubbedEnv()
+      env
     });
     this.child = child;
     const stderrTail: string[] = [];
@@ -171,13 +173,40 @@ function resolveDaemonCommand(): DaemonCommand | null {
   return null;
 }
 
-function scrubbedEnv(): NodeJS.ProcessEnv {
+async function scrubbedEnv(): Promise<NodeJS.ProcessEnv> {
   const keep = ["PATH", "Path", "SYSTEMROOT", "SystemRoot", "TEMP", "TMP", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "HOMEDRIVE", "HOMEPATH", "FAST_SUB_HOME", "FAST_SUB_CONFIG", "FAST_SUB_GO_CONFIG", "GOCACHE", "GOMODCACHE", "GOPATH"];
   const env: NodeJS.ProcessEnv = {};
   for (const key of keep) {
     if (process.env[key]) {
       env[key] = process.env[key];
     }
+  }
+  env.FAST_SUB_GO_CONFIG = env.FAST_SUB_GO_CONFIG ?? join(app.getPath("userData"), "fast-sub-go.toml");
+  const store = new SafeStorageSecretStore(defaultSecretStorePath());
+  const secrets = await store.listEnvSecrets();
+  for (const [key, value] of Object.entries(secrets)) {
+    env[key] = value;
+  }
+  const legacyOpenAISecret = secrets.FAST_SUB_OPENAI_API_KEY ?? secrets["openai-default"];
+  if (legacyOpenAISecret && !env.FAST_SUB_OPENAI_API_KEY) {
+    env.FAST_SUB_OPENAI_API_KEY = legacyOpenAISecret;
+  }
+  if (legacyOpenAISecret && !env.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY) {
+    env.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY = legacyOpenAISecret;
+  }
+  if (legacyOpenAISecret && !env.FAST_SUB_OPENAI_CHAT_API_KEY) {
+    env.FAST_SUB_OPENAI_CHAT_API_KEY = legacyOpenAISecret;
+  }
+  if (secrets.FAST_SUB_OPENAI_CHAT_API_KEY && !env.OPENAI_API_KEY) {
+    env.OPENAI_API_KEY = secrets.FAST_SUB_OPENAI_CHAT_API_KEY;
+  } else if (legacyOpenAISecret && !env.OPENAI_API_KEY) {
+    env.OPENAI_API_KEY = legacyOpenAISecret;
+  }
+  if (secrets.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY && !env.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY) {
+    env.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY = secrets.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY;
+  }
+  if (secrets.FAST_SUB_OPENAI_CHAT_API_KEY && !env.FAST_SUB_OPENAI_CHAT_API_KEY) {
+    env.FAST_SUB_OPENAI_CHAT_API_KEY = secrets.FAST_SUB_OPENAI_CHAT_API_KEY;
   }
   return env;
 }

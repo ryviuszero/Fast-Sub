@@ -105,6 +105,7 @@ function outputPathFromExistsMessage(message: string): string {
 
 function jobFromRecord(record: Record<string, unknown>): JobDetail {
   const status = stringField(record, "status", "queued");
+  const normalizedStatus = status === "running" || status === "succeeded" || status === "failed" || status === "canceled" || status === "interrupted" ? status : "queued";
   const inputPath = stringField(record, "input_path", "");
   const outputPath = stringField(record, "output_path", "");
   const title = stringField(record, "title", inputPath.split(/[\\/]/).pop() || stringField(record, "current_file", "字幕任务"));
@@ -112,11 +113,11 @@ function jobFromRecord(record: Record<string, unknown>): JobDetail {
     id: stringField(record, "job_id", stringField(record, "id", "")),
     displayId: "任务",
     type: "transcribe",
-    status: status === "running" || status === "succeeded" || status === "failed" || status === "canceled" || status === "interrupted" ? status : "queued",
+    status: normalizedStatus,
     statusLabel: status === "succeeded" ? "已完成" : status === "failed" ? "已失败" : status === "canceled" ? "已取消" : "等待中",
     title,
     currentFile: stringField(record, "current_file", inputPath),
-    progressPercent: numberField(record, "percent", 0),
+    progressPercent: progressPercentForStatus(normalizedStatus, numberField(record, "percent", 0)),
     stageLabel: stringField(record, "stage_label", ""),
     createdAt: stringField(record, "created_at", ""),
     inputPaths: inputPath ? [inputPath] : [],
@@ -125,6 +126,13 @@ function jobFromRecord(record: Record<string, unknown>): JobDetail {
     modelName: stringField(record, "model", ""),
     logs: []
   };
+}
+
+function progressPercentForStatus(status: JobDetail["status"], percent: number): number {
+  if (status === "succeeded") {
+    return 100;
+  }
+  return Math.max(0, Math.min(100, percent));
 }
 
 export function mapDaemonEventToJobEvent(fixture: DaemonEventFixture): JobEvent | null {

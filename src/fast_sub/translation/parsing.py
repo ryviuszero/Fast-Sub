@@ -17,8 +17,31 @@ def parse_chat_translations(content: str, *, expected_ids: list[int]) -> dict[in
     try:
         payload = json.loads(cleaned)
     except json.JSONDecodeError as exc:
+        if len(expected_ids) == 1:
+            text = _plain_text_translation(cleaned)
+            if text:
+                return {expected_ids[0]: text}
         raise ValueError("Could not parse provider JSON response.") from exc
-    items = payload.get("translations")
+    if isinstance(payload, list):
+        if len(expected_ids) == 1 and len(payload) == 1 and isinstance(payload[0], str):
+            text = _plain_text_translation(payload[0])
+            if text:
+                return {expected_ids[0]: text}
+        items = payload
+    elif isinstance(payload, dict):
+        items = payload.get("translations") or payload.get("results") or payload.get("items")
+        if items is None and len(expected_ids) == 1:
+            text = (
+                payload.get("text")
+                or payload.get("translation")
+                or payload.get("translated_text")
+                or payload.get("target")
+                or payload.get(str(expected_ids[0]))
+            )
+            if isinstance(text, str) and text.strip():
+                return {expected_ids[0]: text.strip()}
+    else:
+        items = None
     if not isinstance(items, list):
         raise ValueError("Provider JSON response is missing translations list.")
     translations: dict[int, str] = {}
@@ -31,6 +54,24 @@ def parse_chat_translations(content: str, *, expected_ids: list[int]) -> dict[in
     if any(not text for text in translations.values()):
         raise ValueError("Provider response contains empty translation text.")
     return translations
+
+
+def _plain_text_translation(value: str) -> str:
+    text = value.strip()
+    if not text:
+        return ""
+    text = re.sub(r"^```(?:text|markdown)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
+    text = re.sub(
+        r"^\s*(?:translation|translated text|译文|翻译)\s*[:：]\s*", "", text, flags=re.IGNORECASE
+    )
+    text = re.sub(r"^\s*(?:id\s*)?\d+\s*[.)、:：-]\s*", "", text, flags=re.IGNORECASE)
+    text = text.strip().strip('"').strip()
+    if not text:
+        return ""
+    if text.startswith("{") or text.startswith("["):
+        return ""
+    return text
 
 
 __all__ = ["parse_chat_translations"]

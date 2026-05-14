@@ -37,7 +37,7 @@ Round 11 不接真实 daemon，不做真实模型安装，不直接调用 ffmpeg
 6. 在主界面隐藏 daemon、worker、provider runtime、SSE、JSON envelope 等技术细节。
 7. 在任务队列中清楚展示等待中、正在生成、已完成、已失败和已取消状态。
 8. 将翻译已有 SRT 和字幕烧录作为独立子功能，不干扰主生成流程。
-9. 在设置页提供模型、API 服务、provider、诊断和 benchmark 入口。
+9. 在设置页提供模型、Provider、诊断和 benchmark 入口；API key、Base URL 和模型名配置归入对应 Provider 卡片。
 10. 对远程音频上传或字幕文本上传提供明确、不可绕过的确认流程。
 
 ## 核心用户流程
@@ -93,7 +93,8 @@ Round 11 不接真实 daemon，不做真实模型安装，不直接调用 ffmpeg
 - ASR 模型选择。
 - 翻译模型选择。
 - 设备选择：自动、CPU、GPU。
-- 输出内容：原字幕、翻译字幕、双语字幕、烧录视频。
+- 输出内容：原字幕、翻译字幕、双语字幕。
+- 烧录视频：独立开关，开启后在字幕生成完成后额外生成烧录视频。
 - 生成模式：只转写、转写后翻译、只翻译 SRT。
 - 转写方式：本地或远程。
 - 翻译方式：本地、网页或 API。
@@ -135,8 +136,7 @@ Round 11 不接真实 daemon，不做真实模型安装，不直接调用 ffmpeg
 
 - 通用设置：默认语言、输出位置、输出冲突、设备、输出类型。
 - 模型管理：安装、校验、维护、重试、占用空间。
-- API 服务：API key alias、base URL、模型、上传格式、静态检查/live 测试、上传前确认；用户设置直接映射到 Fast Sub 配置文件，secret 只保存 alias/masked 状态。
-- Provider 管理：STT/translation provider、local/api/web/native 分类、可用性、隐私说明。
+- Provider 管理：按 `转写 Provider` / `翻译 Provider` 分组展示 local/api/web/native provider；API key alias、base URL、模型名、上传确认、静态检查/live 测试都归属对应 Provider 卡片，secret 只保存 alias/masked 状态。
 - 诊断：daemon 状态、一键修复、redacted logs、结构化错误、最近事件。
 - Benchmark：第一版只保留规划入口或诊断入口，不进入主流程。
 
@@ -153,7 +153,7 @@ Round 11 不接真实 daemon，不做真实模型安装，不直接调用 ffmpeg
 
 - 默认本地处理。
 - renderer 不直接访问 Node.js、shell、daemon token 或 API key。
-- API key 使用 OS keychain 或等效安全存储。
+- API key 使用 Electron main process 管理的 `safeStorage` + 本地加密 secret store 或等效安全存储；renderer 只看到 alias/masked 状态。
 - localStorage 不保存 secret。
 - 远程 provider 使用前必须确认上传内容。
 - 诊断信息必须 redacted token、API key、Authorization、signed URL 和 proxy credential。
@@ -168,10 +168,10 @@ Round 11 不接真实 daemon，不做真实模型安装，不直接调用 ffmpeg
 - 任务队列和任务详情。
 - 翻译已有 SRT 子功能。
 - 字幕烧录子功能。
-- 设置页：通用、模型管理、API 服务、Provider、诊断、Benchmark 入口。
+- 设置页：通用、模型管理、Provider、诊断、Benchmark 入口；API 服务不再作为独立用户入口。
 - `FastSubClient` 接口设计。
 - `MockFastSubClient` 实现，用于完整 mock 流程。
-- `DaemonFastSubClient` 设计和后续接入。
+- `DaemonFastSubClient` 真实 daemon 接入、生命周期、REST/SSE job 和配置读写。
 - Electron main/preload 安全边界。
 - 本地设置和安全存储策略。
 - 远程 provider 上传确认 UI。

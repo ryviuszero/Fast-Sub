@@ -41,6 +41,8 @@ export type RenderProps = {
   setUiFontStyle: (style: UiFontStyle) => void;
   files: MediaFile[];
   setFiles: (files: MediaFile[]) => void;
+  fileImportPending: boolean;
+  fileImportCount: number | null;
   outputDirectoryLabel: string;
   asrReady: boolean;
   translationReady: boolean;
@@ -69,4 +71,5 @@ export type RenderProps = {
   repairDaemon: () => Promise<void>;
   testProvider: (id: string, mode: "static" | "live") => Promise<ProviderStatus>;
   updateConfig: (patch: Partial<ConfigViewModel>) => Promise<void>;
+  saveProviderSecret: (providerId: string, alias: string, rawSecret: string) => Promise<void>;
 };

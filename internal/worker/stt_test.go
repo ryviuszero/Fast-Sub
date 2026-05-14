@@ -97,6 +97,76 @@ func main() {
 	}
 }
 
+func TestRunSTTForcesPythonUTF8Env(t *testing.T) {
+	command := fakeWorkerBinary(t, `package main
+import (
+  "encoding/json"
+  "os"
+)
+func main() {
+  if os.Getenv("PYTHONUTF8") != "1" || os.Getenv("PYTHONIOENCODING") != "utf-8:replace" {
+    os.Exit(7)
+  }
+  var responsePath string
+  for i := 1; i < len(os.Args); i++ {
+    if os.Args[i] == "--response" && i+1 < len(os.Args) { responsePath = os.Args[i+1]; i++ }
+  }
+  raw, _ := json.Marshal(map[string]any{"schema_version": 1, "language": "zh", "segments": []map[string]any{{"start_sec": 0, "end_sec": 1, "text": "中文 ok"}}})
+  _ = os.WriteFile(responsePath, raw, 0600)
+}
+`)
+	dir := t.TempDir()
+	_, appErr := Runner{Command: command}.RunSTT(context.Background(), filepath.Join(dir, "request.json"), filepath.Join(dir, "response.json"), STTRequest{
+		JobID:       "job_utf8",
+		AudioPath:   filepath.Join(dir, "audio.wav"),
+		ModelPath:   filepath.Join(dir, "model"),
+		Language:    "zh",
+		Device:      "auto",
+		ComputeType: "auto",
+		BatchSize:   1,
+	})
+	if appErr != nil {
+		t.Fatal(appErr)
+	}
+}
+
+func TestRunSTTTreatsEmptySegmentsAsEmptySubtitle(t *testing.T) {
+	command := fakeWorkerBinary(t, `package main
+import (
+  "encoding/json"
+  "os"
+)
+func main() {
+  var responsePath string
+  for i := 1; i < len(os.Args); i++ {
+    if os.Args[i] == "--response" && i+1 < len(os.Args) { responsePath = os.Args[i+1]; i++ }
+  }
+  raw, _ := json.Marshal(map[string]any{"schema_version": 1, "error": map[string]any{"code": "EMPTY_SEGMENTS", "message": "faster-whisper returned no segments.", "retryable": false, "details": map[string]any{}}})
+  _ = os.WriteFile(responsePath, raw, 0600)
+  os.Exit(1)
+}
+`)
+	dir := t.TempDir()
+	response, appErr := Runner{Command: command}.RunSTT(context.Background(), filepath.Join(dir, "request.json"), filepath.Join(dir, "response.json"), STTRequest{
+		JobID:       "job_empty",
+		AudioPath:   filepath.Join(dir, "audio.wav"),
+		ModelPath:   filepath.Join(dir, "model"),
+		Language:    "auto",
+		Device:      "auto",
+		ComputeType: "auto",
+		BatchSize:   1,
+	})
+	if appErr != nil {
+		t.Fatal(appErr)
+	}
+	if len(response.Segments) != 0 {
+		t.Fatalf("segments = %#v", response.Segments)
+	}
+	if len(response.Warnings) == 0 {
+		t.Fatal("expected empty subtitle warning")
+	}
+}
+
 func fakeWorkerBinary(t *testing.T, source string) string {
 	t.Helper()
 	dir := t.TempDir()

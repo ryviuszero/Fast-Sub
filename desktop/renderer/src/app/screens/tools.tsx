@@ -1,21 +1,27 @@
 import { useRef, useState, type DragEvent } from "react";
 import type { RenderProps } from "../types";
-import { Chrome, KV, Segment, SettingRow, SettingsEntry } from "../components";
+import { Chrome, SettingRow, SettingsEntry } from "../components";
+import { useT } from "../i18n";
 
 export function ToolTranslate({ setScreen, startToolJob, translationReady, providers, config, updateConfig }: RenderProps) {
+  const t = useT();
   const srtInputRef = useRef<HTMLInputElement | null>(null);
-  const [srtName, setSrtName] = useState("尚未选择 SRT");
+  const [srtName, setSrtName] = useState(t("No SRT selected"));
+  const [srtPath, setSrtPath] = useState("");
   const [translateStatus, setTranslateStatus] = useState<"idle" | "done" | "failed">("idle");
-  const translationProvider = providers.find((provider) => provider.id === config.translationProvider && provider.capability === "translation");
+  const translationProviders = providers.filter((provider) => provider.capability === "translation");
+  const translationProvider = translationProviders.find((provider) => provider.id === config.translationProvider);
+  const usesWebTranslation = translationProvider?.id === "web-bing" || translationProvider?.id === "web-google";
   const providerReady = Boolean(translationProvider?.enabled && translationProvider.state === "available");
   const canTranslate = translationReady && providerReady;
   const readinessMessage = !providerReady
-    ? "当前翻译 Provider 未配置或不可用，请先到 Provider 管理中配置翻译能力。"
-    : "当前默认翻译模型未准备好，请先配置翻译 Provider 或安装默认翻译模型。";
+    ? t("Translation provider unavailable hint")
+    : t("Default translation model not ready hint");
   const pickSrt = (files: FileList | null) => {
     const file = files?.[0];
     if (file) {
       setSrtName(file.name);
+      setSrtPath(pathForFile(file));
       setTranslateStatus("idle");
     }
     if (srtInputRef.current) {
@@ -31,55 +37,82 @@ export function ToolTranslate({ setScreen, startToolJob, translationReady, provi
       setTranslateStatus("idle");
       return;
     }
-    if (srtName === "尚未选择 SRT") {
+    if (!srtPath) {
       setTranslateStatus("failed");
       return;
     }
-    await startToolJob("translate_srt", [`mock-input://${srtName}`]);
-    setTranslateStatus("done");
+    await startToolJob("translate_srt", [srtPath]);
   };
   return (
     <div className="wf">
-      <Chrome title="翻译字幕" back onBack={() => setScreen("main-empty")} />
+      <Chrome title={t("Translated subtitles")} back onBack={() => setScreen("main-empty")} />
       <main className="content-flow">
-        <div><h2>翻译已有 SRT</h2><span className="caption">独立子功能：不影响一键生成主流程。</span></div>
-        <input ref={srtInputRef} aria-label="选择 SRT 文件" className="native-file-picker" type="file" accept=".srt,text/plain" onChange={(event) => pickSrt(event.currentTarget.files)} />
-        <section className="drop-zone small" onClick={() => srtInputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={dropSrt}><h2>拖入 .srt 文件</h2><span>{srtName}</span><div className="row gap-8"><button className="btn" onClick={(event) => { event.stopPropagation(); srtInputRef.current?.click(); }}>选择 SRT</button><button className="btn ghost" onClick={(event) => event.stopPropagation()}>粘贴字幕文本</button></div></section>
+        <div><h2>{t("Translate existing SRT")}</h2><span className="caption">{t("Standalone translate tool description")}</span></div>
+        <input ref={srtInputRef} aria-label={t("Choose SRT file")} className="native-file-picker" type="file" accept=".srt,.txt,.text,.md,.markdown,text/plain,text/markdown" onChange={(event) => pickSrt(event.currentTarget.files)} />
+        <section className="drop-zone small" onClick={() => srtInputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={dropSrt}><h2>{t("Drop SRT file")}</h2><span>{srtName}</span><div className="row gap-8"><button className="btn" onClick={(event) => { event.stopPropagation(); srtInputRef.current?.click(); }}>{t("Choose SRT")}</button><button className="btn ghost" onClick={(event) => event.stopPropagation()}>{t("Paste subtitle text")}</button></div></section>
         {!canTranslate && (
           <section className="panel warn-panel">
-            <h2>翻译环境未准备好</h2>
+            <h2>{t("Translation environment not ready")}</h2>
             <p>{readinessMessage}</p>
             <div className="row gap-8">
-              <button className="btn primary" onClick={() => setScreen("settings-providers")}>配置翻译 Provider</button>
-              <button className="btn ghost" onClick={() => setScreen("settings-models")}>查看模型</button>
+              <button className="btn primary" onClick={() => setScreen("settings-providers")}>{t("Configure translation Provider")}</button>
+              <button className="btn ghost" onClick={() => setScreen("settings-models")}>{t("View models")}</button>
             </div>
           </section>
         )}
-        <section className="panel"><h3>翻译设置</h3><SettingRow label="源语言"><select value={config.defaultLanguage} onChange={(event) => void updateConfig({ defaultLanguage: event.currentTarget.value })}><option value="auto">自动识别</option><option value="zh">中文</option><option value="en">英语</option></select></SettingRow><SettingRow label="目标语言"><select value={config.targetLanguage} onChange={(event) => void updateConfig({ targetLanguage: event.currentTarget.value })}><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></SettingRow><SettingRow label="翻译方式"><Segment items={["本地", "网页", "API"]} active={0} /></SettingRow></section>
-        {translateStatus === "done" && (
-          <section className="panel ok-card">
-            <h2>翻译完成</h2>
-            <KV k="输出文件" v={srtName.replace(/\.srt$/i, ".zh.srt")} />
-            <KV k="模式" v="本地 mock 翻译" />
-          </section>
-        )}
-        {translateStatus === "failed" && <section className="panel warn-panel"><h2>翻译失败</h2><p>请先选择一个 SRT 文件。</p></section>}
+        <section className="panel">
+          <h3>{t("Translation settings")}</h3>
+          <SettingRow label={t("Source language")}><select value={config.defaultLanguage} onChange={(event) => void updateConfig({ defaultLanguage: event.currentTarget.value })}><option value="auto">{t("Auto detect")}</option><option value="zh">{t("Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></SettingRow>
+          <SettingRow label={t("Target language")}><select value={config.targetLanguage} onChange={(event) => void updateConfig({ targetLanguage: event.currentTarget.value })}><option value="zh">{t("Simplified Chinese")}</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></SettingRow>
+          <div className="setting-row setting-row-top">
+            <span>{t("Translation Provider")}</span>
+            <div className="setting-control-with-note">
+              <select aria-label={t("Translation Provider")} value={config.translationProvider} onChange={(event) => void updateConfig({ translationProvider: event.currentTarget.value })}>
+                {translationProviders.map((provider) => <option key={provider.id} value={provider.id}>{providerOptionLabel(provider, t)}</option>)}
+              </select>
+              {usesWebTranslation && <p className="caption no-margin">{t("Web translation large file warning body")}</p>}
+            </div>
+          </div>
+        </section>
+        {translateStatus === "failed" && <section className="panel warn-panel"><h2>{t("Translation failed")}</h2><p>{t("Choose SRT file first")}</p></section>}
       </main>
-      <div className="action-footer"><SettingsEntry onClick={() => setScreen("settings-general")} /><div className="row gap-8"><button className="btn ghost" onClick={() => setTranslateStatus("failed")}>查看错误记录</button><button className="btn primary" disabled={!canTranslate} onClick={() => void startTranslate()}>开始翻译</button></div></div>
+      <div className="action-footer"><SettingsEntry onClick={() => setScreen("settings-general")} /><div className="row gap-8"><button className="btn primary" disabled={!canTranslate} onClick={() => void startTranslate()}>{t("Start translation")}</button></div></div>
     </div>
   );
 }
 
+function providerOptionLabel(provider: RenderProps["providers"][number], t: (key: string) => string): string {
+  const prefix = provider.kind === "local" ? t("Local") : provider.kind === "web" ? t("Web") : provider.kind === "api" ? "API" : "Native";
+  const state = provider.state === "available" ? "" : ` (${providerStateLabel(provider.state, t)})`;
+  return `${prefix} · ${provider.name}${state}`;
+}
+
+function providerStateLabel(state: RenderProps["providers"][number]["state"], t: (key: string) => string): string {
+  switch (state) {
+    case "missing_dependency": return t("Missing dependency");
+    case "missing_model": return t("Missing model");
+    case "missing_api_key": return t("Missing API key");
+    case "invalid_config": return t("Config needs review");
+    case "disabled": return t("Disabled");
+    case "not_implemented": return t("Unavailable");
+    default: return t("Available");
+  }
+}
+
 export function ToolBurnIn({ setScreen, startToolJob }: RenderProps) {
+  const t = useT();
   const videoInputRef = useRef<HTMLInputElement | null>(null);
   const subtitleInputRef = useRef<HTMLInputElement | null>(null);
-  const [videoName, setVideoName] = useState("尚未选择视频");
-  const [subtitleName, setSubtitleName] = useState("尚未选择字幕");
+  const [videoName, setVideoName] = useState(t("No video selected"));
+  const [videoPath, setVideoPath] = useState("");
+  const [subtitleName, setSubtitleName] = useState(t("No subtitle selected"));
+  const [subtitlePath, setSubtitlePath] = useState("");
   const [burnStatus, setBurnStatus] = useState<"idle" | "done" | "failed">("idle");
   const pickVideo = (files: FileList | null) => {
     const file = files?.[0];
     if (file) {
       setVideoName(file.name);
+      setVideoPath(pathForFile(file));
       setBurnStatus("idle");
     }
     if (videoInputRef.current) {
@@ -90,40 +123,40 @@ export function ToolBurnIn({ setScreen, startToolJob }: RenderProps) {
     const file = files?.[0];
     if (file) {
       setSubtitleName(file.name);
+      setSubtitlePath(pathForFile(file));
       setBurnStatus("idle");
     }
     if (subtitleInputRef.current) {
       subtitleInputRef.current.value = "";
     }
   };
-  const canBurn = videoName !== "尚未选择视频" && subtitleName !== "尚未选择字幕";
+  const canBurn = Boolean(videoPath && subtitlePath);
   const startBurnIn = async () => {
     if (!canBurn) {
       setBurnStatus("failed");
       return;
     }
-    await startToolJob("burn_in", [`mock-input://${videoName}`, `mock-input://${subtitleName}`]);
-    setBurnStatus("done");
+    await startToolJob("burn_in", [videoPath, subtitlePath]);
   };
   return (
     <div className="wf">
-      <Chrome title="字幕烧录" back onBack={() => setScreen("main-empty")} />
+      <Chrome title={t("Burn-in subtitles")} back onBack={() => setScreen("main-empty")} />
       <main className="content-flow">
-        <div><h2>烧录字幕到视频</h2><span className="caption">独立子功能：输出带硬字幕的视频文件。</span></div>
-        <input ref={videoInputRef} aria-label="选择烧录视频文件" className="native-file-picker" type="file" accept=".mp4,.mov,.mkv,video/*" onChange={(event) => pickVideo(event.currentTarget.files)} />
-        <input ref={subtitleInputRef} aria-label="选择烧录字幕文件" className="native-file-picker" type="file" accept=".srt,.ass,.vtt,text/plain" onChange={(event) => pickSubtitle(event.currentTarget.files)} />
-        <div className="two-col"><section className="drop-zone small" onClick={() => videoInputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); pickVideo(event.dataTransfer.files); }}><h2>选择视频</h2><span>{videoName}</span></section><section className="drop-zone small" onClick={() => subtitleInputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); pickSubtitle(event.dataTransfer.files); }}><h2>选择字幕</h2><span>{subtitleName}</span></section></div>
-        <section className="panel"><SettingRow label="字号"><Segment items={["小", "中", "大"]} active={1} /></SettingRow><SettingRow label="编码 preset"><Segment items={["快速", "均衡", "质量"]} active={1} /></SettingRow></section>
-        {burnStatus === "done" && (
-          <section className="panel ok-card">
-            <h2>烧录完成</h2>
-            <KV k="输出文件" v={videoName.replace(/\.[^.]+$/, ".burned.mp4")} />
-            <KV k="字幕" v={subtitleName} />
-          </section>
-        )}
-        {burnStatus === "failed" && <section className="panel warn-panel"><h2>烧录失败</h2><p>请先选择视频和字幕文件。</p></section>}
+        <div><h2>{t("Burn subtitles into video")}</h2><span className="caption">{t("Standalone burn-in tool description")}</span></div>
+        <input ref={videoInputRef} aria-label={t("Choose burn-in video file")} className="native-file-picker" type="file" accept=".mp4,.mov,.mkv,video/*" onChange={(event) => pickVideo(event.currentTarget.files)} />
+        <input ref={subtitleInputRef} aria-label={t("Choose burn-in subtitle file")} className="native-file-picker" type="file" accept=".srt,.ass,.vtt,text/plain" onChange={(event) => pickSubtitle(event.currentTarget.files)} />
+        <div className="two-col"><section className="drop-zone small" onClick={() => videoInputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); pickVideo(event.dataTransfer.files); }}><h2>{t("Choose video")}</h2><span>{videoName}</span></section><section className="drop-zone small" onClick={() => subtitleInputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); pickSubtitle(event.dataTransfer.files); }}><h2>{t("Choose subtitle")}</h2><span>{subtitleName}</span></section></div>
+        {burnStatus === "failed" && <section className="panel warn-panel"><h2>{t("Burn-in failed")}</h2><p>{t("Choose video and subtitle first")}</p></section>}
       </main>
-      <div className="action-footer"><SettingsEntry onClick={() => setScreen("settings-general")} /><div className="row gap-8"><button className="btn ghost" onClick={() => setScreen("main-empty")}>取消</button><button className="btn primary" onClick={() => void startBurnIn()}>开始烧录</button></div></div>
+      <div className="action-footer"><SettingsEntry onClick={() => setScreen("settings-general")} /><div className="row gap-8"><button className="btn ghost" onClick={() => setScreen("main-empty")}>{t("Cancel")}</button><button className="btn primary" onClick={() => void startBurnIn()}>{t("Start burn-in")}</button></div></div>
     </div>
   );
+}
+
+function pathForFile(file: File): string {
+  const bridgePath = window.fastSubSystem?.getPathForFile?.(file);
+  if (bridgePath) {
+    return bridgePath;
+  }
+  return (file as File & { path?: string }).path || file.name;
 }

@@ -87,6 +87,23 @@ describe("daemon event mapping fixture", () => {
     expect(JSON.stringify(mapped)).not.toContain("C:\\Users\\Example");
   });
 
+  it("normalizes succeeded job snapshots to 100 percent", () => {
+    const mapped = mapDaemonEventToJobEvent({
+      event: "queued",
+      data: {
+        status: "succeeded",
+        title: "done.mp3",
+        percent: 93
+      }
+    });
+    expect(mapped?.type).toBe("snapshot");
+    if (mapped?.type !== "snapshot" || !mapped.job) {
+      throw new Error("expected snapshot event");
+    }
+    expect(mapped.job.status).toBe("succeeded");
+    expect(mapped.job.progressPercent).toBe(100);
+  });
+
   it("extracts output_exists target path into error details", () => {
     const mapped = mapDaemonEventToJobEvent({
       event: "failed",

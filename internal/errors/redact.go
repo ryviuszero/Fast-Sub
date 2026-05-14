@@ -1,6 +1,9 @@
 package errors
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 var sensitiveMarkers = []string{
 	"authorization",
@@ -10,21 +13,23 @@ var sensitiveMarkers = []string{
 	"secret",
 }
 
+var (
+	authorizationPattern = regexp.MustCompile(`(?i)(authorization\s*:\s*bearer\s+)([^\s,;"}]+)`)
+	bearerPattern        = regexp.MustCompile(`(?i)\b(bearer\s+)([A-Za-z0-9._~+/=-]{8,})`)
+	openAIKeyPattern     = regexp.MustCompile(`sk-[A-Za-z0-9_-]{8,}`)
+	secretFieldPattern   = regexp.MustCompile(`(?i)((?:api[_-]?key|apikey|token|secret|secret_ref|secretref)["']?\s*[:=]\s*)(["']?)([^"'\s,;&}]+)(["']?)`)
+)
+
 // Redact removes obvious secret-bearing values from text.
 func Redact(value string) string {
 	if value == "" {
 		return value
 	}
-	lower := strings.ToLower(value)
-	for _, marker := range sensitiveMarkers {
-		if strings.Contains(lower, marker) {
-			return "[redacted]"
-		}
-	}
-	if strings.Contains(value, "sk-") || strings.Contains(lower, "bearer ") {
-		return "[redacted]"
-	}
-	return value
+	redacted := authorizationPattern.ReplaceAllString(value, `${1}[redacted]`)
+	redacted = bearerPattern.ReplaceAllString(redacted, `${1}[redacted]`)
+	redacted = openAIKeyPattern.ReplaceAllString(redacted, `sk-[redacted]`)
+	redacted = secretFieldPattern.ReplaceAllString(redacted, `${1}${2}[redacted]${4}`)
+	return redacted
 }
 
 // RedactMap recursively redacts secret-looking detail values.

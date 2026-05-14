@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { ConfigViewModel, CreateJobRequest, JobEvent, JobEventHandlers } from "../shared/contracts/types";
+import type { ConfigViewModel, CreateJobRequest, FolderScanOptions, JobEvent, JobEventHandlers } from "../shared/contracts/types";
 
 type SecuritySnapshot = {
   contextIsolation: boolean;
@@ -10,7 +10,7 @@ type SecuritySnapshot = {
 
 const api = {
   selectMediaFiles: (): Promise<string[]> => ipcRenderer.invoke("fast-sub:select-media-files") as Promise<string[]>,
-  selectMediaFolder: (): Promise<string[]> => ipcRenderer.invoke("fast-sub:select-media-folder") as Promise<string[]>,
+  selectMediaFolder: (options?: Partial<FolderScanOptions>): Promise<string[]> => ipcRenderer.invoke("fast-sub:select-media-folder", options) as Promise<string[]>,
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke("fast-sub:select-folder") as Promise<string | null>,
   selectSubtitleOutputPath: (defaultPath: string): Promise<string | null> => ipcRenderer.invoke("fast-sub:select-subtitle-output-path", defaultPath) as Promise<string | null>,
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
@@ -30,6 +30,7 @@ const clientApi = {
   repairDaemon: () => ipcRenderer.invoke("fast-sub-client:repair-daemon"),
   getConfig: () => ipcRenderer.invoke("fast-sub-client:get-config"),
   updateConfig: (patch: Partial<ConfigViewModel>) => ipcRenderer.invoke("fast-sub-client:update-config", patch),
+  saveProviderSecret: (providerId: string, alias: string, rawSecret: string) => ipcRenderer.invoke("fast-sub-client:save-provider-secret", providerId, alias, rawSecret),
   listModels: () => ipcRenderer.invoke("fast-sub-client:list-models"),
   installModel: (modelId: string) => ipcRenderer.invoke("fast-sub-client:install-model", modelId),
   createModelInstallJob: (modelId: string) => ipcRenderer.invoke("fast-sub-client:create-model-install-job", modelId),

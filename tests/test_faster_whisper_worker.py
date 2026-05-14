@@ -254,3 +254,63 @@ def test_empty_segments_is_worker_failure(workdir: Path, monkeypatch: pytest.Mon
         worker.transcribe(make_request(workdir))
 
     assert exc_info.value.code == "EMPTY_SEGMENTS"
+
+
+def test_empty_segments_retries_without_vad(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    class FakeWhisperModel:
+        def __init__(self, model_path: str, *, device: str, compute_type: str) -> None:
+            pass
+
+        def transcribe(self, audio_path: str, **kwargs: object) -> tuple[object, object]:
+            calls.append(dict(kwargs))
+            if kwargs.get("vad_filter") is True:
+                return iter([]), SimpleNamespace(language="en")
+            return (
+                iter([SimpleNamespace(start=0.0, end=1.0, text="recovered", words=[])]),
+                SimpleNamespace(language="en"),
+            )
+
+    fake_module = SimpleNamespace(WhisperModel=FakeWhisperModel)
+    monkeypatch.setattr(worker, "_import_faster_whisper", lambda: fake_module)
+
+    response = worker.transcribe(make_request(workdir, vad="normal"))
+
+    assert [call["vad_filter"] for call in calls] == [True, False]
+    assert response.segments[0].text == "recovered"
+    assert response.warnings == ["No segments returned with VAD; retried with VAD disabled."]
+
+
+def test_vad_off_retries_with_vad_when_clip_timestamps_are_required(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    class FakeWhisperModel:
+        def __init__(self, model_path: str, *, device: str, compute_type: str) -> None:
+            pass
+
+        def transcribe(self, audio_path: str, **kwargs: object) -> tuple[object, object]:
+            calls.append(dict(kwargs))
+            if kwargs.get("vad_filter") is False:
+                raise RuntimeError(
+                    "No clip timestamps found. Set 'vad_filter' to True or provide 'clip_timestamps'."
+                )
+            return (
+                iter([SimpleNamespace(start=0.0, end=1.0, text="recovered", words=[])]),
+                SimpleNamespace(language="en"),
+            )
+
+    fake_module = SimpleNamespace(WhisperModel=FakeWhisperModel)
+    monkeypatch.setattr(worker, "_import_faster_whisper", lambda: fake_module)
+
+    response = worker.transcribe(make_request(workdir, vad="off"))
+
+    assert [call["vad_filter"] for call in calls] == [False, True]
+    assert response.segments[0].text == "recovered"
+    assert response.warnings == [
+        "faster-whisper required clip timestamps with VAD disabled; retried with VAD enabled."
+    ]

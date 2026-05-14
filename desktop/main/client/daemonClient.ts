@@ -144,24 +144,26 @@ function primitiveDetails(value: Record<string, unknown>): Record<string, string
 function mapJob(value: unknown): JobDetail {
   const item = record(value);
   const type = str(item.type, "transcribe") as JobDetail["type"];
-  const status = str(item.status, "queued");
+  const rawStatus = str(item.status, "queued");
   const inputPath = str(item.input_path, "");
   const outputPath = str(item.output_path, "");
-  const result = mapResult(item.result, outputPath);
+  const result = mapResult(item.result, outputPath, { inputPath, type });
+  const finishedAt = str(item.finished_at, "");
+  const status = normalizeJobStatus(rawStatus, finishedAt, result);
   const provider = str(item.provider, "");
   const model = str(item.model, "");
   return {
     id: str(item.job_id, str(item.id, "job")),
     displayId: "任务",
     type,
-    status: (status === "created" ? "queued" : status) as JobDetail["status"],
+    status,
     statusLabel: statusLabel(status),
     title: titleFor(type, inputPath, str(item.model, "")),
     currentFile: inputPath || str(item.model, "模型"),
-    progressPercent: percentFrom(item.progress),
-    stageLabel: stageLabel(str(item.stage, "queued"), type),
+    progressPercent: status === "succeeded" ? 100 : percentFrom(item.progress),
+    stageLabel: status === "succeeded" ? "已完成" : stageLabel(str(item.stage, "queued"), type),
     createdAt: str(item.created_at, "刚刚"),
-    completedAt: str(item.finished_at, ""),
+    completedAt: finishedAt,
     language: result?.language || str(item.language, ""),
     inputPaths: inputPath ? [inputPath] : [],
     outputDirectory: outputPath ? outputPath.replace(/[\\/][^\\/]*$/, "") : "",
@@ -173,14 +175,35 @@ function mapJob(value: unknown): JobDetail {
   };
 }
 
-function mapResult(value: unknown, fallbackOutput = ""): JobResult | undefined {
+function normalizeJobStatus(status: string, finishedAt: string, result?: JobResult): JobDetail["status"] {
+  const normalized = (status === "created" ? "queued" : status) as JobDetail["status"];
+  if (normalized === "queued" || normalized === "running" || normalized === "canceling") {
+    if (finishedAt || hasPersistedResultOutput(result)) {
+      return "succeeded";
+    }
+  }
+  return normalized;
+}
+
+function hasPersistedResultOutput(result?: JobResult): boolean {
+  if (!result?.subtitlePath) {
+    return false;
+  }
+  try {
+    return existsSync(result.subtitlePath);
+  } catch {
+    return false;
+  }
+}
+
+function mapResult(value: unknown, fallbackOutput = "", repairContext: { inputPath?: string; type?: string } = {}): JobResult | undefined {
   const item = record(value);
   if (Object.keys(item).length === 0 && !fallbackOutput) {
     return undefined;
   }
   const outputs = Array.isArray(item.outputs) ? item.outputs.map(record) : [];
   const firstOutput = outputs[0];
-  const outputPath = str(item.subtitle_path, str(item.output_path, str(firstOutput?.path, fallbackOutput)));
+  const outputPath = repairCorruptOutputPath(str(item.subtitle_path, str(item.output_path, str(firstOutput?.path, fallbackOutput))), repairContext.inputPath ?? "", repairContext.type ?? "");
   return {
     subtitlePath: outputPath,
     outputFolder: outputPath ? outputPath.replace(/[\\/][^\\/]*$/, "") : "",
@@ -190,13 +213,59 @@ function mapResult(value: unknown, fallbackOutput = ""): JobResult | undefined {
   };
 }
 
+function repairCorruptOutputPath(outputPath: string, inputPath: string, type: string): string {
+  if (!outputPath || !inputPath || !hasReplacementChar(baseName(outputPath)) || hasReplacementChar(baseName(inputPath))) {
+    return outputPath;
+  }
+  const directory = directoryName(outputPath) || directoryName(inputPath);
+  if (!directory) {
+    return outputPath;
+  }
+  const inputBase = baseName(inputPath);
+  const stem = inputBase.replace(/\.[^.\\/]+$/, "");
+  const ext = extensionName(outputPath) || (type === "burn_in" ? ".mp4" : ".srt");
+  const suffix = type === "burn_in" ? ".burned" : type === "translate_srt" ? ".translated" : "";
+  const sep = directory.includes("/") && !directory.includes("\\") ? "/" : "\\";
+  return `${directory}${sep}${stem}${suffix}${ext}`;
+}
+
+function hasReplacementChar(value: string): boolean {
+  return value.includes("\uFFFD");
+}
+
+function baseName(path: string): string {
+  return path.split(/[\\/]/).pop() || "";
+}
+
+function directoryName(path: string): string {
+  const index = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
+  if (index <= 0) {
+    return "";
+  }
+  if (index === 2 && /^[A-Za-z]:[\\/]/.test(path)) {
+    return path.slice(0, 3);
+  }
+  return path.slice(0, index);
+}
+
+function extensionName(path: string): string {
+  const name = baseName(path);
+  const match = /\.[^.\\/]+$/.exec(name);
+  return match?.[0] ?? "";
+}
+
+function isPlainTextTranslationInput(path: string): boolean {
+  const extension = extensionName(path).toLowerCase();
+  return [".txt", ".text", ".md", ".markdown"].includes(extension);
+}
+
 function titleFor(type: string, inputPath: string, model: string): string {
   if (type === "model_install") {
     return `${model || "模型"} 安装`;
   }
   const base = inputPath.split(/[\\/]/).pop() || "字幕任务";
   if (type === "translate_srt") {
-    return base.replace(/\.srt$/i, ".translated.srt");
+    return base.replace(/\.[^.\\/]+$/i, isPlainTextTranslationInput(base) ? ".translated.txt" : ".translated.srt");
   }
   if (type === "burn_in") {
     return base.replace(/\.[^.]+$/, ".burned.mp4");
@@ -326,9 +395,17 @@ export class MainDaemonFastSubClient {
     }
   }
 
-  async testProvider(providerId: string, _mode: "static" | "live"): Promise<ProviderStatus> {
-    const providers = await this.listProviders();
-    return providers.find((provider) => provider.id === providerId) ?? mapProvider({ id: providerId, status: "not_implemented" });
+  async testProvider(providerId: string, mode: "static" | "live"): Promise<ProviderStatus> {
+    try {
+      const result = record(await this.request(`/v1/providers?provider_id=${encodeURIComponent(providerId)}&mode=${encodeURIComponent(mode)}`));
+      return mapProvider(record(result.provider));
+    } catch (error) {
+      if (!isDaemonUnavailable(error)) {
+        throw error;
+      }
+      const providers = await this.listProviders();
+      return providers.find((provider) => provider.id === providerId) ?? mapProvider({ id: providerId, status: "not_implemented" });
+    }
   }
 
   async createJob(request: CreateJobRequest): Promise<JobDetail> {
@@ -339,16 +416,24 @@ export class MainDaemonFastSubClient {
       input_path: first,
       subtitle_path: request.type === "burn_in" ? request.inputPaths[1] ?? "" : undefined,
       output_path: outputPathFor(request),
+      output_type: request.outputType,
       output_format: request.outputFormat,
       provider: request.providerId,
       model: request.modelId,
       language: request.language,
       target_language: request.targetLanguage ?? "zh",
+      translation_provider: request.translationProviderId,
+      translation_model: request.translationModelId,
+      translation_upload_confirmed: request.translationUploadConfirmed ?? false,
       word_timestamps: request.outputType === "original_srt" ? "off" : "auto",
       options: {
         yes: request.remoteUploadConfirmed,
         overwrite: request.outputConflict === "overwrite",
         output_conflict: request.outputConflict ?? "ask",
+        output_type: request.outputType,
+        translation_provider: request.translationProviderId,
+        translation_model: request.translationModelId,
+        translation_upload_confirmed: request.translationUploadConfirmed ?? false,
         target_language: request.targetLanguage ?? "zh",
         keep_temp: false,
         device: "auto"
@@ -545,6 +630,9 @@ async function streamSSE(session: DaemonSession, jobId: string, lastEventId: str
 function mapConfig(value: unknown): ConfigViewModel {
   const item = record(value);
   const openai = record(item.openai_compatible);
+  const apiProvidersRaw = record(item.api_providers);
+  const apiProviderConfigs = Object.fromEntries(Object.entries(apiProvidersRaw).map(([providerId, raw]) => [providerId, mapApiProviderConfig(record(raw))]));
+  const rawOutputType = str(item.output_type, "original_srt");
   return {
     defaultLanguage: str(item.language, "auto"),
     targetLanguage: str(item.target_language, "zh"),
@@ -552,19 +640,37 @@ function mapConfig(value: unknown): ConfigViewModel {
     outputConflict: (str(item.output_conflict, "ask") as ConfigViewModel["outputConflict"]),
     outputFormat: (str(item.output_format, "srt") as ConfigViewModel["outputFormat"]),
     device: normalizeDevice(str(item.device, "auto")),
-    outputType: (str(item.output_type, "original_srt") as ConfigViewModel["outputType"]),
+    outputType: ((rawOutputType === "burned_video" ? "original_srt" : rawOutputType) as ConfigViewModel["outputType"]),
+    burnInVideo: bool(item.burn_in_video, rawOutputType === "burned_video"),
     asrProvider: str(item.default_asr_provider, "local-faster-whisper"),
     translationProvider: str(item.default_translation_provider, "local-nllb-ct2"),
     asrModel: str(item.default_asr_model, "whisper-small"),
     translationModel: str(item.default_translation_model, "nllb-200-distilled-600m-ct2-int8"),
     keepTempFiles: bool(item.keep_temp, false),
     wordTimestamps: bool(item.word_timestamps, false),
-    apiKeyAlias: str(openai.api_key_alias, "openai-default"),
+    folderScanIncludeSubfolders: bool(item.folder_scan_include_subfolders, false),
+    folderScanMaxFiles: num(item.folder_scan_max_files, 100),
+    apiKeyAlias: normalizeOpenAIKeyAlias(str(openai.api_key_alias, "FAST_SUB_OPENAI_API_KEY")),
+    openAIBaseUrl: str(openai.base_url, "https://api.openai.com/v1"),
+    openAIModel: str(openai.model, ""),
+    openAIUploadFormat: (str(openai.upload_format, "wav") as ConfigViewModel["openAIUploadFormat"]),
+    apiKeyStatus: (str(openai.api_key_status, "missing") as ConfigViewModel["apiKeyStatus"]),
+    apiProviderConfigs
+  };
+}
+
+function mapApiProviderConfig(openai: Record<string, unknown>): NonNullable<ConfigViewModel["apiProviderConfigs"]>[string] {
+  return {
+    apiKeyAlias: normalizeOpenAIKeyAlias(str(openai.api_key_alias, "FAST_SUB_OPENAI_API_KEY")),
     openAIBaseUrl: str(openai.base_url, "https://api.openai.com/v1"),
     openAIModel: str(openai.model, ""),
     openAIUploadFormat: (str(openai.upload_format, "wav") as ConfigViewModel["openAIUploadFormat"]),
     apiKeyStatus: (str(openai.api_key_status, "missing") as ConfigViewModel["apiKeyStatus"])
   };
+}
+
+function normalizeOpenAIKeyAlias(value: string): string {
+  return value === "openai-default" ? "FAST_SUB_OPENAI_API_KEY" : value;
 }
 
 function configPatch(patch: Partial<ConfigViewModel>): Record<string, unknown> {
@@ -575,6 +681,7 @@ function configPatch(patch: Partial<ConfigViewModel>): Record<string, unknown> {
   if (patch.outputConflict !== undefined) out.output_conflict = patch.outputConflict;
   if (patch.outputFormat !== undefined) out.output_format = patch.outputFormat;
   if (patch.outputType !== undefined) out.output_type = patch.outputType;
+  if (patch.burnInVideo !== undefined) out.burn_in_video = patch.burnInVideo;
   if (patch.device !== undefined) out.device = patch.device === "gpu" ? "cuda" : patch.device;
   if (patch.asrProvider !== undefined) out.default_asr_provider = patch.asrProvider;
   if (patch.translationProvider !== undefined) out.default_translation_provider = patch.translationProvider;
@@ -582,6 +689,8 @@ function configPatch(patch: Partial<ConfigViewModel>): Record<string, unknown> {
   if (patch.translationModel !== undefined) out.default_translation_model = patch.translationModel;
   if (patch.keepTempFiles !== undefined) out.keep_temp = patch.keepTempFiles;
   if (patch.wordTimestamps !== undefined) out.word_timestamps = patch.wordTimestamps;
+  if (patch.folderScanIncludeSubfolders !== undefined) out.folder_scan_include_subfolders = patch.folderScanIncludeSubfolders;
+  if (patch.folderScanMaxFiles !== undefined) out.folder_scan_max_files = patch.folderScanMaxFiles;
   if (patch.openAIBaseUrl !== undefined || patch.openAIModel !== undefined || patch.openAIUploadFormat !== undefined || patch.apiKeyAlias !== undefined) {
     out.openai_compatible = {
       base_url: patch.openAIBaseUrl,
@@ -589,6 +698,14 @@ function configPatch(patch: Partial<ConfigViewModel>): Record<string, unknown> {
       upload_format: patch.openAIUploadFormat,
       api_key_alias: patch.apiKeyAlias
     };
+  }
+  if (patch.apiProviderConfigs !== undefined) {
+    out.api_providers = Object.fromEntries(Object.entries(patch.apiProviderConfigs).map(([providerId, cfg]) => [providerId, {
+      base_url: cfg.openAIBaseUrl,
+      model: cfg.openAIModel,
+      upload_format: cfg.openAIUploadFormat,
+      api_key_alias: cfg.apiKeyAlias
+    }]));
   }
   return out;
 }
@@ -669,7 +786,10 @@ function outputPathFor(request: CreateJobRequest): string {
   const stem = base.replace(/\.[^.]+$/, "");
   const directory = request.outputDirectory || first.replace(/[\\/][^\\/]*$/, "");
   const sep = directory.includes("/") && !directory.includes("\\") ? "/" : "\\";
-  if (request.type === "translate_srt") return `${directory}${sep}${stem}.translated.${request.outputFormat}`;
+  if (request.type === "translate_srt") {
+    const extension = isPlainTextTranslationInput(first) ? "txt" : request.outputFormat;
+    return `${directory}${sep}${stem}.translated.${extension}`;
+  }
   if (request.type === "burn_in") return `${directory}${sep}${stem}.burned.mp4`;
   return `${directory}${sep}${stem}.${request.outputFormat}`;
 }
@@ -724,7 +844,10 @@ function jobRequestSummary(value: unknown): Record<string, unknown> {
     outputPath,
     provider: str(item.provider, ""),
     model: str(item.model, ""),
+    outputType: str(item.output_type, ""),
     language: str(item.language, ""),
-    targetLanguage: str(item.target_language, "")
+    targetLanguage: str(item.target_language, ""),
+    translationProvider: str(item.translation_provider, ""),
+    translationModel: str(item.translation_model, "")
   };
 }

@@ -2,18 +2,20 @@ import { useEffect, useState } from "react";
 import type { ConfigViewModel, ModelStatus, ProviderState, ProviderStatus } from "../../../../shared/contracts/types";
 import type { RenderProps, Screen, UiFontStyle, UiLanguage } from "../types";
 import { Chip, Chrome, KV, Segment, SettingRow, Toggle } from "../components";
+import { useT } from "../i18n";
 
 export function SettingsPage(props: RenderProps & { tab: "general" | "models" | "api" | "providers" | "diagnostics" | "benchmark" }) {
+  const t = useT();
   return (
     <div className="wf">
-      <Chrome title="设置" />
+      <Chrome title={t("Settings")} />
       <main className="settings-shell">
         <aside className="settings-nav">
           {[
-            ["settings-general", "◎", "通用"],
-            ["settings-models", "◇", "模型管理"],
+            ["settings-general", "◎", t("General")],
+            ["settings-models", "◇", t("Models")],
             ["settings-providers", "◌", "Provider"],
-            ["settings-diagnostics", "⚙", "诊断"],
+            ["settings-diagnostics", "⚙", t("Diagnostics")],
             ["settings-benchmark", "▣", "Benchmark"]
           ].map(([id, icon, label]) => <button key={id} className={props.screen === id ? "active" : ""} onClick={() => props.setScreen(id as Screen)}>{icon} {label}</button>)}
           <span className="caption version">v0.11 mock</span>
@@ -31,20 +33,21 @@ export function SettingsPage(props: RenderProps & { tab: "general" | "models" | 
 }
 
 export function SettingsGeneral(props: RenderProps) {
+  const t = useT();
+  const [translationOutputWarning, setTranslationOutputWarning] = useState(false);
   const uiLanguages: Array<{ label: string; value: UiLanguage }> = [
-    { label: "跟随系统", value: "system" },
-    { label: "简体中文", value: "zh" },
+    { label: t("Follow system"), value: "system" },
+    { label: t("Simplified Chinese"), value: "zh" },
     { label: "English", value: "en" }
   ];
   const fontStyles: Array<{ label: string; value: UiFontStyle }> = [
-    { label: "系统字体", value: "system" },
-    { label: "手绘字体", value: "sketch" }
+    { label: t("System font"), value: "system" },
+    { label: t("Handwritten font"), value: "sketch" }
   ];
   const outputTypes: Array<{ label: string; value: ConfigViewModel["outputType"] }> = [
-    { label: "原字幕", value: "original_srt" },
-    { label: "翻译字幕", value: "translated_srt" },
-    { label: "双语字幕", value: "bilingual_srt" },
-    { label: "烧录视频", value: "burned_video" }
+    { label: t("Original subtitles"), value: "original_srt" },
+    { label: t("Translated subtitles"), value: "translated_srt" },
+    { label: t("Bilingual subtitles"), value: "bilingual_srt" }
   ];
   const outputFormats: Array<{ label: string; value: ConfigViewModel["outputFormat"] }> = [
     { label: "SRT", value: "srt" },
@@ -53,46 +56,74 @@ export function SettingsGeneral(props: RenderProps) {
     { label: "JSON", value: "json" }
   ];
   const conflictModes: Array<{ label: string; value: ConfigViewModel["outputConflict"] }> = [
-    { label: "询问", value: "ask" },
-    { label: "覆盖", value: "overwrite" },
-    { label: "跳过", value: "skip" }
+    { label: t("Ask"), value: "ask" },
+    { label: t("Overwrite"), value: "overwrite" },
+    { label: t("Skip"), value: "skip" }
   ];
   const outputTypeIndex = Math.max(0, outputTypes.findIndex((item) => item.value === props.config.outputType));
   const outputFormatIndex = Math.max(0, outputFormats.findIndex((item) => item.value === props.config.outputFormat));
   const conflictIndex = Math.max(0, conflictModes.findIndex((item) => item.value === props.config.outputConflict));
   const deviceIndex = props.config.device === "cpu" ? 1 : props.config.device === "gpu" ? 2 : 0;
+  const folderScanMaxOptions = [50, 100, 200, 500];
   const uiLanguageIndex = Math.max(0, uiLanguages.findIndex((item) => item.value === props.uiLanguage));
   const fontStyleIndex = Math.max(0, fontStyles.findIndex((item) => item.value === props.uiFontStyle));
   const asrProviders = props.providers.filter((provider) => provider.capability === "stt");
   const translationProviders = props.providers.filter((provider) => provider.capability === "translation");
+  const canUseTranslationOutput = translationOutputReady(props.config, props.providers, props.translationReady);
+  const selectOutputType = (outputType: ConfigViewModel["outputType"]) => {
+    if (outputTypeNeedsTranslation(outputType) && !canUseTranslationOutput) {
+      setTranslationOutputWarning(true);
+      return;
+    }
+    setTranslationOutputWarning(false);
+    void props.updateConfig({ outputType });
+  };
   return (
     <div className="settings-list">
-      <h2>通用</h2>
-      <h3>界面</h3>
-      <SettingRow label="语言"><Segment items={uiLanguages.map((item) => item.label)} active={uiLanguageIndex} onSelect={(index) => props.setUiLanguage(uiLanguages[index].value)} /></SettingRow>
-      <SettingRow label="字体"><Segment items={fontStyles.map((item) => item.label)} active={fontStyleIndex} onSelect={(index) => props.setUiFontStyle(fontStyles[index].value)} /></SettingRow>
-      <h3>默认参数</h3>
-      <SettingRow label="输出内容"><Segment items={outputTypes.map((item) => item.label)} active={outputTypeIndex} onSelect={(index) => void props.updateConfig({ outputType: outputTypes[index].value })} /></SettingRow>
-      <SettingRow label="字幕语言"><select value={props.config.defaultLanguage} onChange={(event) => void props.updateConfig({ defaultLanguage: event.target.value })}><option value="auto">自动识别</option><option value="zh">中文</option></select></SettingRow>
-      <SettingRow label="输出格式"><Segment items={outputFormats.map((item) => item.label)} active={outputFormatIndex} onSelect={(index) => void props.updateConfig({ outputFormat: outputFormats[index].value })} /></SettingRow>
-      <SettingRow label="文件已存在时"><Segment items={conflictModes.map((item) => item.label)} active={conflictIndex} onSelect={(index) => void props.updateConfig({ outputConflict: conflictModes[index].value })} /></SettingRow>
-      <h3>转写</h3>
-      <SettingRow label="默认转写 Provider">
-        <select aria-label="默认转写 Provider" value={props.config.asrProvider} onChange={(event) => void props.updateConfig({ asrProvider: event.currentTarget.value })}>
-          {asrProviders.map((provider) => <option key={provider.id} value={provider.id}>{providerOptionLabel(provider)}</option>)}
+      <h2>{t("General")}</h2>
+      <h3>{t("Interface")}</h3>
+      <SettingRow label={t("Language")}><Segment items={uiLanguages.map((item) => item.label)} active={uiLanguageIndex} onSelect={(index) => props.setUiLanguage(uiLanguages[index].value)} /></SettingRow>
+      <SettingRow label={t("Font")}><Segment items={fontStyles.map((item) => item.label)} active={fontStyleIndex} onSelect={(index) => props.setUiFontStyle(fontStyles[index].value)} /></SettingRow>
+      <SettingRow label={t("Scan subfolders")}><Toggle ariaLabel={t("Set scan subfolders")} on={props.config.folderScanIncludeSubfolders} onClick={() => void props.updateConfig({ folderScanIncludeSubfolders: !props.config.folderScanIncludeSubfolders })} /></SettingRow>
+      <SettingRow label={t("Maximum folder files")}><select aria-label={t("Maximum folder files")} value={props.config.folderScanMaxFiles} onChange={(event) => void props.updateConfig({ folderScanMaxFiles: Number(event.currentTarget.value) })}>{folderScanMaxOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></SettingRow>
+      <h3>{t("Transcription")}</h3>
+      <SettingRow label={t("Default transcription Provider")}>
+        <select aria-label={t("Default transcription Provider")} value={props.config.asrProvider} onChange={(event) => void props.updateConfig({ asrProvider: event.currentTarget.value })}>
+          {asrProviders.map((provider) => <option disabled={!provider.enabled || provider.state !== "available"} key={provider.id} value={provider.id}>{providerOptionLabel(provider, t)}</option>)}
         </select>
       </SettingRow>
-      <SettingRow label="设备"><Segment items={["自动", "CPU", "GPU"]} active={deviceIndex} onSelect={(index) => void props.updateConfig({ device: (["auto", "cpu", "gpu"] as ConfigViewModel["device"][])[index] })} /></SettingRow>
-      <SettingRow label="词级时间戳"><Toggle ariaLabel="设置词级时间戳" on={props.config.wordTimestamps} onClick={() => void props.updateConfig({ wordTimestamps: !props.config.wordTimestamps })} /></SettingRow>
-      <h3>翻译</h3>
-      <SettingRow label="默认翻译 Provider">
-        <select aria-label="默认翻译 Provider" value={props.config.translationProvider} onChange={(event) => void props.updateConfig({ translationProvider: event.currentTarget.value })}>
-          {translationProviders.map((provider) => <option key={provider.id} value={provider.id}>{providerOptionLabel(provider)}</option>)}
+      <SettingRow label={t("Device")}><Segment items={[t("Auto"), "CPU", "GPU"]} active={deviceIndex} onSelect={(index) => void props.updateConfig({ device: (["auto", "cpu", "gpu"] as ConfigViewModel["device"][])[index] })} /></SettingRow>
+      <SettingRow label={t("Word timestamps")}><Toggle ariaLabel={t("Set word timestamps")} on={props.config.wordTimestamps} onClick={() => void props.updateConfig({ wordTimestamps: !props.config.wordTimestamps })} /></SettingRow>
+      <h3>{t("Translation")}</h3>
+      <SettingRow label={t("Default translation Provider")}>
+        <select aria-label={t("Default translation Provider")} value={props.config.translationProvider} onChange={(event) => void props.updateConfig({ translationProvider: event.currentTarget.value })}>
+          {translationProviders.map((provider) => <option disabled={!provider.enabled || provider.state !== "available"} key={provider.id} value={provider.id}>{providerOptionLabel(provider, t)}</option>)}
         </select>
       </SettingRow>
-      <SettingRow label="目标语言"><select value={props.config.targetLanguage} onChange={(event) => void props.updateConfig({ targetLanguage: event.target.value })}><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></SettingRow>
+      <SettingRow label={t("Target language")}><select value={props.config.targetLanguage} onChange={(event) => void props.updateConfig({ targetLanguage: event.target.value })}><option value="zh">{t("Simplified Chinese")}</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></SettingRow>
+      <h3>{t("Defaults")}</h3>
+      <SettingRow label={t("Output content")}><Segment items={outputTypes.map((item) => item.label)} active={outputTypeIndex} onSelect={(index) => selectOutputType(outputTypes[index].value)} /></SettingRow>
+      {translationOutputWarning && (
+        <div className="blocking-note" role="status">
+          <span>{t("Translation output not ready")}</span>
+          <button className="btn sm primary" onClick={() => props.setScreen("settings-providers")} type="button">{t("Configure translation Provider")}</button>
+        </div>
+      )}
+      <SettingRow label={t("Subtitle language")}><select value={props.config.defaultLanguage} onChange={(event) => void props.updateConfig({ defaultLanguage: event.target.value })}><option value="auto">{t("Auto detect")}</option><option value="zh">{t("Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></SettingRow>
+      <SettingRow label={t("Output format")}><Segment items={outputFormats.map((item) => item.label)} active={outputFormatIndex} onSelect={(index) => void props.updateConfig({ outputFormat: outputFormats[index].value })} /></SettingRow>
+      <SettingRow label={t("Burn-in video")}><Toggle ariaLabel={t("Burn-in video")} on={props.config.burnInVideo} onClick={() => void props.updateConfig({ burnInVideo: !props.config.burnInVideo })} /></SettingRow>
+      <SettingRow label={t("When file exists")}><Segment items={conflictModes.map((item) => item.label)} active={conflictIndex} onSelect={(index) => void props.updateConfig({ outputConflict: conflictModes[index].value })} /></SettingRow>
     </div>
   );
+}
+
+function outputTypeNeedsTranslation(outputType: ConfigViewModel["outputType"]): boolean {
+  return outputType === "translated_srt" || outputType === "bilingual_srt";
+}
+
+function translationOutputReady(config: ConfigViewModel, providers: ProviderStatus[], translationReady: boolean): boolean {
+  const provider = providers.find((item) => item.id === config.translationProvider);
+  return translationReady && Boolean(provider?.enabled && provider.state === "available");
 }
 
 export function SettingsModels({ models, modelInstallJobs, installModel, removeModel, config, updateConfig }: RenderProps) {
@@ -158,17 +189,17 @@ function ModelCard({ model, installJob, isDefault, onInstall, onRemove, onDefaul
   );
 }
 
-function providerStateLabel(state: ProviderState): string {
+function providerStateLabel(state: ProviderState, t: (key: string) => string = (key) => key): string {
   const labels: Record<ProviderState, string> = {
-    available: "可用",
-    missing_dependency: "缺少依赖",
-    missing_model: "缺少模型",
-    missing_api_key: "未配置密钥",
-    invalid_config: "配置需检查",
-    disabled: "已停用",
-    not_implemented: "暂不可用"
+    available: "Available",
+    missing_dependency: "Missing dependency",
+    missing_model: "Missing model",
+    missing_api_key: "Missing API key",
+    invalid_config: "Config needs review",
+    disabled: "Disabled",
+    not_implemented: "Unavailable"
   };
-  return labels[state];
+  return t(labels[state]);
 }
 
 function modelInstallStageLabel(job: RenderProps["activeJob"] | undefined): string {
@@ -207,18 +238,18 @@ function providerStateTone(provider: ProviderStatus): "ok" | "accent" | "warn" |
   return "muted";
 }
 
-function providerOptionLabel(provider: ProviderStatus): string {
-  const state = providerStateLabel(provider.state);
-  const prefix = provider.kind === "local" ? "本地" : provider.kind === "api" ? "API" : provider.kind === "web" ? "网页" : "Native";
+function providerOptionLabel(provider: ProviderStatus, t: (key: string) => string = (key) => key): string {
+  const state = providerStateLabel(provider.state, t);
+  const prefix = provider.kind === "local" ? t("Local") : provider.kind === "api" ? "API" : provider.kind === "web" ? t("Web") : "Native";
   return `${prefix} · ${provider.name}${provider.enabled && provider.state === "available" ? "" : ` (${state})`}`;
 }
 
-function providerKindLabel(kind: ProviderStatus["kind"]): string {
+function providerKindLabel(kind: ProviderStatus["kind"], t: (key: string) => string = (key) => key): string {
   switch (kind) {
     case "api": return "API";
-    case "web": return "网页";
+    case "web": return t("Web");
     case "native": return "Native";
-    default: return "本地";
+    default: return t("Local");
   }
 }
 
@@ -255,16 +286,68 @@ export function SettingsProviders(props: RenderProps) {
   const { providers, models, config, updateConfig, testProvider } = props;
   const [providerViews, setProviderViews] = useState(providers);
   const [refreshLabel, setRefreshLabel] = useState("未刷新");
+  const [providerDrafts, setProviderDrafts] = useState<Record<string, ProviderDraft>>(() => providerDraftsFromConfig(providers, config));
+  const [providerChecks, setProviderChecks] = useState<Record<string, ProviderCheckState>>({});
 
   useEffect(() => {
     setProviderViews(providers);
   }, [providers]);
 
+  useEffect(() => {
+    setProviderDrafts((current) => {
+      const next = { ...current };
+      for (const provider of providers) {
+        next[provider.id] = current[provider.id] ?? providerDraftFromConfig(config, provider.id);
+      }
+      return next;
+    });
+  }, [config, providers]);
+
+  const updateProviderDraft = (providerId: string, patch: Partial<ProviderDraft>) => {
+    setProviderDrafts((current) => ({
+      ...current,
+      [providerId]: { ...(current[providerId] ?? providerDraftFromConfig(config, providerId)), ...patch }
+    }));
+  };
+
   const refreshProviders = async () => {
     setRefreshLabel("检查中");
     const nextProviders = await Promise.all(providerViews.map((provider) => testProvider(provider.id, "static")));
     setProviderViews(nextProviders);
+    setProviderChecks(Object.fromEntries(nextProviders.map((provider) => [provider.id, {
+      status: provider.state === "available" ? "ok" : "failed",
+      message: provider.state === "available" ? "静态检查通过" : providerStateLabel(provider.state)
+    } satisfies ProviderCheckState])));
     setRefreshLabel("刷新完成");
+  };
+
+  const runProviderCheck = async (providerId: string) => {
+    setProviderChecks((current) => ({ ...current, [providerId]: { status: "checking", message: "正在检查" } }));
+    try {
+      const currentProvider = providerViews.find((provider) => provider.id === providerId);
+      const mode = currentProvider?.kind === "api" ? "live" : "static";
+      if (currentProvider?.kind === "api") {
+        const draft = providerDrafts[providerId] ?? providerDraftFromConfig(config, providerId);
+        await updateConfig({
+          apiProviderConfigs: {
+            [providerId]: {
+              openAIBaseUrl: draft.openAIBaseUrl,
+              openAIModel: draft.openAIModel,
+              apiKeyAlias: providerSecretAliasForId(providerId, config),
+              apiKeyStatus: apiProviderConfig(config, providerId).apiKeyStatus
+            }
+          }
+        });
+      }
+      const checked = await testProvider(providerId, mode);
+      setProviderViews((current) => current.map((provider) => provider.id === providerId ? checked : provider));
+      setProviderChecks((current) => ({ ...current, [providerId]: {
+        status: checked.state === "available" ? "ok" : "failed",
+        message: checked.state === "available" ? (mode === "live" ? "连接检查通过" : "静态检查通过") : providerStateLabel(checked.state)
+      } }));
+    } catch {
+      setProviderChecks((current) => ({ ...current, [providerId]: { status: "failed", message: "检查失败" } }));
+    }
   };
 
   return (
@@ -283,6 +366,11 @@ export function SettingsProviders(props: RenderProps) {
         testProvider={testProvider}
         config={config}
         updateConfig={updateConfig}
+        saveProviderSecret={props.saveProviderSecret}
+        checks={providerChecks}
+        runProviderCheck={runProviderCheck}
+        providerDrafts={providerDrafts}
+        updateProviderDraft={updateProviderDraft}
       />
       <ProviderSection
         title="翻译 Provider"
@@ -296,9 +384,46 @@ export function SettingsProviders(props: RenderProps) {
         testProvider={testProvider}
         config={config}
         updateConfig={updateConfig}
+        saveProviderSecret={props.saveProviderSecret}
+        checks={providerChecks}
+        runProviderCheck={runProviderCheck}
+        providerDrafts={providerDrafts}
+        updateProviderDraft={updateProviderDraft}
       />
     </div>
   );
+}
+
+type ProviderDraft = {
+  model: string;
+  device: ConfigViewModel["device"];
+  wordTimestamps: boolean;
+  sourceLanguage: string;
+  targetLanguage: string;
+  openAIBaseUrl: string;
+  openAIModel: string;
+};
+
+type ProviderCheckState = {
+  status: "idle" | "checking" | "ok" | "failed";
+  message: string;
+};
+
+function providerDraftFromConfig(config: ConfigViewModel, providerId = ""): ProviderDraft {
+  const providerConfig = providerId ? apiProviderConfig(config, providerId) : undefined;
+  return {
+    model: "",
+    device: config.device,
+    wordTimestamps: config.wordTimestamps,
+    sourceLanguage: config.defaultLanguage,
+    targetLanguage: config.targetLanguage,
+    openAIBaseUrl: providerConfig?.openAIBaseUrl ?? config.openAIBaseUrl ?? "",
+    openAIModel: providerConfig?.openAIModel ?? config.openAIModel ?? ""
+  };
+}
+
+function providerDraftsFromConfig(providers: ProviderStatus[], config: ConfigViewModel): Record<string, ProviderDraft> {
+  return Object.fromEntries(providers.map((provider) => [provider.id, providerDraftFromConfig(config, provider.id)]));
 }
 
 function ProviderSection(props: {
@@ -313,6 +438,11 @@ function ProviderSection(props: {
   testProvider: RenderProps["testProvider"];
   config: ConfigViewModel;
   updateConfig: RenderProps["updateConfig"];
+  saveProviderSecret: RenderProps["saveProviderSecret"];
+  checks: Record<string, ProviderCheckState>;
+  runProviderCheck: (providerId: string) => Promise<void>;
+  providerDrafts: Record<string, ProviderDraft>;
+  updateProviderDraft: (providerId: string, patch: Partial<ProviderDraft>) => void;
 }) {
   return (
     <section className="provider-section">
@@ -332,9 +462,13 @@ function ProviderSection(props: {
             activeModel={props.activeModel}
             onProvider={props.onProvider}
             onModel={props.onModel}
-            onTest={() => void props.testProvider(provider.id, "static")}
+            onTest={() => void props.runProviderCheck(provider.id)}
+            check={props.checks[provider.id]}
             config={props.config}
             updateConfig={props.updateConfig}
+            saveProviderSecret={props.saveProviderSecret}
+            draft={props.providerDrafts[provider.id] ?? providerDraftFromConfig(props.config, provider.id)}
+            onDraft={(patch) => props.updateProviderDraft(provider.id, patch)}
           />
         );
       })}
@@ -350,21 +484,128 @@ function ProviderCard(props: {
   onProvider: (id: string) => void;
   onModel: (id: string) => void;
   onTest: () => void;
+  check?: ProviderCheckState;
   config: ConfigViewModel;
   updateConfig: RenderProps["updateConfig"];
+  saveProviderSecret: RenderProps["saveProviderSecret"];
+  draft: ProviderDraft;
+  onDraft: (patch: Partial<ProviderDraft>) => void;
 }) {
+  const t = useT();
   const { provider } = props;
+  const [secretValue, setSecretValue] = useState("");
+  const [showSecret, setShowSecret] = useState(false);
+  const [secretStatus, setSecretStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const modelValue = providerControlValue(props.activeModel, props.draft.model, props.models);
+  const deviceValue = props.active ? props.config.device : props.draft.device;
+  const wordTimestamps = props.active ? props.config.wordTimestamps : props.draft.wordTimestamps;
+  const sourceLanguage = props.active ? props.config.defaultLanguage : props.draft.sourceLanguage;
+  const targetLanguage = props.active ? props.config.targetLanguage : props.draft.targetLanguage;
+  const providerApiConfig = apiProviderConfig(props.config, provider.id);
+  const openAIBaseUrl = props.active ? providerApiConfig.openAIBaseUrl ?? props.draft.openAIBaseUrl : props.draft.openAIBaseUrl;
+  const openAIModel = props.active ? providerApiConfig.openAIModel ?? props.draft.openAIModel : props.draft.openAIModel;
   const languageOptions = provider.id === "local-nllb-ct2"
     ? [["en", "英语"], ["zh", "中文"], ["ja", "日语"], ["ko", "韩语"]]
     : [["auto", "自动识别"], ["en", "英语"], ["zh", "中文"], ["ja", "日语"], ["ko", "韩语"]];
+  const updateModel = (model: string) => {
+    props.onDraft({ model });
+    if (props.active) props.onModel(model);
+  };
+  const updateDevice = (device: ConfigViewModel["device"]) => {
+    props.onDraft({ device });
+    if (props.active) void props.updateConfig({ device });
+  };
+  const updateWordTimestamps = (checked: boolean) => {
+    props.onDraft({ wordTimestamps: checked });
+    if (props.active) void props.updateConfig({ wordTimestamps: checked });
+  };
+  const updateSourceLanguage = (defaultLanguage: string) => {
+    props.onDraft({ sourceLanguage: defaultLanguage });
+    if (props.active) void props.updateConfig({ defaultLanguage });
+  };
+  const updateTargetLanguage = (targetLanguage: string) => {
+    props.onDraft({ targetLanguage });
+    if (props.active) void props.updateConfig({ targetLanguage });
+  };
+  const updateOpenAIBaseUrl = (openAIBaseUrl: string) => {
+    props.onDraft({ openAIBaseUrl });
+    void props.updateConfig({
+      apiProviderConfigs: {
+        [provider.id]: {
+          ...apiProviderConfig(props.config, provider.id),
+          openAIBaseUrl
+        }
+      }
+    });
+  };
+  const updateOpenAIModel = (openAIModel: string) => {
+    props.onDraft({ openAIModel });
+    void props.updateConfig({
+      apiProviderConfigs: {
+        [provider.id]: {
+          ...apiProviderConfig(props.config, provider.id),
+          openAIModel
+        }
+      }
+    });
+  };
+  const checking = props.check?.status === "checking";
+  const secretConfigured = isProviderSecretConfigured(provider, props.config);
+  const secretAlias = providerSecretAlias(provider, props.config);
+  const saveSecret = async () => {
+    const value = secretValue.trim();
+    if (!value) {
+      setSecretStatus("failed");
+      return;
+    }
+    setSecretStatus("saving");
+    try {
+      await props.saveProviderSecret(provider.id, defaultSecretAlias(provider.id), value);
+      setSecretValue("");
+      setSecretStatus("saved");
+    } catch {
+      setSecretStatus("failed");
+    }
+  };
+  const canSetDefault = provider.enabled && provider.state === "available";
+  const defaultBlockReason = providerDefaultBlockReason(provider);
+  const selectAsDefault = () => {
+    if (!canSetDefault) {
+      return;
+    }
+    const patch: Partial<ConfigViewModel> = provider.capability === "stt"
+      ? {
+          asrProvider: provider.id,
+          asrModel: modelValue || props.activeModel,
+          device: props.draft.device,
+          wordTimestamps: props.draft.wordTimestamps
+        }
+      : {
+          translationProvider: provider.id,
+          translationModel: modelValue || props.activeModel,
+          defaultLanguage: provider.id === "local-nllb-ct2" && props.draft.sourceLanguage === "auto" ? "en" : props.draft.sourceLanguage,
+          targetLanguage: props.draft.targetLanguage
+        };
+    if (provider.kind === "api") {
+      patch.apiProviderConfigs = {
+        [provider.id]: {
+          ...apiProviderConfig(props.config, provider.id),
+          openAIBaseUrl: props.draft.openAIBaseUrl,
+          openAIModel: props.draft.openAIModel,
+          apiKeyAlias: providerSecretAliasForId(provider.id, props.config)
+        }
+      };
+    }
+    void props.updateConfig(patch);
+  };
   return (
     <article className={`provider-card provider-card-rich ${provider.requiresUploadConfirmation ? "warn-card-soft" : "ok-card"} ${props.active ? "selected-card" : ""}`}>
       <div className="provider-main">
         <div className="row gap-8 wrap">
           <strong>{provider.name}</strong>
-          <Chip tone={providerStateTone(provider)}>{providerStateLabel(provider.state)}</Chip>
+          <Chip tone={providerStateTone(provider)}>{providerStateLabel(provider.state, t)}</Chip>
           {props.active && <Chip tone="accent">当前默认</Chip>}
-          <Chip>{providerKindLabel(provider.kind)}</Chip>
+          <Chip>{providerKindLabel(provider.kind, t)}</Chip>
           {provider.requiresUploadConfirmation && <Chip tone="warn">上传确认</Chip>}
         </div>
         <span>{provider.privacyNote}</span>
@@ -375,41 +616,134 @@ function ProviderCard(props: {
           {provider.supportsWordTimestamps && <Chip tone="muted">词级时间戳</Chip>}
           {(provider.supportedLanguages ?? []).slice(0, 5).map((lang) => <Chip key={lang} tone="muted">{lang}</Chip>)}
         </div>
-        <div className="provider-config">
-          {provider.requiresModel && props.models.length > 0 && (
-            <label>模型<select value={props.activeModel} onChange={(event) => props.onModel(event.currentTarget.value)}>
+        <div className={`provider-config ${provider.kind === "api" ? "api-provider-config" : ""}`}>
+          {provider.requiresModel && provider.kind !== "api" && props.models.length > 0 && (
+            <label>模型<select value={modelValue} onChange={(event) => updateModel(event.currentTarget.value)}>
               {props.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
             </select></label>
           )}
-          {provider.capability === "stt" && provider.id !== "api-openai-transcription" && (
+          {provider.capability === "stt" && provider.kind !== "api" && (
             <>
-              <label>设备<select value={props.config.device} onChange={(event) => void props.updateConfig({ device: event.currentTarget.value as ConfigViewModel["device"] })}><option value="auto">自动</option><option value="cpu">CPU</option><option value="gpu">GPU</option></select></label>
-              <label className="inline-check"><input type="checkbox" checked={props.config.wordTimestamps} onChange={() => void props.updateConfig({ wordTimestamps: !props.config.wordTimestamps })} /> 词级时间戳</label>
+              <label>设备<select value={deviceValue} onChange={(event) => updateDevice(event.currentTarget.value as ConfigViewModel["device"])}><option value="auto">自动</option><option value="cpu">CPU</option><option value="gpu">GPU</option></select></label>
+              <label className="inline-check"><input type="checkbox" checked={wordTimestamps} onChange={(event) => updateWordTimestamps(event.currentTarget.checked)} /> 词级时间戳</label>
             </>
           )}
-          {provider.capability === "translation" && (
+          {provider.capability === "translation" && provider.kind !== "api" && (
             <>
-              <label>源语言<select value={provider.id === "local-nllb-ct2" && props.config.defaultLanguage === "auto" ? "en" : props.config.defaultLanguage} onChange={(event) => void props.updateConfig({ defaultLanguage: event.currentTarget.value })}>
+              <label>源语言<select value={provider.id === "local-nllb-ct2" && sourceLanguage === "auto" ? "en" : sourceLanguage} onChange={(event) => updateSourceLanguage(event.currentTarget.value)}>
                 {languageOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select></label>
-              <label>目标语言<select value={props.config.targetLanguage} onChange={(event) => void props.updateConfig({ targetLanguage: event.currentTarget.value })}><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></label>
+              <label>目标语言<select value={targetLanguage} onChange={(event) => updateTargetLanguage(event.currentTarget.value)}><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></label>
             </>
           )}
           {provider.kind === "api" && (
-            <>
-              <label>密钥<span className="input mono">{provider.maskedCredential || props.config.apiKeyAlias || "未配置"}</span></label>
-              <label>Base URL<input value={props.config.openAIBaseUrl ?? ""} onChange={(event) => void props.updateConfig({ openAIBaseUrl: event.currentTarget.value })} /></label>
-              <label>模型名<input value={props.config.openAIModel ?? ""} placeholder={provider.capability === "stt" ? "gpt-4o-transcribe" : "gpt-4o-mini"} onChange={(event) => void props.updateConfig({ openAIModel: event.currentTarget.value })} /></label>
-            </>
+            <div className="api-provider-form">
+              <div className="api-field">
+                <span className="api-label">API Key</span>
+                <div className="api-key-row">
+                  <input
+                    aria-label={`${provider.name} API Key`}
+                    className="mono"
+                    type={showSecret ? "text" : "password"}
+                    value={secretValue}
+                    placeholder={providerSecretPlaceholder(provider, props.config)}
+                    onChange={(event) => {
+                      setSecretValue(event.currentTarget.value);
+                      if (secretStatus !== "idle") setSecretStatus("idle");
+                    }}
+                  />
+                  <button className="btn sm ghost" disabled={!secretValue} onClick={() => setShowSecret((shown) => !shown)} type="button">{showSecret ? "隐藏" : "显示"}</button>
+                </div>
+              </div>
+              <label>模型<input value={openAIModel || defaultAPIModel(provider)} placeholder={defaultAPIModel(provider)} onChange={(event) => updateOpenAIModel(event.currentTarget.value)} /></label>
+              <label>Base URL<input value={openAIBaseUrl} onChange={(event) => updateOpenAIBaseUrl(event.currentTarget.value)} /></label>
+              <div className="api-form-footer">
+                <span>凭据：{secretConfigured ? `已保存到 ${secretAlias}` : "未配置"}</span>
+                <button className="btn sm ghost" disabled={!secretValue.trim() || secretStatus === "saving"} onClick={() => void saveSecret()} type="button">
+                  {secretStatus === "saving" ? "保存中" : secretConfigured ? "替换密钥" : "保存密钥"}
+                </button>
+                {secretStatus === "saved" && <Chip tone="ok">已保存</Chip>}
+                {secretStatus === "failed" && <Chip tone="warn">保存失败</Chip>}
+              </div>
+              <p className="caption no-margin">请求会通过本机 daemon 代理发送到你设置的 Base URL。Key 保存在系统安全存储中，不写入配置文件。</p>
+            </div>
           )}
         </div>
       </div>
       <div className="row gap-8 wrap end">
-        {!props.active && <button className="btn sm" onClick={() => props.onProvider(provider.id)}>设为默认</button>}
-        <button className="btn sm ghost" onClick={props.onTest}>静态检查</button>
+        {!props.active && <button className="btn sm" disabled={!canSetDefault} title={defaultBlockReason} onClick={selectAsDefault}>设为默认</button>}
+        {!props.active && !canSetDefault && <Chip tone="warn">{defaultBlockReason}</Chip>}
+        <button className="btn sm ghost" disabled={checking} onClick={props.onTest}>{checking ? "检查中" : provider.kind === "api" ? "连接检查" : "静态检查"}</button>
+        {props.check && props.check.status !== "idle" && (
+          <Chip tone={props.check.status === "ok" ? "ok" : props.check.status === "failed" ? "warn" : "accent"}>{props.check.message}</Chip>
+        )}
       </div>
     </article>
   );
+}
+
+function providerControlValue(activeModel: string, draftModel: string, models: ModelStatus[]): string {
+  if (draftModel && models.some((model) => model.id === draftModel)) {
+    return draftModel;
+  }
+  if (models.some((model) => model.id === activeModel)) {
+    return activeModel;
+  }
+  return models[0]?.id ?? "";
+}
+
+function apiProviderConfig(config: ConfigViewModel, providerId: string): NonNullable<ConfigViewModel["apiProviderConfigs"]>[string] {
+  return config.apiProviderConfigs?.[providerId] ?? {};
+}
+
+function defaultSecretAlias(providerId: string): string {
+  if (providerId === "api-openai-chat") {
+    return "FAST_SUB_OPENAI_CHAT_API_KEY";
+  }
+  if (providerId === "api-openai-transcription") {
+    return "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY";
+  }
+  return `FAST_SUB_${providerId.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_API_KEY`;
+}
+
+function providerSecretAliasForId(providerId: string, config: ConfigViewModel): string {
+  return apiProviderConfig(config, providerId).apiKeyAlias || defaultSecretAlias(providerId);
+}
+
+function isProviderSecretConfigured(provider: ProviderStatus, config: ConfigViewModel): boolean {
+  const providerConfig = apiProviderConfig(config, provider.id);
+  return (providerConfig.apiKeyStatus === "configured" && Boolean(providerConfig.apiKeyAlias)) || Boolean(provider.maskedCredential && provider.maskedCredential !== "未配置");
+}
+
+function providerSecretAlias(provider: ProviderStatus, config: ConfigViewModel): string {
+  const providerConfig = apiProviderConfig(config, provider.id);
+  if (providerConfig.apiKeyStatus === "configured" && providerConfig.apiKeyAlias) {
+    return providerConfig.apiKeyAlias;
+  }
+  if (provider.maskedCredential && provider.maskedCredential !== "未配置") {
+    return provider.maskedCredential;
+  }
+  return defaultSecretAlias(provider.id);
+}
+
+function providerSecretPlaceholder(provider: ProviderStatus, config: ConfigViewModel): string {
+  return isProviderSecretConfigured(provider, config) ? "输入新的 API Key 以替换已保存密钥" : "sk-...";
+}
+
+function defaultAPIModel(provider: ProviderStatus): string {
+  return provider.capability === "stt" ? "gpt-4o-transcribe" : "gpt-4o-mini";
+}
+
+function providerDefaultBlockReason(provider: ProviderStatus): string {
+  switch (provider.state) {
+    case "missing_api_key": return "先配置密钥";
+    case "missing_model": return "先安装模型";
+    case "missing_dependency": return "先安装依赖";
+    case "invalid_config": return "先修复配置";
+    case "disabled": return "Provider 已停用";
+    case "not_implemented": return "暂不可用";
+    default: return provider.enabled ? "" : "Provider 已停用";
+  }
 }
 
 export function SettingsDiagnostics({ environment }: RenderProps) {

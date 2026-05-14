@@ -103,17 +103,34 @@ export interface ConfigViewModel {
   outputFormat: "srt" | "vtt" | "txt" | "json";
   device: "auto" | "cpu" | "gpu";
   outputType: "original_srt" | "translated_srt" | "bilingual_srt" | "burned_video";
+  burnInVideo: boolean;
   asrProvider: string;
   translationProvider: string;
   asrModel: string;
   translationModel: string;
   keepTempFiles: boolean;
   wordTimestamps: boolean;
+  folderScanIncludeSubfolders: boolean;
+  folderScanMaxFiles: number;
   apiKeyAlias?: string;
   openAIBaseUrl?: string;
   openAIModel?: string;
   openAIUploadFormat?: "wav" | "mp3" | "m4a";
   apiKeyStatus?: "missing" | "configured" | "unknown";
+  apiProviderConfigs?: Record<string, ApiProviderConfigViewModel>;
+}
+
+export interface ApiProviderConfigViewModel {
+  apiKeyAlias?: string;
+  openAIBaseUrl?: string;
+  openAIModel?: string;
+  openAIUploadFormat?: "wav" | "mp3" | "m4a";
+  apiKeyStatus?: "missing" | "configured" | "unknown";
+}
+
+export interface FolderScanOptions {
+  includeSubfolders: boolean;
+  maxFiles: number;
 }
 
 export interface CreateJobRequest {
@@ -128,6 +145,9 @@ export interface CreateJobRequest {
   targetLanguage?: string;
   providerId: string;
   modelId: string;
+  translationProviderId?: string;
+  translationModelId?: string;
+  translationUploadConfirmed?: boolean;
   remoteUploadConfirmed: boolean;
 }
 
@@ -198,6 +218,7 @@ export interface FastSubClient {
   repairDaemon(): Promise<EnvironmentStatus>;
   getConfig(): Promise<ConfigViewModel>;
   updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel>;
+  saveProviderSecret(providerId: string, alias: string, rawSecret: string): Promise<ConfigViewModel>;
   listModels(): Promise<ModelStatus[]>;
   installModel(modelId: string): Promise<ModelStatus>;
   createModelInstallJob(modelId: string): Promise<JobDetail>;

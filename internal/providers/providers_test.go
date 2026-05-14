@@ -3,8 +3,11 @@ package providers
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -50,6 +53,75 @@ func TestTranslationProvidersAreListedWithMetadata(t *testing.T) {
 	}
 	if byID["api-openai-chat"].Status != StatusMissingAPIKey {
 		t.Fatalf("api-openai-chat status = %q", byID["api-openai-chat"].Status)
+	}
+}
+
+func TestLocalNLLBMissingDependencies(t *testing.T) {
+	cfg := fakeRuntime(nil, true, nil)
+	cfg.RunCommand = func(context.Context, string, []string) error {
+		return errors.New("missing module")
+	}
+	cfg.ModelResolver = func(providerID string) ModelResolution {
+		if providerID != "local-nllb-ct2" {
+			t.Fatalf("provider id = %q", providerID)
+		}
+		return ModelResolution{OK: true, Path: filepath.Join("models", "nllb"), Message: "model is installed"}
+	}
+
+	result, ok := Test(context.Background(), cfg, "local-nllb-ct2")
+	if !ok {
+		t.Fatal("provider missing")
+	}
+	if result.Status != StatusMissingDependency || result.Available {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestLocalTranslateDependencyCommandUsesUVExtra(t *testing.T) {
+	cfg := fakeRuntime(map[string]string{"FAST_SUB_PYTHON_CLI": "uv run fast-sub"}, true, nil)
+
+	command, args, ok := localTranslateDependencyCommand(cfg)
+	if !ok {
+		t.Fatal("command did not resolve")
+	}
+	if command != "uv" || strings.Join(args, " ") != "run --extra local-translate python -c import ctranslate2, sentencepiece" {
+		t.Fatalf("command=%q args=%q", command, strings.Join(args, " "))
+	}
+}
+
+func TestFasterWhisperMissingDependencies(t *testing.T) {
+	cfg := fakeRuntime(nil, true, nil)
+	cfg.RunCommand = func(context.Context, string, []string) error {
+		return errors.New("missing module")
+	}
+	cfg.ModelResolver = func(providerID string) ModelResolution {
+		if providerID != "local-faster-whisper" {
+			t.Fatalf("provider id = %q", providerID)
+		}
+		return ModelResolution{OK: true, Path: filepath.Join("models", "whisper-small"), Message: "model is installed"}
+	}
+
+	result, ok := Test(context.Background(), cfg, "local-faster-whisper")
+	if !ok {
+		t.Fatal("provider missing")
+	}
+	if result.Status != StatusMissingDependency || result.Available {
+		t.Fatalf("result = %#v", result)
+	}
+	if result.Checks[0].Name != "python_dependencies" {
+		t.Fatalf("first check = %#v", result.Checks[0])
+	}
+}
+
+func TestLocalASRDependencyCommandUsesUVExtra(t *testing.T) {
+	cfg := fakeRuntime(map[string]string{"FAST_SUB_STT_WORKER_COMMAND": "uv run fast-sub-worker-faster-whisper"}, true, nil)
+
+	command, args, ok := localASRDependencyCommand(cfg)
+	if !ok {
+		t.Fatal("command did not resolve")
+	}
+	if command != "uv" || strings.Join(args, " ") != "run --extra local-asr python -c import faster_whisper" {
+		t.Fatalf("command=%q args=%q", command, strings.Join(args, " "))
 	}
 }
 
@@ -126,8 +198,8 @@ func TestExplicitCommandMustResolve(t *testing.T) {
 	if result.Status != StatusMissingDependency {
 		t.Fatalf("status = %q", result.Status)
 	}
-	if result.Checks[0].OK {
-		t.Fatalf("explicit missing command should not pass: %#v", result.Checks[0])
+	if result.Checks[1].OK {
+		t.Fatalf("explicit missing command should not pass: %#v", result.Checks[1])
 	}
 }
 
@@ -177,6 +249,158 @@ model = "gpt-4o-transcribe"
 	}
 }
 
+func TestOpenAICompatibleLocalEndpointAllowsMissingKey(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "fast-sub-go.toml")
+	if err := os.WriteFile(configPath, []byte(`
+[providers.api-openai-chat]
+base_url = "http://127.0.0.1:1234/v1"
+model = "qwen/qwen3-4b-2507"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, ok := Test(context.Background(), fakeRuntime(map[string]string{
+		"FAST_SUB_GO_CONFIG": configPath,
+	}, false, nil), "api-openai-chat")
+	if !ok {
+		t.Fatal("provider missing")
+	}
+	if result.Status != StatusAvailable || !result.Available {
+		t.Fatalf("local endpoint check = %#v", result)
+	}
+	if result.Details["api_key_optional"] != true {
+		t.Fatalf("api_key_optional = %#v", result.Details["api_key_optional"])
+	}
+	if result.Details["api_key_env"] != "OPENAI_API_KEY" {
+		t.Fatalf("api_key_env = %#v", result.Details["api_key_env"])
+	}
+}
+
+func TestOpenAILegacyAliasUsesFastSubOpenAIEnv(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "fast-sub-go.toml")
+	if err := os.WriteFile(configPath, []byte(`
+[providers.api-openai-transcription]
+api_key_env = "openai-default"
+model = "gpt-4o-transcribe"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, ok := Test(context.Background(), fakeRuntime(map[string]string{
+		"FAST_SUB_GO_CONFIG":      configPath,
+		"FAST_SUB_OPENAI_API_KEY": "sk-test-secret",
+	}, false, nil), "api-openai-transcription")
+	if !ok {
+		t.Fatal("provider missing")
+	}
+	if result.Status != StatusAvailable || !result.Available {
+		t.Fatalf("legacy alias check = %#v", result)
+	}
+	if result.Details["api_key_env"] != "FAST_SUB_OPENAI_API_KEY" {
+		t.Fatalf("api_key_env = %#v", result.Details["api_key_env"])
+	}
+}
+
+func TestOpenAICompatibleLiveCheckUsesModelsEndpointWithoutKeyForLocalServer(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "" {
+			t.Fatalf("Authorization header should be omitted for no-key local check")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer server.Close()
+	configPath := filepath.Join(t.TempDir(), "fast-sub-go.toml")
+	if err := os.WriteFile(configPath, []byte(`
+[providers.api-openai-chat]
+base_url = "`+server.URL+`/v1"
+model = "qwen/qwen3-4b-2507"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, ok := TestMode(context.Background(), fakeRuntime(map[string]string{
+		"FAST_SUB_GO_CONFIG": configPath,
+	}, false, nil), "api-openai-chat", CheckModeLive)
+	if !ok {
+		t.Fatal("provider missing")
+	}
+	if result.CheckMode != CheckModeLive || result.Status != StatusAvailable || !result.Available {
+		t.Fatalf("live check = %#v", result)
+	}
+	if result.Details["live_network"] != true {
+		t.Fatalf("live_network = %#v", result.Details["live_network"])
+	}
+}
+
+func TestOpenAITranscriptionLiveCheckUsesModelsEndpointWithoutPreflightKey(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "" {
+			t.Fatalf("Authorization header should be omitted when no key is configured")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer server.Close()
+	configPath := filepath.Join(t.TempDir(), "fast-sub-go.toml")
+	if err := os.WriteFile(configPath, []byte(`
+[providers.api-openai-transcription]
+base_url = "`+server.URL+`/v1"
+model = "FenomAI/faster-whisper-large-v3"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, ok := TestMode(context.Background(), fakeRuntime(map[string]string{
+		"FAST_SUB_GO_CONFIG": configPath,
+	}, false, nil), "api-openai-transcription", CheckModeLive)
+	if !ok {
+		t.Fatal("provider missing")
+	}
+	if !called {
+		t.Fatal("live check should call /models instead of failing on missing key before request")
+	}
+	if result.CheckMode != CheckModeLive || result.Status != StatusAvailable || !result.Available {
+		t.Fatalf("live check = %#v", result)
+	}
+	if result.Details["api_key_optional"] != true {
+		t.Fatalf("api_key_optional = %#v", result.Details["api_key_optional"])
+	}
+}
+
+func TestOpenAICompatibleLiveCheckReportsKeyRejected(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+	configPath := filepath.Join(t.TempDir(), "fast-sub-go.toml")
+	if err := os.WriteFile(configPath, []byte(`
+[providers.api-openai-chat]
+base_url = "`+server.URL+`/v1"
+model = "qwen/qwen3-4b-2507"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, ok := TestMode(context.Background(), fakeRuntime(map[string]string{
+		"FAST_SUB_GO_CONFIG": configPath,
+	}, false, nil), "api-openai-chat", CheckModeLive)
+	if !ok {
+		t.Fatal("provider missing")
+	}
+	if result.Status != StatusMissingAPIKey || result.Available {
+		t.Fatalf("live rejected check = %#v", result)
+	}
+}
+
 func TestOpenAIInvalidConfigIsUnavailableEvenWithEnvKey(t *testing.T) {
 	missingConfigPath := filepath.Join(t.TempDir(), "missing.toml")
 
@@ -218,6 +442,9 @@ func fakeRuntime(env map[string]string, lookPathOK bool, statErr error) RuntimeC
 				return nil, statErr
 			}
 			return os.Stat(path)
+		},
+		RunCommand: func(context.Context, string, []string) error {
+			return nil
 		},
 		ModelResolver: func(providerID string) ModelResolution {
 			return ModelResolution{Message: "No compatible Go-managed model is installed."}

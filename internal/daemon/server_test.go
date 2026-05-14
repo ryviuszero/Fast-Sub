@@ -117,6 +117,146 @@ func TestServer_DeleteModelRemovesManagedModel(t *testing.T) {
 	}
 }
 
+func TestServer_ConfigPatchPreservesPreviousValues(t *testing.T) {
+	t.Parallel()
+	srv := newTestHTTPServer(t, fakeRunner{})
+	defer srv.Close()
+
+	resp, body := request(t, srv.URL, http.MethodPatch, "/v1/config", "test-token", map[string]any{
+		"schema_version": 1,
+		"patch": map[string]any{
+			"output_type": "bilingual_srt",
+		},
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch output_type status=%d body=%s", resp.StatusCode, body)
+	}
+	resp, body = request(t, srv.URL, http.MethodPatch, "/v1/config", "test-token", map[string]any{
+		"schema_version": 1,
+		"patch": map[string]any{
+			"output_format": "vtt",
+		},
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch output_format status=%d body=%s", resp.StatusCode, body)
+	}
+	if !bytes.Contains(body, []byte(`"output_type":"bilingual_srt"`)) || !bytes.Contains(body, []byte(`"output_format":"vtt"`)) {
+		t.Fatalf("config patch did not preserve previous values: %s", body)
+	}
+	resp, body = request(t, srv.URL, http.MethodGet, "/v1/config", "test-token", nil, "")
+	if resp.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`"output_type":"bilingual_srt"`)) || !bytes.Contains(body, []byte(`"output_format":"vtt"`)) {
+		t.Fatalf("get config did not preserve patches status=%d body=%s", resp.StatusCode, body)
+	}
+}
+
+func TestServer_ConfigPatchPersistsToFile(t *testing.T) {
+	t.Parallel()
+	configPath := filepath.Join(t.TempDir(), "fast-sub-go.toml")
+	server, err := New(Config{
+		Token:      "test-token",
+		JobRoot:    t.TempDir(),
+		ConfigPath: configPath,
+		Runner:     fakeRunner{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(server)
+	defer srv.Close()
+
+	resp, body := request(t, srv.URL, http.MethodPatch, "/v1/config", "test-token", map[string]any{
+		"schema_version": 1,
+		"patch": map[string]any{
+			"language":                       "en",
+			"target_language":                "zh",
+			"output_type":                    "bilingual_srt",
+			"output_format":                  "vtt",
+			"folder_scan_include_subfolders": true,
+			"folder_scan_max_files":          200,
+		},
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch config status=%d body=%s", resp.StatusCode, body)
+	}
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`output_type = "bilingual_srt"`)) || !bytes.Contains(raw, []byte(`output_format = "vtt"`)) || !bytes.Contains(raw, []byte(`folder_scan_include_subfolders = true`)) || !bytes.Contains(raw, []byte(`folder_scan_max_files = 200`)) {
+		t.Fatalf("config file did not persist patch: %s", raw)
+	}
+
+	restarted, err := New(Config{
+		Token:      "test-token",
+		JobRoot:    t.TempDir(),
+		ConfigPath: configPath,
+		Runner:     fakeRunner{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restarted.runtimeConfig.OutputType != "bilingual_srt" || restarted.runtimeConfig.OutputFormat != "vtt" || restarted.runtimeConfig.Language != "en" || !restarted.runtimeConfig.FolderScanIncludeSubfolders || restarted.runtimeConfig.FolderScanMaxFiles != 200 {
+		t.Fatalf("restarted config = %#v", restarted.runtimeConfig)
+	}
+}
+
+func TestServer_ConfigPatchKeepsAPIProvidersIndependent(t *testing.T) {
+	t.Parallel()
+	configPath := filepath.Join(t.TempDir(), "fast-sub-go.toml")
+	server, err := New(Config{
+		Token:      "test-token",
+		JobRoot:    t.TempDir(),
+		ConfigPath: configPath,
+		Runner:     fakeRunner{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(server)
+	defer srv.Close()
+
+	resp, body := request(t, srv.URL, http.MethodPatch, "/v1/config", "test-token", map[string]any{
+		"schema_version": 1,
+		"patch": map[string]any{
+			"api_providers": map[string]any{
+				"api-openai-transcription": map[string]any{
+					"base_url":      "https://api.openai.com/v1",
+					"model":         "gpt-4o-transcribe",
+					"api_key_alias": "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY",
+				},
+				"api-openai-chat": map[string]any{
+					"base_url":      "http://127.0.0.1:1234/v1",
+					"model":         "qwen/qwen3-4b-2507",
+					"api_key_alias": "FAST_SUB_OPENAI_CHAT_API_KEY",
+				},
+			},
+		},
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch config status=%d body=%s", resp.StatusCode, body)
+	}
+	if !bytes.Contains(body, []byte(`"api-openai-transcription":{"api_key_alias":"FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY","api_key_status":"missing","base_url":"https://api.openai.com/v1","model":"gpt-4o-transcribe"`)) {
+		t.Fatalf("transcription provider config missing from response: %s", body)
+	}
+	if !bytes.Contains(body, []byte(`"api-openai-chat":{"api_key_alias":"FAST_SUB_OPENAI_CHAT_API_KEY","api_key_status":"missing","base_url":"http://127.0.0.1:1234/v1","model":"qwen/qwen3-4b-2507"`)) {
+		t.Fatalf("chat provider config missing from response: %s", body)
+	}
+
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`[providers.api-openai-transcription]`)) || !bytes.Contains(raw, []byte(`[providers.api-openai-chat]`)) {
+		t.Fatalf("provider sections were not persisted independently: %s", raw)
+	}
+	if !bytes.Contains(raw, []byte(`api_key_env = "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY"`)) || !bytes.Contains(raw, []byte(`api_key_env = "FAST_SUB_OPENAI_CHAT_API_KEY"`)) {
+		t.Fatalf("provider key aliases were not persisted independently: %s", raw)
+	}
+	if !bytes.Contains(raw, []byte(`model = "gpt-4o-transcribe"`)) || !bytes.Contains(raw, []byte(`model = "qwen/qwen3-4b-2507"`)) {
+		t.Fatalf("provider models were not persisted independently: %s", raw)
+	}
+}
+
 func TestServer_RejectsNonLoopbackHost(t *testing.T) {
 	t.Parallel()
 	_, err := New(Config{

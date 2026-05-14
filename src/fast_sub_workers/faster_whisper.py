@@ -113,8 +113,17 @@ def transcribe(request: SttWorkerRequest) -> SttWorkerResponse:
                 transcriber = pipeline_cls(model=model)
                 transcribe_kwargs["batch_size"] = request.batch_size
 
-        segments_iter, info = transcriber.transcribe(str(request.audio_path), **transcribe_kwargs)
-        segments = list(segments_iter)
+        segments, info = _transcribe_once_with_clip_timestamp_fallback(
+            transcriber, request.audio_path, transcribe_kwargs, warnings
+        )
+        if not segments and transcribe_kwargs.get("vad_filter") is True:
+            fallback_kwargs = dict(transcribe_kwargs)
+            fallback_kwargs["vad_filter"] = False
+            fallback_kwargs.pop("vad_parameters", None)
+            warnings.append("No segments returned with VAD; retried with VAD disabled.")
+            segments, info = _transcribe_once_with_clip_timestamp_fallback(
+                transcriber, request.audio_path, fallback_kwargs, warnings
+            )
     except WorkerFailure:
         raise
     except Exception as exc:
@@ -141,6 +150,39 @@ def transcribe(request: SttWorkerRequest) -> SttWorkerResponse:
         segments=provider_segments,
         warnings=warnings,
     )
+
+
+def _transcribe_once(
+    transcriber: Any,
+    audio_path: Path,
+    kwargs: dict[str, Any],
+) -> tuple[list[Any], Any]:
+    segments_iter, info = transcriber.transcribe(str(audio_path), **kwargs)
+    return list(segments_iter), info
+
+
+def _transcribe_once_with_clip_timestamp_fallback(
+    transcriber: Any,
+    audio_path: Path,
+    kwargs: dict[str, Any],
+    warnings: list[str],
+) -> tuple[list[Any], Any]:
+    try:
+        return _transcribe_once(transcriber, audio_path, kwargs)
+    except RuntimeError as exc:
+        if kwargs.get("vad_filter") is False and _is_clip_timestamps_error(exc):
+            fallback_kwargs = dict(kwargs)
+            fallback_kwargs["vad_filter"] = True
+            warnings.append(
+                "faster-whisper required clip timestamps with VAD disabled; retried with VAD enabled."
+            )
+            return _transcribe_once(transcriber, audio_path, fallback_kwargs)
+        raise
+
+
+def _is_clip_timestamps_error(exc: RuntimeError) -> bool:
+    message = str(exc).lower()
+    return "no clip timestamps found" in message and "vad_filter" in message
 
 
 def _read_request(request_path: Path) -> SttWorkerRequest:

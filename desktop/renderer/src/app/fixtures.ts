@@ -45,6 +45,9 @@ export const seedFiles: MediaFile[] = [
   { path: "\\\\NAS\\data\\others\\资料\\sample-podcast.wav", name: "sample-podcast.wav", size: "120 MB", duration: "28:40" }
 ];
 
+const SUPPORTED_MEDIA_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".wav", ".m4a", ".mp3"]);
+const SKIPPED_MEDIA_NAMES = new Set([".ds_store", "thumbs.db", "desktop.ini"]);
+
 export function createClient(scenario: MockScenario): FastSubClient {
   const viteMode = (import.meta as ImportMeta & { env?: { MODE?: string } }).env?.MODE;
   if (window.fastSubClient && viteMode !== "test") {
@@ -63,8 +66,39 @@ export function makeFile(path: string, index = 0): MediaFile {
   };
 }
 
-export function makeFilesFromList(selected: FileList, limit = Number.POSITIVE_INFINITY): MediaFile[] {
-  return Array.from(selected).slice(0, limit).map((file, index) => makeFile(pathForFile(file), index));
+export function isSupportedMediaPath(path: string): boolean {
+  const name = path.split(/[\\/]/).pop()?.trim().toLowerCase() ?? "";
+  if (!name || SKIPPED_MEDIA_NAMES.has(name)) {
+    return false;
+  }
+  const dotIndex = name.lastIndexOf(".");
+  return dotIndex > 0 && SUPPORTED_MEDIA_EXTENSIONS.has(name.slice(dotIndex));
+}
+
+export function filterSupportedMediaPaths(paths: string[], limit = Number.POSITIVE_INFINITY): string[] {
+  const safeLimit = Math.max(0, Math.floor(limit));
+  return paths.filter(isSupportedMediaPath).slice(0, safeLimit);
+}
+
+export function makeFilesFromList(
+  selected: FileList,
+  limit = Number.POSITIVE_INFINITY,
+  options: { includeSubfolders?: boolean } = {}
+): MediaFile[] {
+  const includeSubfolders = options.includeSubfolders === true;
+  return Array.from(selected)
+    .filter((file) => includeSubfolders || isTopLevelFolderFile(file))
+    .filter((file) => isSupportedMediaPath(pathForFile(file)))
+    .slice(0, Math.max(0, Math.floor(limit)))
+    .map((file, index) => makeFile(pathForFile(file), index));
+}
+
+function isTopLevelFolderFile(file: File): boolean {
+  const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath ?? "";
+  if (!relativePath) {
+    return true;
+  }
+  return relativePath.split("/").filter(Boolean).length <= 2;
 }
 
 function pathForFile(file: File): string {

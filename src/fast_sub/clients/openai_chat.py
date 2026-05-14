@@ -102,13 +102,29 @@ def _message_content(response: dict[str, object]) -> str:
     first_choice = choices[0]
     if not isinstance(first_choice, dict):
         raise OpenAIChatClientError("Chat completion choice must be an object.")
+    legacy_text = first_choice.get("text")
+    if isinstance(legacy_text, str) and legacy_text.strip():
+        return legacy_text
     message = first_choice["message"]
     if not isinstance(message, dict):
         raise OpenAIChatClientError("Chat completion message must be an object.")
     content = message["content"]
-    if not isinstance(content, str):
-        raise OpenAIChatClientError("Chat completion message content must be text.")
-    return content
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+                continue
+            if isinstance(item, dict):
+                text = item.get("text") or item.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+        joined = "\n".join(part for part in parts if part.strip()).strip()
+        if joined:
+            return joined
+    raise OpenAIChatClientError("Chat completion message content must be text.")
 
 
 __all__ = ["OpenAIChatClient"]

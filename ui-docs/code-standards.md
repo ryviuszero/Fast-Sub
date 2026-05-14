@@ -94,7 +94,7 @@
 
 - Electron 第一版不引入数据库。
 - UI 设置可以保存在 Electron store 或本地配置 adapter 中，但只能保存非敏感数据。
-- API key 和 provider secret 必须保存在 OS keychain 或等效安全存储中。
+- API key 和 provider secret 必须由 Electron main process 保存在 `safeStorage` + 本地加密 secret store 或等效安全存储中；renderer 只能看到 alias、masked 状态和是否已配置。
 - localStorage 不允许保存 secret、daemon token、Authorization header 或 signed URL。
 - Renderer state 只保存当前 UI 状态、表单草稿、筛选条件和用户可见数据。
 - Job、model、provider 的真实状态来自 daemon client，不来自 renderer 缓存。
@@ -127,33 +127,35 @@
 
 - `ui-docs/` — UI 规划、项目总览、架构、代码标准和产品流程文档。
 - `ui-docs/prototype/` — 当前 Vite/React 原型和 artboards，仅作为设计参考。
--- `desktop/` — Electron 应用根目录。Round 11 已确定使用此目录名。
--- `desktop/main/` — Electron main process、窗口、daemon lifecycle、系统 dialog、安全存储。
--- `desktop/preload/` — 安全 IPC bridge 和受控 API 暴露。
--- `desktop/renderer/` — React UI、页面、组件、状态和样式。
--- `desktop/renderer/pages/setup/` — 首次启动和环境检查流程。
--- `desktop/renderer/pages/main/` — 主界面、一键生成、详细设置和结果状态。
--- `desktop/renderer/pages/jobs/` — 任务列表、任务详情、失败详情和日志摘要。
--- `desktop/renderer/pages/tools/` — 翻译已有 SRT、字幕烧录等独立工具。
--- `desktop/renderer/pages/settings/` — 通用、模型、API、Provider、诊断、Benchmark 设置页。
--- `desktop/renderer/components/` — 按钮、输入、状态标签、进度条、文件卡片、确认弹窗等基础组件。
--- `desktop/renderer/client/` — `FastSubClient` interface、mock client、daemon client renderer-facing facade、hooks 和 view-model adapter。
--- `desktop/main/client/` — 真实 daemon adapter、REST/SSE、auth、daemon lifecycle、配置文件同步。
--- `desktop/preload/client/` — 受控 IPC client bridge。
--- `desktop/renderer/state/` — UI store、view model、form state 和 derived state。
--- `desktop/shared/contracts/` — TypeScript contract types、schema adapter、错误码映射。
--- `desktop/shared/privacy/` — provider privacy 文案、远程上传确认模型、redaction UI helper。
--- `desktop/test/` — UI、client、mock flow、contract mapping 和隐私测试。
+- `desktop/` — Electron 应用根目录。Round 11 已确定使用此目录名。
+- `desktop/main/` — Electron main process、窗口、daemon lifecycle、系统 dialog、安全存储。
+- `desktop/preload/` — 安全 IPC bridge 和受控 API 暴露。
+- `desktop/renderer/` — React UI、页面、组件、状态和样式。
+- `desktop/renderer/pages/setup/` — 首次启动和环境检查流程。
+- `desktop/renderer/pages/main/` — 主界面、一键生成、详细设置和结果状态。
+- `desktop/renderer/pages/jobs/` — 任务列表、任务详情、失败详情和日志摘要。
+- `desktop/renderer/pages/tools/` — 翻译已有 SRT / TXT、字幕烧录等独立工具。
+- `desktop/renderer/pages/settings/` — 通用、模型、Provider、诊断、Benchmark 设置页；API 配置内嵌对应 Provider 卡片。
+- `desktop/renderer/components/` — 按钮、输入、状态标签、进度条、文件卡片、确认弹窗等基础组件。
+- `desktop/renderer/client/` — `FastSubClient` interface、mock client、daemon client renderer-facing facade、hooks 和 view-model adapter。
+- `desktop/main/client/` — 真实 daemon adapter、REST/SSE、auth、daemon lifecycle、配置文件同步。
+- `desktop/preload/client/` — 受控 IPC client bridge。
+- `desktop/renderer/state/` — UI store、view model、form state 和 derived state。
+- `desktop/shared/contracts/` — TypeScript contract types、schema adapter、错误码映射。
+- `desktop/shared/privacy/` — provider privacy 文案、远程上传确认模型、redaction UI helper。
+- `desktop/test/` — UI、client、mock flow、contract mapping 和隐私测试。
 
-## Round 11 Decisions And Later Choices
+## Current Decisions And Later Choices
 
-| 决策 | Round 11 选择 | 后续需要确认 |
+| 决策 | 当前实现 | 后续需要确认 |
 | --- | --- | --- |
 | Electron 应用目录 | 使用 `desktop/` | 无 |
 | UI 状态库 | 使用 React state，不引入 Zustand/Jotai | 复杂度上升后是否需要轻量 store |
 | UI 组件库 | 使用自定义组件，基于 prototype 和 `ui-context.md` token 整理 | Round 13 是否引入 Radix/shadcn |
-| 安全存储库 | Round 11 只实现 mock 安全存储 | Round 12/13 选择具体 Electron keychain 依赖 |
-| 设置存储 | 用户设置映射到 Fast Sub 配置文件；纯 UI 偏好可用 Electron store | 配置文件路径和真实写入 adapter 细节 |
-| SSE client | Round 11 只模拟 job event/progress | Round 12 确认 EventSource 代理、fetch-based SSE 或 main process stream bridge |
+| Provider 设置 | API 配置内嵌转写/翻译 Provider 卡片；API 服务不再作为独立用户入口 | Round 13 是否增加 provider onboarding |
+| 安全存储库 | Electron `safeStorage` + 本地加密 secret store；renderer 不读取 raw secret | keytar/OS keychain 打包和 ABI 兼容验证 |
+| 设置存储 | 运行配置通过 daemon `GET/PATCH /v1/config` 持久化；纯 UI 偏好可用 Electron store | 配置迁移和损坏配置恢复 polish |
+| SSE client | main/preload controlled fetch-based SSE client；renderer 只接 typed event | 打包后 sleep/wake、断线重连 smoke |
+| 文件夹扫描 | 默认不递归；设置中可开启嵌套扫描；默认最大数量 100，硬上限 500；只保留媒体扩展 | 是否增加后台索引和更细扫描报告 |
 | 测试栈 | React Testing Library + fake client + contract fixture | 是否加入 Playwright/Electron E2E |
 | 样式方案 | CSS tokens + 组件样式 | 是否使用 CSS Modules、Tailwind 或纯 CSS |

@@ -404,6 +404,9 @@ func providerRuntimeForCLI(env map[string]string, lookPathOK bool) providers.Run
 			return "", os.ErrNotExist
 		},
 		Stat: os.Stat,
+		RunCommand: func(context.Context, string, []string) error {
+			return nil
+		},
 	}
 }
 

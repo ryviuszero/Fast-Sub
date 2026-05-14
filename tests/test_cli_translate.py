@@ -248,11 +248,13 @@ def test_translate_checkpoint_resume_and_no_resume(monkeypatch, work_dir: Path) 
     ]
 
     first = runner.invoke(cli.app, args)
+    assert Path(str(output) + ".translate-progress.json").exists()
     second = runner.invoke(cli.app, args)
     third = runner.invoke(cli.app, [*args, "--no-resume"])
 
     assert first.exit_code == second.exit_code == third.exit_code == 0
     assert calls == ["Hello", "World", "Hello", "World"]
+    assert Path(str(output) + ".translate-progress.json").exists() is False
 
 
 def test_translate_api_openai_chat_reads_dotenv(monkeypatch, work_dir: Path) -> None:

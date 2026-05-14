@@ -1,16 +1,23 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { JobSummary } from "../../../../shared/contracts/types";
 import type { QueueFilter, RenderProps } from "../types";
 import { Chip, Chrome, Divider, KV, Tabs } from "../components";
 
+const RECENT_HISTORY_LIMIT = 40;
+
 export function QueueList({ jobs, queueInitialFilter, setScreen, openJob }: RenderProps) {
   const [queueFilter, setQueueFilter] = useState<QueueFilter>(queueInitialFilter);
-  const runningJobs = jobs.filter((job) => job.status === "running" || job.status === "canceling");
-  const queuedJobs = jobs.filter((job) => job.status === "queued");
+  useEffect(() => {
+    setQueueFilter(queueInitialFilter);
+  }, [queueInitialFilter]);
+  const displayJobs = recentQueueJobs(jobs, RECENT_HISTORY_LIMIT);
+  const hiddenCount = Math.max(0, jobs.length - displayJobs.length);
+  const runningJobs = displayJobs.filter((job) => job.status === "running" || job.status === "canceling");
+  const queuedJobs = displayJobs.filter((job) => job.status === "queued");
   const activeJobs = [...runningJobs, ...queuedJobs];
-  const completedJobs = jobs.filter((job) => job.status === "succeeded");
-  const failedJobs = jobs.filter((job) => job.status === "failed");
-  const totalCount = jobs.length;
+  const completedJobs = displayJobs.filter((job) => job.status === "succeeded");
+  const failedJobs = displayJobs.filter((job) => job.status === "failed");
+  const totalCount = displayJobs.length;
   const showRunning = queueFilter === "all" || queueFilter === "running";
   const showDone = queueFilter === "all" || queueFilter === "done";
   const showFailed = queueFilter === "all" || queueFilter === "failed";
@@ -18,8 +25,9 @@ export function QueueList({ jobs, queueInitialFilter, setScreen, openJob }: Rend
   return (
     <div className="wf">
       <Chrome title="任务队列" back onBack={() => setScreen("main-empty")} />
-      <Tabs items={[`全部 ${totalCount}`, `正在生成 ${activeJobs.length}`, `已完成 ${completedJobs.length}`, `失败 ${failedJobs.length}`]} active={tabIndex} onSelect={(index) => setQueueFilter(["all", "running", "done", "failed"][index] as QueueFilter)} />
+      <Tabs items={[`全部 ${totalCount}${hiddenCount ? ` / ${jobs.length}` : ""}`, `正在生成 ${activeJobs.length}`, `已完成 ${completedJobs.length}`, `失败 ${failedJobs.length}`]} active={tabIndex} onSelect={(index) => setQueueFilter(["all", "running", "done", "failed"][index] as QueueFilter)} />
       <main className="content-flow queue-flow">
+        {hiddenCount > 0 && <p className="queue-note">仅显示最近 {displayJobs.length} 条任务，已隐藏更早的 {hiddenCount} 条记录。</p>}
         {showRunning && (
           <>
             {runningJobs.map((job) => (
@@ -53,7 +61,8 @@ export function QueueList({ jobs, queueInitialFilter, setScreen, openJob }: Rend
 
 export function QueueDetail({ activeJob, setScreen, failed, retryJob, deleteJob, cancelJob }: RenderProps & { failed: boolean }) {
   const [detailTab, setDetailTab] = useState(0);
-  const tabs = failed ? ["问题", "日志", "配置"] : ["进度", "日志", "详情"];
+  const failedStatus = activeJob ? activeJob.status === "failed" : failed;
+  const tabs = failedStatus ? ["问题", "日志", "配置"] : ["进度", "日志", "详情"];
   const canceled = activeJob?.status === "canceled";
   const canceling = activeJob?.status === "canceling";
   const succeeded = activeJob?.status === "succeeded";
@@ -72,14 +81,17 @@ export function QueueDetail({ activeJob, setScreen, failed, retryJob, deleteJob,
         : activeJob?.stageLabel ?? "等待 daemon 任务事件...";
   return (
     <div className="wf">
-      <Chrome title={failed ? "失败任务详情" : "任务详情"} back onBack={() => setScreen("queue-list")} />
+      <Chrome title={failedStatus ? "失败任务详情" : "任务详情"} back onBack={() => setScreen("queue-list")} />
       <header className="detail-head">
         <div><h2>{title}</h2><span>{subtitle}</span></div>
-        <Chip tone={failed ? "warn" : succeeded ? "ok" : canceled ? "muted" : "accent"}>{failed ? "已失败" : succeeded ? "已完成" : canceled ? "已取消" : canceling ? "正在取消" : "正在生成"}</Chip>
+        <div className="row gap-8 mid">
+          <button className="btn sm ghost" onClick={() => setScreen("queue-list")} type="button">返回任务列表</button>
+          <Chip tone={failedStatus ? "warn" : succeeded ? "ok" : canceled ? "muted" : "accent"}>{failedStatus ? "已失败" : succeeded ? "已完成" : canceled ? "已取消" : canceling ? "正在取消" : "正在生成"}</Chip>
+        </div>
       </header>
       <Tabs items={tabs} active={detailTab} onSelect={setDetailTab} />
       <main className="content-flow">
-        {failed ? (
+        {failedStatus ? (
           <>
             {detailTab === 0 && (
               <>
@@ -139,18 +151,50 @@ export function LogPanel({ activeJob }: Pick<RenderProps, "activeJob">) {
   );
 }
 
+function recentQueueJobs(jobs: JobSummary[], limit: number): JobSummary[] {
+  const active = jobs.filter((job) => job.status === "running" || job.status === "queued" || job.status === "canceling");
+  const activeIds = new Set(active.map((job) => job.id));
+  const history = jobs
+    .filter((job) => !activeIds.has(job.id))
+    .slice()
+    .sort((a, b) => jobTimeValue(b) - jobTimeValue(a));
+  return [...active, ...history.slice(0, Math.max(0, limit - active.length))];
+}
+
+function jobTimeValue(job: JobSummary): number {
+  const value = Date.parse(job.completedAt || job.createdAt);
+  return Number.isFinite(value) ? value : 0;
+}
+
 function QueueMetaChips({ job, extra = [] }: { job: JobSummary; extra?: string[] }) {
+  const modelName = queueModelChip(job);
   const items = [
     ...extra,
     job.language ? languageLabel(job.language) : "",
     job.providerName || "",
-    job.modelName || ""
+    modelName
   ].filter(Boolean);
   return (
     <div className="job-meta">
       {items.length > 0 ? items.map((item) => <Chip key={item}>{item}</Chip>) : <Chip>配置未同步</Chip>}
     </div>
   );
+}
+
+function queueModelChip(job: JobSummary): string {
+  const model = job.modelName ?? "";
+  if (!model) {
+    return "";
+  }
+  if (job.type !== "translate_srt" && !job.title.endsWith(".translated.srt") && !job.title.endsWith(".translated.txt")) {
+    return model;
+  }
+  const provider = job.providerName ?? "";
+  const nllbModel = model.toLowerCase().includes("nllb");
+  if (nllbModel && !provider.includes("NLLB")) {
+    return "";
+  }
+  return model;
 }
 
 function completedTimeLabel(value = ""): string {

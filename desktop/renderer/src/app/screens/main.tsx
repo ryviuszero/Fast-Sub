@@ -1,73 +1,151 @@
 import { useEffect, useState } from "react";
 import type { DragEvent } from "react";
-import type { ConfigViewModel, JobStatus } from "../../../../shared/contracts/types";
+import type { ConfigViewModel, JobDetail, JobStatus } from "../../../../shared/contracts/types";
 import type { RenderProps } from "../types";
 import { CheckItem, Chip, Chrome, Divider, Footer, Segment, SettingsEntry, Toggle } from "../components";
+import { useRuntimeText, useT } from "../i18n";
+
+const MAX_VISIBLE_SELECTED_FILES = 40;
+
+type QuickSelectOption<T extends string> = {
+  label: string;
+  value: T;
+};
 
 function outputFormatLabel(format: ConfigViewModel["outputFormat"]): string {
   return format.toUpperCase();
 }
 
-function outputTypeLabel(type: ConfigViewModel["outputType"]): string {
+function outputTypeLabel(type: ConfigViewModel["outputType"], t: (key: string) => string): string {
   const labels: Record<ConfigViewModel["outputType"], string> = {
-    original_srt: "原字幕",
-    translated_srt: "翻译字幕",
-    bilingual_srt: "双语字幕",
-    burned_video: "烧录视频"
+    original_srt: "Original subtitles",
+    translated_srt: "Translated subtitles",
+    bilingual_srt: "Bilingual subtitles",
+    burned_video: "Burn-in video"
   };
-  return labels[type];
+  return t(labels[type]);
 }
 
-export function MainEmpty({ setScreen, addFiles, addFolder, addDroppedFiles, chooseOutputDirectory, outputDirectoryLabel, asrReady, translationReady, config }: RenderProps) {
+export function MainEmpty({ setScreen, addFiles, addFolder, addDroppedFiles, asrReady, translationReady, config, providers, jobs, activeJob, updateConfig }: RenderProps) {
+  const t = useT();
+  const [translationOutputWarning, setTranslationOutputWarning] = useState(false);
+  const [openQuickSelect, setOpenQuickSelect] = useState<"source" | "target" | "output" | null>(null);
+  const languageOptions: Array<QuickSelectOption<string>> = [
+    { label: t("Auto detect"), value: "auto" },
+    { label: t("Chinese"), value: "zh" },
+    { label: t("English"), value: "en" },
+    { label: t("Japanese"), value: "ja" },
+    { label: t("Korean"), value: "ko" }
+  ];
+  const targetLanguageOptions = languageOptions.filter((item) => item.value !== "auto");
+  const outputTypes: Array<{ label: string; value: ConfigViewModel["outputType"] }> = [
+    { label: t("Original subtitles"), value: "original_srt" },
+    { label: t("Translated subtitles"), value: "translated_srt" },
+    { label: t("Bilingual subtitles"), value: "bilingual_srt" }
+  ];
+  const canUseTranslationOutput = translationOutputReady(config, providers, translationReady);
   const handleDropZoneClick = () => {
-    if (asrReady) {
-      void addFiles();
-    }
+    void addFiles();
   };
   const handleDrop = (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
-    if (asrReady && event.dataTransfer.files.length > 0) {
+    if (event.dataTransfer.files.length > 0) {
       addDroppedFiles(event.dataTransfer.files);
     }
   };
+  const selectOutputType = (outputType: ConfigViewModel["outputType"]) => {
+    if (outputTypeNeedsTranslation(outputType) && !canUseTranslationOutput) {
+      setTranslationOutputWarning(true);
+      return;
+    }
+    setTranslationOutputWarning(false);
+    void updateConfig({ outputType });
+  };
   return (
     <div className="wf">
-      <Chrome right={<><Chip tone={asrReady ? "ok" : "warn"}>{asrReady ? "本地转写就绪" : "本地转写未就绪"}</Chip><Chip tone={translationReady ? "ok" : "warn"}>{translationReady ? "翻译就绪" : "翻译未就绪"}</Chip></>} />
+      <Chrome right={<><Chip tone={asrReady ? "ok" : "warn"}>{asrReady ? t("Local transcription ready") : t("Local transcription not ready")}</Chip><Chip tone={translationReady ? "ok" : "warn"}>{translationReady ? t("Translation ready") : t("Translation not ready")}</Chip></>} />
       <main className="main-empty">
-        {!asrReady && (
-          <div className="blocking-note" role="status">
-            <span>缺少默认 ASR 模型。请先在模型管理中下载后再添加媒体。</span>
-            <button className="btn sm primary" onClick={() => setScreen("settings-models")} type="button">去下载模型</button>
-          </div>
-        )}
         <section
-          className={`drop-zone ${asrReady ? "" : "locked"}`}
-          aria-disabled={!asrReady}
+          className="drop-zone"
           onClick={handleDropZoneClick}
           onDragOver={(event) => event.preventDefault()}
           onDrop={handleDrop}
         >
           <div className="drop-arrow">⬇</div>
-          <h1>{asrReady ? "拖拽视频到这里" : "缺少 ASR 模型"}</h1>
-          <p>{asrReady ? "支持 .mp4 · .mov · .mkv · .wav · .m4a · .mp3" : "安装默认模型后才能继续生成字幕。"}</p>
+          <h1>{t("Drop video here")}</h1>
+          <p>{t("Supported media extensions")}</p>
           <div className="row gap-8">
-            <button className="btn" disabled={!asrReady} onClick={(event) => { event.stopPropagation(); void addFiles(); }}>添加视频</button>
-            <button className="btn" disabled={!asrReady} onClick={(event) => { event.stopPropagation(); void addFolder(); }}>添加文件夹</button>
+            <button className="btn" onClick={(event) => { event.stopPropagation(); void addFiles(); }}>{t("Add video")}</button>
+            <button className="btn" onClick={(event) => { event.stopPropagation(); void addFolder(); }}>{t("Add folder")}</button>
           </div>
         </section>
         <div className="output-row">
-          <div><span className="subtle">输出位置：</span><strong>{outputDirectoryLabel}</strong> <button className="link-button" disabled={!asrReady} onClick={() => void chooseOutputDirectory()}>修改</button></div>
-          <div><span className="subtle">格式：</span><strong>{outputFormatLabel(config.outputFormat)}</strong></div>
+          <QuickSelect label={t("Source language")} open={openQuickSelect === "source"} options={languageOptions} value={config.defaultLanguage} onOpen={() => setOpenQuickSelect("source")} onClose={() => setOpenQuickSelect(null)} onChange={(defaultLanguage) => void updateConfig({ defaultLanguage })} />
+          <QuickSelect label={t("Target language")} open={openQuickSelect === "target"} options={targetLanguageOptions} value={config.targetLanguage} onOpen={() => setOpenQuickSelect("target")} onClose={() => setOpenQuickSelect(null)} onChange={(targetLanguage) => void updateConfig({ targetLanguage })} />
+          <QuickSelect label={t("Output content")} open={openQuickSelect === "output"} options={outputTypes} value={config.outputType === "burned_video" ? "original_srt" : config.outputType} onOpen={() => setOpenQuickSelect("output")} onClose={() => setOpenQuickSelect(null)} onChange={selectOutputType} />
         </div>
+        {translationOutputWarning && (
+          <div className="blocking-note" role="status">
+            <span>{t("Translation output not ready")}</span>
+            <button className="btn sm primary" onClick={() => setScreen("settings-providers")} type="button">{t("Configure translation Provider")}</button>
+          </div>
+        )}
       </main>
-      <Footer onHistory={() => setScreen("queue-list")} onSettings={() => setScreen("settings-general")} />
+      <Footer activeJob={activeJob} jobs={jobs} onHistory={() => setScreen("queue-list")} onSettings={() => setScreen("settings-general")} />
+    </div>
+  );
+}
+
+function QuickSelect<T extends string>(props: {
+  label: string;
+  open: boolean;
+  options: Array<QuickSelectOption<T>>;
+  value: T;
+  onOpen: () => void;
+  onClose: () => void;
+  onChange: (value: T) => void;
+}) {
+  const selected = props.options.find((item) => item.value === props.value) ?? props.options[0];
+  return (
+    <div className="quick-setting" onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        props.onClose();
+      }
+    }}>
+      <span className="subtle">{props.label}</span>
+      <button aria-expanded={props.open} aria-haspopup="listbox" aria-label={props.label} className="quick-select-button" onClick={() => props.open ? props.onClose() : props.onOpen()} type="button">
+        <span>{selected?.label ?? props.value}</span>
+        <span aria-hidden="true">›</span>
+      </button>
+      {props.open && (
+        <div className="quick-select-menu" role="listbox">
+          {props.options.map((item) => (
+            <button
+              aria-selected={item.value === props.value}
+              className={item.value === props.value ? "selected" : ""}
+              key={item.value}
+              onClick={() => {
+                props.onChange(item.value);
+                props.onClose();
+              }}
+              role="option"
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 export function MainFiles(props: RenderProps & { advanced: boolean }) {
+  const t = useT();
   const files = props.files;
-  const canGenerate = props.asrReady;
+  const visibleFiles = files.slice(0, MAX_VISIBLE_SELECTED_FILES);
+  const hiddenFileCount = Math.max(0, files.length - visibleFiles.length);
+  const localReady = props.asrReady;
   const removeFile = (path: string) => {
     const nextFiles = files.filter((item) => item.path !== path);
     props.setFiles(nextFiles);
@@ -77,28 +155,39 @@ export function MainFiles(props: RenderProps & { advanced: boolean }) {
   };
   return (
     <div className="wf">
-      <Chrome right={<Chip tone={canGenerate ? "ok" : "warn"}>{canGenerate ? "就绪" : "未就绪"}</Chip>} />
+      <Chrome right={<Chip tone={localReady ? "ok" : "warn"}>{localReady ? t("Ready") : t("Not ready")}</Chip>} />
       <main className="content-flow">
         <div className="between">
-          <h2>已添加 {files.length} 个文件</h2>
-          <button className="btn sm ghost" disabled={!canGenerate} onClick={() => void props.addFiles()}>+ 添加更多</button>
+          <h2>{props.fileImportPending ? t("Preparing selected files") : t("Files added", { count: files.length })}</h2>
+          <button className="btn sm ghost" disabled={props.fileImportPending} onClick={() => void props.addFiles()}>{t("+ Add more")}</button>
         </div>
-        {!canGenerate && <div className="blocking-note" role="status">缺少默认 ASR 模型，当前不能继续生成字幕。</div>}
         {props.advanced && <AdvancedSettings {...props} />}
+        {props.fileImportPending && (
+          <section aria-live="polite" className="panel file-import-loading" role="status">
+            <span className="spin" />
+            <div>
+              <strong>{t("Preparing media files")}</strong>
+              <span>{props.fileImportCount ? t("Preparing selected count", { count: props.fileImportCount }) : t("Please wait while files are scanned")}</span>
+            </div>
+          </section>
+        )}
         <div className="file-list">
-          {files.map((file) => (
+          {visibleFiles.map((file) => (
             <article className="file-card" key={file.path}>
               <div><strong>{file.name}</strong><span>{file.size} · {file.duration}</span></div>
-              <button className="btn sm ghost" onClick={() => removeFile(file.path)}>移除</button>
+              <button className="btn sm ghost" onClick={() => removeFile(file.path)}>{t("Remove")}</button>
             </article>
           ))}
+          {hiddenFileCount > 0 && (
+            <div className="file-list-more">{t("More files hidden", { count: hiddenFileCount })}</div>
+          )}
         </div>
         {!props.advanced && (
           <>
             <Divider />
             <div className="between">
-              <div><p>输出：{outputTypeLabel(props.config.outputType)} {outputFormatLabel(props.config.outputFormat)} · 与源视频相同目录</p><span className="caption">语言：自动识别 · 本地转写 (whisper-small)</span></div>
-              <button className="link-button" onClick={() => props.setScreen("main-advanced")}>详细设置</button>
+              <div><p>{t("Output prefix")}{outputTypeLabel(props.config.outputType, t)} {outputFormatLabel(props.config.outputFormat)}{props.config.burnInVideo ? ` · ${t("Burn-in video")}` : ""} · {t("Same folder as source")}</p><span className="caption">{t("Default main summary")}</span></div>
+              <button className="link-button" onClick={() => props.setScreen("main-advanced")}>{t("Detailed settings")}</button>
             </div>
           </>
         )}
@@ -106,8 +195,8 @@ export function MainFiles(props: RenderProps & { advanced: boolean }) {
       <div className="action-footer">
         <SettingsEntry onClick={() => props.setScreen("settings-general")} />
         <div className="row gap-8">
-          <button className="btn ghost" onClick={() => props.setScreen("main-empty")}>取消</button>
-          <button className="btn primary hero-action" disabled={!canGenerate} onClick={() => void props.startJob()}>生成字幕</button>
+          <button className="btn ghost" onClick={() => props.setScreen("main-empty")}>{t("Cancel")}</button>
+          <button className="btn primary hero-action" disabled={props.fileImportPending || files.length === 0} onClick={() => void props.startJob()}>{t("Start subtitle generation")}</button>
         </div>
       </div>
     </div>
@@ -115,16 +204,17 @@ export function MainFiles(props: RenderProps & { advanced: boolean }) {
 }
 
 export function AdvancedSettings(props: RenderProps) {
+  const t = useT();
+  const [translationOutputWarning, setTranslationOutputWarning] = useState(false);
   const outputTypes: Array<{ label: string; value: ConfigViewModel["outputType"] }> = [
-    { label: "原字幕", value: "original_srt" },
-    { label: "翻译字幕", value: "translated_srt" },
-    { label: "双语字幕", value: "bilingual_srt" },
-    { label: "烧录视频", value: "burned_video" }
+    { label: t("Original subtitles"), value: "original_srt" },
+    { label: t("Translated subtitles"), value: "translated_srt" },
+    { label: t("Bilingual subtitles"), value: "bilingual_srt" }
   ];
   const conflictModes: Array<{ label: string; value: ConfigViewModel["outputConflict"] }> = [
-    { label: "询问", value: "ask" },
-    { label: "覆盖", value: "overwrite" },
-    { label: "跳过", value: "skip" }
+    { label: t("Ask"), value: "ask" },
+    { label: t("Overwrite"), value: "overwrite" },
+    { label: t("Skip"), value: "skip" }
   ];
   const outputFormats: Array<{ label: string; value: ConfigViewModel["outputFormat"] }> = [
     { label: "SRT", value: "srt" },
@@ -135,38 +225,63 @@ export function AdvancedSettings(props: RenderProps) {
   const outputTypeIndex = Math.max(0, outputTypes.findIndex((item) => item.value === props.config.outputType));
   const outputFormatIndex = Math.max(0, outputFormats.findIndex((item) => item.value === props.config.outputFormat));
   const conflictIndex = Math.max(0, conflictModes.findIndex((item) => item.value === props.config.outputConflict));
+  const canUseTranslationOutput = translationOutputReady(props.config, props.providers, props.translationReady);
+  const selectOutputType = (outputType: ConfigViewModel["outputType"]) => {
+    if (outputTypeNeedsTranslation(outputType) && !canUseTranslationOutput) {
+      setTranslationOutputWarning(true);
+      return;
+    }
+    setTranslationOutputWarning(false);
+    void props.updateConfig({ outputType });
+  };
   return (
     <section className="panel paper-muted compact-settings">
-      <div className="between"><h2>详细设置</h2><button className="link-button" onClick={() => props.setScreen("main-files")}>收起</button></div>
+      <div className="between"><h2>{t("Detailed settings")}</h2><button className="link-button" onClick={() => props.setScreen("main-files")}>{t("Collapse")}</button></div>
       <div className="settings-grid">
-        <label>字幕语言<select value={props.config.defaultLanguage} onChange={(event) => props.setConfig({ ...props.config, defaultLanguage: event.target.value })}><option value="auto">自动识别</option><option value="zh">中文</option><option value="en">英语</option></select></label>
-        <label>目标语言<select value={props.config.targetLanguage} onChange={(event) => props.setConfig({ ...props.config, targetLanguage: event.target.value })}><option value="zh">简体中文</option><option value="en">英语</option><option value="ja">日语</option></select></label>
-        <label>ASR 模型<select value={props.config.asrModel} onChange={(event) => props.setConfig({ ...props.config, asrModel: event.target.value })}>{props.models.filter((model) => model.kind === "asr").map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</select></label>
-        <label>转写方式<select value={props.config.asrProvider} onChange={(event) => props.setConfig({ ...props.config, asrProvider: event.target.value })}>{props.providers.filter((provider) => provider.capability === "stt").map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}</select></label>
-        <label>设备<select value={props.config.device} onChange={(event) => props.setConfig({ ...props.config, device: event.target.value as ConfigViewModel["device"] })}><option value="auto">自动</option><option value="cpu">CPU</option><option value="gpu">GPU</option></select></label>
+        <label>{t("Subtitle language")}<select value={props.config.defaultLanguage} onChange={(event) => void props.updateConfig({ defaultLanguage: event.target.value })}><option value="auto">{t("Auto detect")}</option><option value="zh">{t("Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></label>
+        <label>{t("Target language")}<select value={props.config.targetLanguage} onChange={(event) => void props.updateConfig({ targetLanguage: event.target.value })}><option value="zh">{t("Simplified Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></label>
+        <label>{t("Transcription Provider")}<select value={props.config.asrProvider} onChange={(event) => void props.updateConfig({ asrProvider: event.target.value })}>{props.providers.filter((provider) => provider.capability === "stt").map((provider) => <option disabled={!provider.enabled || provider.state !== "available"} key={provider.id} value={provider.id}>{provider.name}</option>)}</select></label>
+        <label>{t("Device")}<select value={props.config.device} onChange={(event) => void props.updateConfig({ device: event.target.value as ConfigViewModel["device"] })}><option value="auto">{t("Auto")}</option><option value="cpu">CPU</option><option value="gpu">GPU</option></select></label>
       </div>
-      <div className="between"><span>输出内容</span><Segment items={outputTypes.map((item) => item.label)} active={outputTypeIndex} onSelect={(index) => props.setConfig({ ...props.config, outputType: outputTypes[index].value })} /></div>
-      <div className="between"><span>输出格式</span><Segment items={outputFormats.map((item) => item.label)} active={outputFormatIndex} onSelect={(index) => props.setConfig({ ...props.config, outputFormat: outputFormats[index].value })} /></div>
-      <div className="between"><span>输出冲突</span><Segment items={conflictModes.map((item) => item.label)} active={conflictIndex} onSelect={(index) => props.setConfig({ ...props.config, outputConflict: conflictModes[index].value })} /></div>
-      <div className="between"><span>词级时间戳</span><Toggle ariaLabel="词级时间戳" on={props.config.wordTimestamps} onClick={() => props.setConfig({ ...props.config, wordTimestamps: !props.config.wordTimestamps })} /></div>
-      <div className="between"><span>保留临时文件</span><Toggle ariaLabel="保留临时文件" on={props.config.keepTempFiles} onClick={() => props.setConfig({ ...props.config, keepTempFiles: !props.config.keepTempFiles })} /></div>
+      <div className="between"><span>{t("Output content")}</span><Segment items={outputTypes.map((item) => item.label)} active={outputTypeIndex} onSelect={(index) => selectOutputType(outputTypes[index].value)} /></div>
+      {translationOutputWarning && (
+        <div className="blocking-note" role="status">
+          <span>{t("Translation output not ready")}</span>
+          <button className="btn sm primary" onClick={() => props.setScreen("settings-providers")} type="button">{t("Configure translation Provider")}</button>
+        </div>
+      )}
+      <div className="between"><span>{t("Output format")}</span><Segment items={outputFormats.map((item) => item.label)} active={outputFormatIndex} onSelect={(index) => void props.updateConfig({ outputFormat: outputFormats[index].value })} /></div>
+      <div className="between"><span>{t("Burn-in video")}</span><Toggle ariaLabel={t("Burn-in video")} on={props.config.burnInVideo} onClick={() => void props.updateConfig({ burnInVideo: !props.config.burnInVideo })} /></div>
+      <div className="between"><span>{t("Output conflict")}</span><Segment items={conflictModes.map((item) => item.label)} active={conflictIndex} onSelect={(index) => void props.updateConfig({ outputConflict: conflictModes[index].value })} /></div>
+      <div className="between"><span>{t("Word timestamps")}</span><Toggle ariaLabel={t("Word timestamps")} on={props.config.wordTimestamps} onClick={() => void props.updateConfig({ wordTimestamps: !props.config.wordTimestamps })} /></div>
+      <div className="between"><span>{t("Keep temporary files")}</span><Toggle ariaLabel={t("Keep temporary files")} on={props.config.keepTempFiles} onClick={() => void props.updateConfig({ keepTempFiles: !props.config.keepTempFiles })} /></div>
     </section>
   );
 }
 
+function outputTypeNeedsTranslation(outputType: ConfigViewModel["outputType"]): boolean {
+  return outputType === "translated_srt" || outputType === "bilingual_srt";
+}
+
+function translationOutputReady(config: ConfigViewModel, providers: RenderProps["providers"], translationReady: boolean): boolean {
+  const provider = providers.find((item) => item.id === config.translationProvider);
+  return translationReady && Boolean(provider?.enabled && provider.state === "available");
+}
+
 export function MainMissing({ setScreen, installModel, translationReady }: RenderProps) {
+  const t = useT();
   return (
     <div className="wf">
-      <Chrome right={<><Chip tone="warn">本地转写未就绪</Chip><Chip tone={translationReady ? "ok" : "warn"}>{translationReady ? "翻译就绪" : "翻译未就绪"}</Chip></>} />
+      <Chrome right={<><Chip tone="warn">{t("Local transcription not ready")}</Chip><Chip tone={translationReady ? "ok" : "warn"}>{translationReady ? t("Translation ready") : t("Translation not ready")}</Chip></>} />
       <main className="main-empty">
         <section className="panel warn-panel missing-panel">
-          <h1>还不能生成字幕</h1>
-          <p>缺少默认 ASR 模型。下载完成后即可使用本地转写。</p>
-          <CheckItem label="ASR 模型" detail="whisper-small 未安装" status="missing" />
-          <CheckItem label="翻译模型" detail="可稍后下载" status="skip" />
+          <h1>{t("Cannot generate subtitles yet")}</h1>
+          <p>{t("Default ASR model missing")}</p>
+          <CheckItem label={t("ASR model")} detail={t("whisper-small is not installed")} status="missing" />
+          <CheckItem label={t("Translation model")} detail={t("Can be downloaded later")} status="skip" />
           <div className="row gap-8">
-            <button className="btn primary" onClick={() => void installModel("whisper-small")}>下载默认模型</button>
-            <button className="btn ghost" onClick={() => setScreen("settings-models")}>打开模型管理</button>
+            <button className="btn primary" onClick={() => void installModel("whisper-small")}>{t("Download default model")}</button>
+            <button className="btn ghost" onClick={() => setScreen("settings-models")}>{t("Open Models")}</button>
           </div>
         </section>
       </main>
@@ -175,6 +290,7 @@ export function MainMissing({ setScreen, installModel, translationReady }: Rende
 }
 
 export function OutputConflict({ setScreen, startJob, updateConfig, chooseSubtitleOutputPath, activeJob }: RenderProps) {
+  const t = useT();
   const outputPath = conflictOutputPath(activeJob);
   const resolveConflict = async (mode: ConfigViewModel["outputConflict"]) => {
     await updateConfig({ outputConflict: mode });
@@ -192,18 +308,18 @@ export function OutputConflict({ setScreen, startJob, updateConfig, chooseSubtit
   };
   return (
     <div className="wf">
-      <Chrome back onBack={() => setScreen("main-files")} right={<Chip tone="warn">需要确认</Chip>} />
+      <Chrome back onBack={() => setScreen("main-files")} right={<Chip tone="warn">{t("Confirmation required")}</Chip>} />
       <main className="dialog-stage">
         <section className="modal-card">
-          <div className="between"><h2>字幕文件已存在</h2><span className="warn-symbol">!</span></div>
-          <p>目标位置已有同名文件：</p>
-          <div className="input mono">{outputPath || "字幕输出文件"}</div>
-          <p className="caption">请选择如何处理。这个选择可以应用到本次批量任务。</p>
+          <div className="between"><h2>{t("Subtitle file already exists")}</h2><span className="warn-symbol">!</span></div>
+          <p>{t("Output conflict path intro")}</p>
+          <div className="input mono">{outputPath || t("Subtitle output file")}</div>
+          <p className="caption">{t("Output conflict choice hint")}</p>
           <div className="row gap-8 wrap">
-            <button className="btn primary" onClick={() => void resolveConflict("overwrite")}>覆盖</button>
-            <button className="btn" onClick={() => void resolveConflict("skip")}>跳过</button>
-            <button className="btn" onClick={() => void saveAs()}>另存为</button>
-            <button className="btn ghost" onClick={() => setScreen("main-files")}>取消生成</button>
+            <button className="btn primary" onClick={() => void resolveConflict("overwrite")}>{t("Overwrite")}</button>
+            <button className="btn" onClick={() => void resolveConflict("skip")}>{t("Skip")}</button>
+            <button className="btn" onClick={() => void saveAs()}>{t("Save as")}</button>
+            <button className="btn ghost" onClick={() => setScreen("main-files")}>{t("Cancel generation")}</button>
           </div>
         </section>
       </main>
@@ -228,40 +344,65 @@ function conflictOutputPath(activeJob: RenderProps["activeJob"]): string {
 }
 
 export function MainGenerating({ activeJob, jobs, activeBatchJobIds, cancelJob, cancelAllJobs, openRunningQueue }: RenderProps) {
+  const t = useT();
+  const rt = useRuntimeText();
   const percent = useSmoothProgress(activeJob?.id ?? "", activeJob?.progressPercent ?? 0, activeJob?.status ?? "queued");
+  const copy = generatingCopy(activeJob, t);
   const activeId = activeJob?.id;
   const batchIds = activeBatchJobIds.length > 0 ? activeBatchJobIds : activeId ? [activeId] : [];
   const batchJobs = jobs.filter((job) => batchIds.includes(job.id));
   const waitingJobs = batchJobs.filter((job) => job.id !== activeId && (job.status === "queued" || job.status === "running" || job.status === "canceling"));
   const activeIndex = activeId && batchIds.length > 0 ? Math.max(0, batchIds.indexOf(activeId)) : 0;
   const totalJobs = batchIds.length || batchJobs.length || 1;
-  const remainingLabel = activeJob?.estimatedRemaining ? `预计还需 ${activeJob.estimatedRemaining}` : "等待进度更新";
+  const remainingLabel = activeJob?.estimatedRemaining ? t("Estimated remaining", { time: activeJob.estimatedRemaining }) : t("Waiting for progress");
   return (
     <div className="wf">
-      <Chrome right={<Chip tone="accent">正在生成</Chip>} />
-      <main className="content-flow center-flow">
-        <span className="spin big" />
-        <h1>正在生成字幕...</h1>
-        <p className="subtle">{activeJob?.title ?? "等待任务同步"}</p>
-        <section className="panel paper-muted progress-card">
-          <div className="between"><strong>{percent}%</strong><span>{remainingLabel}</span></div>
-          <div className="progress accent"><i style={{ width: `${percent}%` }} /></div>
-          <p className="center-text caption">{activeJob?.stageLabel ?? "等待 daemon 任务事件..."}</p>
+      <Chrome right={<Chip tone="accent">{copy.badge}</Chip>} />
+      <main className="content-flow center-flow generating-flow">
+        <section className="generating-hero">
+          <span className="spin big" />
+          <h1>{copy.title}</h1>
+          <p className="subtle">{activeJob?.title ?? t("Waiting for task sync")}</p>
+          <section className="panel paper-muted progress-card">
+            <div className="between"><strong>{percent}%</strong><span>{remainingLabel}</span></div>
+            <div className="progress accent"><i style={{ width: `${percent}%` }} /></div>
+            <p className="center-text caption">{stageCopy(activeJob, copy.stage, rt)}</p>
+          </section>
         </section>
         {waitingJobs.length > 0 && (
           <section className="next-list">
-            <h3>接下来</h3>
+            <h3>{t("Next")}</h3>
             {waitingJobs.map((job) => <p key={job.id}><Chip>{job.statusLabel}</Chip> {job.title}</p>)}
           </section>
         )}
         <div className="center-actions">
-          <button className="btn" onClick={() => void cancelJob()}>取消当前任务</button>
-          <button className="btn ghost" onClick={() => void cancelAllJobs()}>全部取消</button>
+          <button className="btn" onClick={() => void cancelJob()}>{t("Cancel current task")}</button>
+          <button className="btn ghost" onClick={() => void cancelAllJobs()}>{t("Cancel all")}</button>
         </div>
       </main>
-      <div className="footer-line"><span>任务 {Math.min(activeIndex + 1, totalJobs)} / {totalJobs}</span><button className="btn sm ghost" onClick={openRunningQueue}>后台运行</button></div>
+      <div className="footer-line"><span>{t("Task progress count", { current: Math.min(activeIndex + 1, totalJobs), total: totalJobs })}</span><button className="btn sm ghost" onClick={openRunningQueue}>{t("Run in background")}</button></div>
     </div>
   );
+}
+
+function generatingCopy(job: JobDetail | null, t: (key: string) => string): { badge: string; title: string; stage: string } {
+  switch (job?.type) {
+    case "burn_in":
+      return { badge: t("Burning"), title: t("Burning subtitles title"), stage: t("Burning subtitles stage") };
+    case "translate_srt":
+      return { badge: t("Translating"), title: t("Translating subtitles title"), stage: t("Translating subtitles stage") };
+    case "model_install":
+      return { badge: t("Downloading"), title: t("Downloading model title"), stage: t("Preparing model") };
+    default:
+      return { badge: t("Generating"), title: t("Generating subtitles title"), stage: t("Generating subtitles stage") };
+  }
+}
+
+function stageCopy(job: JobDetail | null, fallback: string, rt: (text: string) => string): string {
+  if (!job?.stageLabel || job.stageLabel === "正在生成字幕") {
+    return fallback;
+  }
+  return rt(job.stageLabel);
 }
 
 function useSmoothProgress(jobId: string, actualPercent: number, status: JobStatus): number {
@@ -310,30 +451,32 @@ function clampProgress(value: number): number {
 }
 
 export function MainDone({ activeJob, completedBatchJobs, openMock, setScreen }: RenderProps) {
+  const t = useT();
+  const rt = useRuntimeText();
   const completedJobs = completedBatchJobs.length > 0 ? completedBatchJobs : activeJob ? [activeJob] : [];
   return (
     <div className="wf">
-      <Chrome right={<Chip tone="ok">就绪</Chip>} />
+      <Chrome right={<Chip tone="ok">{t("Ready")}</Chip>} />
       <main className="content-flow">
         <div className="center-stack">
           <div className="success-mark">✓</div>
-          <h1>字幕生成完成</h1>
-          <p className="subtle">已完成 {completedJobs.length} 个文件</p>
+          <h1>{t("Subtitles complete")}</h1>
+          <p className="subtle">{t("Files completed", { count: completedJobs.length })}</p>
         </div>
         {completedJobs.map((job) => {
           const result = job.result;
           const outputPath = subtitleOutputPath(job);
-          const outputFolder = result?.outputFolder || job.outputDirectory || outputPath.replace(/[\\/][^\\/]*$/, "");
-          const outputName = outputPath.split(/[\\/]/).pop() || job.title || "字幕结果";
-          const detail = result?.durationLabel || result?.summary || job.stageLabel || "任务已完成";
+          const outputFolder = directoryName(outputPath) || result?.outputFolder || job.outputDirectory;
+          const outputName = baseName(outputPath) || job.title || t("Subtitle result");
+          const detail = result?.durationLabel || result?.summary || rt(job.stageLabel) || t("Task completed");
           return <ResultCard key={job.id} name={outputName} detail={detail} ok onOpen={() => void openMock(outputPath)} onOpenFolder={() => void openMock(outputFolder)} />;
         })}
       </main>
       <div className="action-footer">
         <SettingsEntry onClick={() => setScreen("settings-general")} />
         <div className="row gap-8">
-          <button className="btn ghost" onClick={() => setScreen("queue-list")}>查看全部历史</button>
-          <button className="btn primary" onClick={() => setScreen("main-empty")}>继续添加</button>
+          <button className="btn ghost" onClick={() => setScreen("queue-list")}>{t("View all history")}</button>
+          <button className="btn primary" onClick={() => setScreen("main-empty")}>{t("Add more")}</button>
         </div>
       </div>
     </div>
@@ -345,6 +488,10 @@ function subtitleOutputPath(job: RenderProps["activeJob"]): string {
     return "";
   }
   const path = job.result?.subtitlePath ?? "";
+  const repairedPath = repairCorruptSubtitlePath(path, job);
+  if (repairedPath !== path) {
+    return repairedPath;
+  }
   if (isSubtitlePath(path) || job.type === "burn_in" || job.type === "model_install") {
     return path;
   }
@@ -359,15 +506,60 @@ function subtitleOutputPath(job: RenderProps["activeJob"]): string {
   return `${directory}${sep}${stem}.srt`;
 }
 
+function repairCorruptSubtitlePath(path: string, job: RenderProps["activeJob"]): string {
+  if (!job || !path || !hasReplacementChar(baseName(path))) {
+    return path;
+  }
+  const input = job.inputPaths[0] || job.currentFile || job.title;
+  if (!input || hasReplacementChar(baseName(input))) {
+    return path;
+  }
+  const directory = job.outputDirectory || directoryName(path) || directoryName(input);
+  if (!directory) {
+    return path;
+  }
+  const stem = baseName(input).replace(/\.[^.\\/]+$/, "");
+  const ext = extensionName(path) || (job.type === "burn_in" ? ".mp4" : ".srt");
+  const suffix = job.type === "burn_in" ? ".burned" : job.type === "translate_srt" ? ".translated" : "";
+  const sep = directory.includes("/") && !directory.includes("\\") ? "/" : "\\";
+  return `${directory}${sep}${stem}${suffix}${ext}`;
+}
+
 function isSubtitlePath(path: string): boolean {
   return /\.(srt|ass|vtt)$/i.test(path);
 }
 
+function hasReplacementChar(value: string): boolean {
+  return value.includes("\uFFFD");
+}
+
+function baseName(path: string): string {
+  return path.split(/[\\/]/).pop() || "";
+}
+
+function directoryName(path: string): string {
+  const index = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
+  if (index <= 0) {
+    return "";
+  }
+  if (index === 2 && /^[A-Za-z]:[\\/]/.test(path)) {
+    return path.slice(0, 3);
+  }
+  return path.slice(0, index);
+}
+
+function extensionName(path: string): string {
+  const name = baseName(path);
+  const match = /\.[^.\\/]+$/.exec(name);
+  return match?.[0] ?? "";
+}
+
 function ResultCard({ name, detail, ok, onOpen, onOpenFolder }: { name: string; detail: string; ok: boolean; onOpen: () => void; onOpenFolder: () => void }) {
+  const t = useT();
   return (
     <article className={`result-card ${ok ? "ok-card" : "warn-card"}`}>
       <div><strong>{name}</strong><span>{detail}</span></div>
-      <div className="row gap-6"><button className="btn sm" onClick={onOpen}>{ok ? "打开字幕" : "重试"}</button><button className="btn sm ghost" onClick={onOpenFolder}>文件夹</button></div>
+      <div className="row gap-6"><button className="btn sm" onClick={onOpen}>{ok ? t("Open subtitle") : t("Retry")}</button><button className="btn sm ghost" onClick={onOpenFolder}>{t("Folder")}</button></div>
     </article>
   );
 }

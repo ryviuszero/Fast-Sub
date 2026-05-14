@@ -48,12 +48,36 @@ function statusLabel(status: JobDetail["status"]): string {
 function titleForRequest(request: CreateJobRequest, file: string): string {
   const base = file.split(/[\\/]/).pop() ?? "字幕任务";
   if (request.type === "translate_srt") {
-    return base.replace(/\.srt$/i, `.zh.${request.outputFormat}`);
+    return translatedTitle(base, request.outputFormat);
   }
   if (request.type === "burn_in") {
     return base.replace(/\.[^.]+$/, ".burned.mp4");
   }
+  if (request.outputType === "translated_srt") {
+    return base.replace(/\.[^.]+$/, `.translated.${request.outputFormat}`);
+  }
+  if (request.outputType === "bilingual_srt") {
+    return base.replace(/\.[^.]+$/, `.bilingual.${request.outputFormat}`);
+  }
   return base;
+}
+
+function translatedTitle(base: string, outputFormat: string): string {
+  const extension = base.match(/\.[^.\\/]+$/)?.[0].toLowerCase() ?? "";
+  if ([".txt", ".text", ".md", ".markdown"].includes(extension)) {
+    return base.replace(/\.[^.\\/]+$/i, ".translated.txt");
+  }
+  return base.replace(/\.[^.\\/]+$/i, `.zh.${outputFormat}`);
+}
+
+function modelNameForRequest(request: CreateJobRequest): string {
+  if (request.type === "translate_srt") {
+    return request.modelId;
+  }
+  if ((request.outputType === "translated_srt" || request.outputType === "bilingual_srt") && request.translationModelId) {
+    return `${request.modelId} + ${request.translationModelId}`;
+  }
+  return request.modelId;
 }
 
 function mockResultForJob(job: JobDetail): JobResult {
@@ -197,6 +221,20 @@ export class MockFastSubClient implements FastSubClient {
     return clone(this.config);
   }
 
+  async saveProviderSecret(providerId: string, alias: string, rawSecret: string): Promise<ConfigViewModel> {
+    if (!rawSecret.trim()) {
+      throw new Error("empty secret");
+    }
+    this.config = { ...this.config, apiKeyAlias: alias, apiKeyStatus: "configured" };
+    this.providers = this.providers.map((provider) => provider.id === providerId ? {
+      ...provider,
+      state: "available",
+      enabled: true,
+      maskedCredential: `${alias} (已保存)`
+    } : provider);
+    return clone(this.config);
+  }
+
   async listModels(): Promise<ModelStatus[]> {
     return clone(this.models);
   }
@@ -293,8 +331,12 @@ export class MockFastSubClient implements FastSubClient {
   async createJob(request: CreateJobRequest): Promise<JobDetail> {
     await delay(20);
     const provider = this.providers.find((item) => item.id === request.providerId);
+    const translationProvider = this.providers.find((item) => item.id === request.translationProviderId);
     if (provider?.requiresUploadConfirmation && !request.remoteUploadConfirmed) {
       throw new Error("remote upload confirmation required");
+    }
+    if (translationProvider?.requiresUploadConfirmation && !request.translationUploadConfirmed) {
+      throw new Error("remote translation confirmation required");
     }
     const id = `mock-${this.sequence++}`;
     const file = request.inputPaths[0] ?? mockPaths.spaced;
@@ -310,7 +352,7 @@ export class MockFastSubClient implements FastSubClient {
       inputPaths: request.inputPaths,
       outputDirectory: request.outputDirectory,
       providerName,
-      modelName: request.modelId,
+      modelName: modelNameForRequest(request),
       language: request.language,
       status: instantToolJob ? "succeeded" : "queued",
       statusLabel: instantToolJob ? "已完成" : "等待中",
@@ -440,6 +482,14 @@ export class MockFastSubClient implements FastSubClient {
     }
     if (this.scenario === "modelInstalling") {
       this.models = this.models.map((model) => model.id === "whisper-small" ? { ...model, state: "installing", progressPercent: 63 } : model);
+    }
+    if (this.scenario === "outputConflict" || this.scenario === "remoteProviderConfirmRequired") {
+      this.providers = this.providers.map((provider) => provider.id === "api-openai-transcription" ? {
+        ...provider,
+        enabled: true,
+        state: "available",
+        maskedCredential: "openai-test (已保存)"
+      } : provider);
     }
   }
 

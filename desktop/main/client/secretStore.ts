@@ -1,6 +1,6 @@
-import { safeStorage } from "electron";
+import { app, safeStorage } from "electron";
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { UiError } from "../../shared/contracts/types";
 import { uiError } from "./uiError";
@@ -18,6 +18,10 @@ type TransientSecret = {
   expiresAt: number;
   consumed: boolean;
 };
+
+export function defaultSecretStorePath(): string {
+  return join(app.getPath("userData"), "provider-secrets");
+}
 
 export class SafeStorageSecretStore {
   constructor(private readonly root: string) {}
@@ -57,10 +61,47 @@ export class SafeStorageSecretStore {
     await rm(this.path(providerId, alias), { force: true });
   }
 
+  async listEnvSecrets(): Promise<Record<string, string>> {
+    if (!this.isSecure()) {
+      return {};
+    }
+    let files: string[];
+    try {
+      files = await readdir(this.root);
+    } catch {
+      return {};
+    }
+    const records: Record<string, { value: string; createdAt: string }> = {};
+    for (const file of files) {
+      if (!file.endsWith(".json")) {
+        continue;
+      }
+      try {
+        const raw = await readFile(join(this.root, file), "utf8");
+        const record = JSON.parse(raw) as SecretRecord;
+        if (!isEnvName(record.alias)) {
+          continue;
+        }
+        const value = safeStorage.decryptString(Buffer.from(record.encrypted, "base64"));
+        const existing = records[record.alias];
+        if (!existing || record.createdAt > existing.createdAt) {
+          records[record.alias] = { value, createdAt: record.createdAt };
+        }
+      } catch {
+        // Ignore corrupted or stale secret records. The provider check will report the missing key.
+      }
+    }
+    return Object.fromEntries(Object.entries(records).map(([key, record]) => [key, record.value]));
+  }
+
   private path(providerId: string, alias: string): string {
     const safe = `${providerId}--${alias}`.replace(/[^A-Za-z0-9._-]/g, "_");
     return join(this.root, `${safe}.json`);
   }
+}
+
+function isEnvName(value: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
 }
 
 export class TransientSecretReferences {

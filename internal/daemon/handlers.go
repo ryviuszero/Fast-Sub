@@ -99,7 +99,39 @@ func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, unknownRoute())
 		return
 	}
+	if providerID := r.URL.Query().Get("provider_id"); providerID != "" {
+		mode := r.URL.Query().Get("mode")
+		result, ok := providers.TestMode(r.Context(), s.cfg.Providers, providerID, mode)
+		if !ok {
+			writeError(w, http.StatusNotFound, unknownRoute())
+			return
+		}
+		writeOK(w, map[string]any{"provider": providerResponse(result)})
+		return
+	}
 	writeOK(w, map[string]any{"providers": providers.List(r.Context(), s.cfg.Providers)})
+}
+
+func providerResponse(result providers.CheckResult) map[string]any {
+	return map[string]any{
+		"id":                       result.Metadata.ID,
+		"type":                     result.Metadata.Type,
+		"location":                 result.Metadata.Location,
+		"backend":                  result.Metadata.Backend,
+		"offline":                  result.Metadata.Offline,
+		"requires_api_key":         result.Metadata.RequiresAPIKey,
+		"requires_model":           result.Metadata.RequiresModel,
+		"privacy_note":             result.Metadata.PrivacyNote,
+		"supported_languages":      result.Metadata.SupportedLanguages,
+		"supports_word_timestamps": result.Metadata.SupportsWordTimestamps,
+		"supports_batch":           result.Metadata.SupportsBatch,
+		"capabilities":             result.Metadata.Capabilities,
+		"compatible_model_types":   result.Metadata.CompatibleModelTypes,
+		"status":                   result.Status,
+		"check_mode":               result.CheckMode,
+		"warnings":                 result.Warnings,
+		"action_hint":              result.ActionHint,
+	}
 }
 
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {

@@ -20,6 +20,7 @@ type Manager struct {
 	mu         sync.Mutex
 	ctx        context.Context
 	cancel     context.CancelFunc
+	runningWG  sync.WaitGroup
 	root       string
 	maxRunning int
 	runner     Runner
@@ -73,6 +74,15 @@ func (m *Manager) Shutdown() {
 	m.mu.Unlock()
 	for _, cancel := range cancels {
 		cancel()
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		m.runningWG.Wait()
+	}()
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
 	}
 }
 
