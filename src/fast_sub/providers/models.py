@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -41,12 +40,6 @@ class ProviderRegistry:
 
     def _provider_status(self, definition: ProviderDefinition) -> ProviderStatus:
         metadata = definition.metadata
-        if definition.api_key_env and not os.getenv(definition.api_key_env):
-            return ProviderStatus(
-                id=metadata.id,
-                status=ProviderStatusCode.MISSING_API_KEY,
-                message=f"Missing {definition.api_key_env}.",
-            )
         missing_dependency = _missing_dependency_module(definition)
         if missing_dependency:
             return ProviderStatus(

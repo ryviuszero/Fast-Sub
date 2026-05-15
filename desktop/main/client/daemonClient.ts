@@ -631,7 +631,7 @@ function mapConfig(value: unknown): ConfigViewModel {
   const item = record(value);
   const openai = record(item.openai_compatible);
   const apiProvidersRaw = record(item.api_providers);
-  const apiProviderConfigs = Object.fromEntries(Object.entries(apiProvidersRaw).map(([providerId, raw]) => [providerId, mapApiProviderConfig(record(raw))]));
+  const apiProviderConfigs = Object.fromEntries(Object.entries(apiProvidersRaw).map(([providerId, raw]) => [providerId, mapApiProviderConfig(providerId, record(raw))]));
   const rawOutputType = str(item.output_type, "original_srt");
   return {
     defaultLanguage: str(item.language, "auto"),
@@ -650,7 +650,7 @@ function mapConfig(value: unknown): ConfigViewModel {
     wordTimestamps: bool(item.word_timestamps, false),
     folderScanIncludeSubfolders: bool(item.folder_scan_include_subfolders, false),
     folderScanMaxFiles: num(item.folder_scan_max_files, 100),
-    apiKeyAlias: normalizeOpenAIKeyAlias(str(openai.api_key_alias, "FAST_SUB_OPENAI_API_KEY")),
+    apiKeyAlias: normalizeOpenAIKeyAlias(str(openai.api_key_alias, ""), "api-openai-transcription"),
     openAIBaseUrl: str(openai.base_url, "https://api.openai.com/v1"),
     openAIModel: str(openai.model, ""),
     openAIUploadFormat: (str(openai.upload_format, "wav") as ConfigViewModel["openAIUploadFormat"]),
@@ -659,9 +659,9 @@ function mapConfig(value: unknown): ConfigViewModel {
   };
 }
 
-function mapApiProviderConfig(openai: Record<string, unknown>): NonNullable<ConfigViewModel["apiProviderConfigs"]>[string] {
+function mapApiProviderConfig(providerId: string, openai: Record<string, unknown>): NonNullable<ConfigViewModel["apiProviderConfigs"]>[string] {
   return {
-    apiKeyAlias: normalizeOpenAIKeyAlias(str(openai.api_key_alias, "FAST_SUB_OPENAI_API_KEY")),
+    apiKeyAlias: normalizeOpenAIKeyAlias(str(openai.api_key_alias, ""), providerId),
     openAIBaseUrl: str(openai.base_url, "https://api.openai.com/v1"),
     openAIModel: str(openai.model, ""),
     openAIUploadFormat: (str(openai.upload_format, "wav") as ConfigViewModel["openAIUploadFormat"]),
@@ -669,8 +669,17 @@ function mapApiProviderConfig(openai: Record<string, unknown>): NonNullable<Conf
   };
 }
 
-function normalizeOpenAIKeyAlias(value: string): string {
-  return value === "openai-default" ? "FAST_SUB_OPENAI_API_KEY" : value;
+function normalizeOpenAIKeyAlias(value: string, providerId = ""): string {
+  if (value && value !== "openai-default") {
+    return value;
+  }
+  if (providerId === "api-openai-chat") {
+    return "FAST_SUB_OPENAI_CHAT_API_KEY";
+  }
+  if (providerId === "api-openai-transcription") {
+    return "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY";
+  }
+  return "FAST_SUB_OPENAI_API_KEY";
 }
 
 function configPatch(patch: Partial<ConfigViewModel>): Record<string, unknown> {

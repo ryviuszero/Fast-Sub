@@ -172,7 +172,7 @@ func (r DefaultRunner) translateArgs(req CreateRequest, input, provider, sourceL
 		}
 		args = append(args, "--model-path", modelPath)
 	}
-	if req.Provider == "api-openai-chat" && req.Model == "" {
+	if provider == "api-openai-chat" && req.Model == "" {
 		model := strings.TrimSpace(openAIProviderConfigFromRunner(r, "api-openai-chat").Model)
 		if model == "" {
 			model = strings.TrimSpace(r.env("FAST_SUB_OPENAI_CHAT_MODEL"))
@@ -480,7 +480,7 @@ func upsertEnv(env []string, key, value string) []string {
 
 func normalizeOpenAIKeyEnv(value string) string {
 	if value == "openai-default" {
-		return "FAST_SUB_OPENAI_API_KEY"
+		return ""
 	}
 	return value
 }

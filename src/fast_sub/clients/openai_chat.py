@@ -15,7 +15,7 @@ class OpenAIChatClient:
     """HTTP client for OpenAI-compatible chat completion translation requests."""
 
     model: str
-    api_key: str
+    api_key: str | None
     base_url: str
     timeout: float
 
@@ -44,7 +44,9 @@ class OpenAIChatClient:
             raise OpenAIChatClientError(f"Invalid chat translation response: {exc}") from exc
 
     def _post_chat_completion(self, payload: dict[str, object]) -> dict[str, object]:
-        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 response = client.post(self._chat_completions_url, headers=headers, json=payload)

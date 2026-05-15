@@ -622,6 +622,18 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     setScreen("queue-list");
   };
 
+  const deleteJobs = async (jobIds: string[]) => {
+    const ids = [...new Set(jobIds)];
+    if (ids.length === 0) {
+      return;
+    }
+    await Promise.allSettled(ids.map((id) => client.deleteJob(id)));
+    if (activeJob && ids.includes(activeJob.id)) {
+      setActiveJob(null);
+    }
+    await refreshJobs();
+  };
+
   const openJob = async (jobId: string, target: Screen) => {
     backgroundQueueOpenRef.current = false;
     const summary = jobs.find((job) => job.id === jobId);
@@ -638,6 +650,10 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     }
     navigateScreen(target);
     setActiveJob(await client.getJob(jobId));
+  };
+
+  const getJobLogs = async (jobId: string) => {
+    return client.getJobLogs(jobId);
   };
 
   const openRunningQueue = () => {
@@ -662,6 +678,18 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
         await refreshJobs();
       })();
     }, 860);
+  };
+
+  const cancelJobs = async (jobIds: string[]) => {
+    const ids = [...new Set(jobIds)];
+    if (ids.length === 0) {
+      return;
+    }
+    await Promise.allSettled(ids.map((id) => client.cancelJob(id)));
+    if (activeJob && ids.includes(activeJob.id)) {
+      setActiveJob(await client.getJob(activeJob.id).catch(() => activeJob));
+    }
+    await refreshJobs();
   };
 
   const cancelAllJobs = async () => {
@@ -734,14 +762,17 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
           chooseOutputDirectory,
           chooseSubtitleOutputPath,
           openJob,
+          getJobLogs,
           openRunningQueue,
           startJob,
           startToolJob,
           retryJob,
           openMock,
           cancelJob: cancelActiveJob,
+          cancelJobs,
           cancelAllJobs,
           deleteJob: deleteActiveJob,
+          deleteJobs,
           installModel: async (id) => {
             const job = await client.createModelInstallJob(id);
             setModelInstallJobs((current) => ({ ...current, [id]: job }));

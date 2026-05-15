@@ -5,7 +5,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,7 +22,7 @@ const (
 	StatusMissingDependency = "missing_dependency"
 	// StatusMissingModel means the provider needs a local model path that is not configured or valid.
 	StatusMissingModel = "missing_model"
-	// StatusMissingAPIKey means an API provider has no configured API key.
+	// StatusMissingAPIKey means a live API request was rejected because authentication is required or invalid.
 	StatusMissingAPIKey = "missing_api_key"
 	// StatusInvalidConfig means a provider config file was requested but could not be loaded.
 	StatusInvalidConfig = "invalid_config"
@@ -236,7 +235,7 @@ func defaultRegistry() map[string]Provider {
 				Location:               "api",
 				Backend:                "openai-compatible-transcription",
 				Offline:                false,
-				RequiresAPIKey:         true,
+				RequiresAPIKey:         false,
 				RequiresModel:          true,
 				PrivacyNote:            "Uploads audio to the configured OpenAI-compatible transcription API only when explicitly selected.",
 				SupportedLanguages:     []string{"auto", "en", "zh", "ja", "ko"},
@@ -280,7 +279,7 @@ func defaultRegistry() map[string]Provider {
 				Location:               "api",
 				Backend:                "openai-compatible-chat",
 				Offline:                false,
-				RequiresAPIKey:         true,
+				RequiresAPIKey:         false,
 				RequiresModel:          true,
 				PrivacyNote:            "Uploads subtitle text to the configured OpenAI-compatible chat API only when explicitly selected.",
 				SupportedLanguages:     []string{"auto", "en", "zh", "ja", "ko"},
@@ -332,12 +331,11 @@ func checkWhisperCPP(_ context.Context, cfg RuntimeConfig, metadata Metadata) Ch
 func checkOpenAI(_ context.Context, cfg RuntimeConfig, metadata Metadata) CheckResult {
 	providerConfig, configPath, configErr := loadProviderConfig(cfg, metadata.ID)
 	baseURL := openAIBaseURL(providerConfig)
-	keyOptional := openAIKeyOptionalForBaseURL(baseURL)
 	details := map[string]any{
-		"config_path":      configPath,
-		"live_network":     false,
-		"base_url":         baseURL,
-		"api_key_optional": keyOptional,
+		"config_path":                configPath,
+		"live_network":               false,
+		"base_url":                   baseURL,
+		"auth_decided_by_live_check": true,
 	}
 	if configErr != nil {
 		check := Check{
@@ -353,21 +351,16 @@ func checkOpenAI(_ context.Context, cfg RuntimeConfig, metadata Metadata) CheckR
 	hasKey := keyName != "" && cfg.Env(keyName) != ""
 	check := Check{
 		Name:       "api_key",
-		OK:         hasKey || keyOptional,
+		OK:         true,
 		Status:     StatusAvailable,
-		Message:    "API key is configured.",
-		ActionHint: "",
+		Message:    "OpenAI-compatible provider config is present. Live connectivity decides whether authentication is required.",
+		ActionHint: "Use the live Provider check to verify the endpoint and credentials before running large jobs.",
 	}
-	if !hasKey && keyOptional {
-		check.Message = "Local OpenAI-compatible endpoint can be checked without an API key."
-		check.ActionHint = "Use the live Provider check if this local endpoint still requires authentication."
-	}
-	if !check.OK {
-		check.Status = StatusMissingAPIKey
-		check.Message = "No OpenAI-compatible API key is configured."
-		check.ActionHint = "Set FAST_SUB_OPENAI_API_KEY or OPENAI_API_KEY, or set api_key_env in fast-sub-go.toml before selecting this provider."
+	if hasKey {
+		check.Message = "OpenAI-compatible provider config and credential alias are present."
 	}
 	details["api_key_env"] = keyName
+	details["api_key_configured"] = hasKey
 	return summarize(metadata, []Check{check}, details)
 }
 
@@ -387,11 +380,11 @@ func checkOpenAILive(ctx context.Context, cfg RuntimeConfig, metadata Metadata) 
 	providerConfig, configPath, configErr := loadProviderConfig(cfg, metadata.ID)
 	baseURL := openAIBaseURL(providerConfig)
 	details := map[string]any{
-		"config_path":      configPath,
-		"live_network":     true,
-		"base_url":         baseURL,
-		"api_key_optional": true,
-		"static_only":      false,
+		"config_path":                configPath,
+		"live_network":               true,
+		"base_url":                   baseURL,
+		"static_only":                false,
+		"auth_decided_by_live_check": true,
 	}
 	if configErr != nil {
 		check := Check{Name: "config", OK: false, Status: StatusInvalidConfig, Message: "OpenAI config could not be read: " + configErr.Error(), ActionHint: "Fix FAST_SUB_GO_CONFIG or fast-sub-go.toml before selecting this provider."}
@@ -404,6 +397,7 @@ func checkOpenAILive(ctx context.Context, cfg RuntimeConfig, metadata Metadata) 
 		keyValue = cfg.Env(keyName)
 	}
 	details["api_key_env"] = keyName
+	details["api_key_configured"] = keyValue != ""
 
 	checkCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
@@ -456,7 +450,7 @@ func loadProviderConfig(cfg RuntimeConfig, providerID string) (appconfig.OpenAIP
 
 func openAIKeyName(cfg RuntimeConfig, providerID string, providerConfig appconfig.OpenAIProviderConfig) string {
 	if providerConfig.APIKeyEnv != "" {
-		return normalizeOpenAIKeyEnv(providerConfig.APIKeyEnv)
+		return normalizeOpenAIKeyEnvForProvider(providerConfig.APIKeyEnv, providerID)
 	}
 	switch providerID {
 	case "api-openai-chat":
@@ -474,11 +468,18 @@ func openAIKeyName(cfg RuntimeConfig, providerID string, providerConfig appconfi
 	return "OPENAI_API_KEY"
 }
 
-func normalizeOpenAIKeyEnv(value string) string {
-	if value == "openai-default" {
+func normalizeOpenAIKeyEnvForProvider(value string, providerID string) string {
+	if value != "openai-default" {
+		return value
+	}
+	switch providerID {
+	case "api-openai-chat":
+		return "FAST_SUB_OPENAI_CHAT_API_KEY"
+	case "api-openai-transcription":
+		return "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY"
+	default:
 		return "FAST_SUB_OPENAI_API_KEY"
 	}
-	return value
 }
 
 func openAIBaseURL(providerConfig appconfig.OpenAIProviderConfig) string {
@@ -486,15 +487,6 @@ func openAIBaseURL(providerConfig appconfig.OpenAIProviderConfig) string {
 		return providerConfig.BaseURL
 	}
 	return "https://api.openai.com/v1"
-}
-
-func openAIKeyOptionalForBaseURL(baseURL string) bool {
-	parsed, err := url.Parse(baseURL)
-	if err != nil {
-		return false
-	}
-	host := strings.ToLower(parsed.Hostname())
-	return host == "localhost" || host == "127.0.0.1" || host == "::1" || strings.HasSuffix(host, ".localhost")
 }
 
 func checkCommand(cfg RuntimeConfig, name, explicitCommand, pathName, actionHint string) Check {

@@ -63,7 +63,7 @@ export function ToolTranslate({ setScreen, startToolJob, translationReady, provi
         <section className="panel">
           <h3>{t("Translation settings")}</h3>
           <SettingRow label={t("Source language")}><select value={config.defaultLanguage} onChange={(event) => void updateConfig({ defaultLanguage: event.currentTarget.value })}><option value="auto">{t("Auto detect")}</option><option value="zh">{t("Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></SettingRow>
-          <SettingRow label={t("Target language")}><select value={config.targetLanguage} onChange={(event) => void updateConfig({ targetLanguage: event.currentTarget.value })}><option value="zh">{t("Simplified Chinese")}</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></SettingRow>
+          <SettingRow label={t("Target language")}><select value={config.targetLanguage} onChange={(event) => void updateConfig({ targetLanguage: event.currentTarget.value })}><option value="zh">{t("Simplified Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></SettingRow>
           <div className="setting-row setting-row-top">
             <span>{t("Translation Provider")}</span>
             <div className="setting-control-with-note">
@@ -84,7 +84,20 @@ export function ToolTranslate({ setScreen, startToolJob, translationReady, provi
 function providerOptionLabel(provider: RenderProps["providers"][number], t: (key: string) => string): string {
   const prefix = provider.kind === "local" ? t("Local") : provider.kind === "web" ? t("Web") : provider.kind === "api" ? "API" : "Native";
   const state = provider.state === "available" ? "" : ` (${providerStateLabel(provider.state, t)})`;
-  return `${prefix} · ${provider.name}${state}`;
+  return `${prefix} · ${providerDisplayName(provider.id, t)}${state}`;
+}
+
+function providerDisplayName(providerId: string, t: (key: string) => string): string {
+  const labels: Record<string, string> = {
+    "local-faster-whisper": "Local Faster Whisper",
+    "local-whisper-cpp": "Local whisper.cpp",
+    "api-openai-transcription": "OpenAI Transcription API",
+    "local-nllb-ct2": "Local NLLB Translation",
+    "web-bing": "Bing Web Translation",
+    "web-google": "Google Web Translation",
+    "api-openai-chat": "OpenAI-compatible Translation API"
+  };
+  return t(labels[providerId] ?? providerId);
 }
 
 function providerStateLabel(state: RenderProps["providers"][number]["state"], t: (key: string) => string): string {

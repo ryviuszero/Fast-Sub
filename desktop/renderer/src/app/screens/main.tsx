@@ -240,7 +240,7 @@ export function AdvancedSettings(props: RenderProps) {
       <div className="settings-grid">
         <label>{t("Subtitle language")}<select value={props.config.defaultLanguage} onChange={(event) => void props.updateConfig({ defaultLanguage: event.target.value })}><option value="auto">{t("Auto detect")}</option><option value="zh">{t("Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></label>
         <label>{t("Target language")}<select value={props.config.targetLanguage} onChange={(event) => void props.updateConfig({ targetLanguage: event.target.value })}><option value="zh">{t("Simplified Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></label>
-        <label>{t("Transcription Provider")}<select value={props.config.asrProvider} onChange={(event) => void props.updateConfig({ asrProvider: event.target.value })}>{props.providers.filter((provider) => provider.capability === "stt").map((provider) => <option disabled={!provider.enabled || provider.state !== "available"} key={provider.id} value={provider.id}>{provider.name}</option>)}</select></label>
+        <label>{t("Transcription Provider")}<select value={props.config.asrProvider} onChange={(event) => void props.updateConfig({ asrProvider: event.target.value })}>{props.providers.filter((provider) => provider.capability === "stt").map((provider) => <option disabled={!provider.enabled || provider.state !== "available"} key={provider.id} value={provider.id}>{providerDisplayName(provider.id, provider.name, t)}</option>)}</select></label>
         <label>{t("Device")}<select value={props.config.device} onChange={(event) => void props.updateConfig({ device: event.target.value as ConfigViewModel["device"] })}><option value="auto">{t("Auto")}</option><option value="cpu">CPU</option><option value="gpu">GPU</option></select></label>
       </div>
       <div className="between"><span>{t("Output content")}</span><Segment items={outputTypes.map((item) => item.label)} active={outputTypeIndex} onSelect={(index) => selectOutputType(outputTypes[index].value)} /></div>
@@ -261,6 +261,19 @@ export function AdvancedSettings(props: RenderProps) {
 
 function outputTypeNeedsTranslation(outputType: ConfigViewModel["outputType"]): boolean {
   return outputType === "translated_srt" || outputType === "bilingual_srt";
+}
+
+function providerDisplayName(providerId: string, fallback: string, t: (key: string) => string): string {
+  const labels: Record<string, string> = {
+    "local-faster-whisper": "Local Faster Whisper",
+    "local-whisper-cpp": "Local whisper.cpp",
+    "api-openai-transcription": "OpenAI Transcription API",
+    "local-nllb-ct2": "Local NLLB Translation",
+    "web-bing": "Bing Web Translation",
+    "web-google": "Google Web Translation",
+    "api-openai-chat": "OpenAI-compatible Translation API"
+  };
+  return t(labels[providerId] ?? fallback);
 }
 
 function translationOutputReady(config: ConfigViewModel, providers: RenderProps["providers"], translationReady: boolean): boolean {

@@ -506,6 +506,36 @@ label { display: grid; gap: 4px; color: var(--ink-2); font-size: 11px; font-weig
 .quick-select-menu button.selected {
   background: var(--paper-2);
 }
+.settings-provider-dropdown {
+  margin-left: auto;
+  max-width: min(100%, 520px);
+  position: relative;
+  width: min(100%, 420px);
+}
+.settings-provider-button {
+  width: 100%;
+}
+.settings-provider-button span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-provider-menu {
+  left: auto;
+  margin-left: 0;
+  max-height: 280px;
+  min-width: 100%;
+  overflow-y: auto;
+  right: 0;
+  top: calc(100% + 4px);
+  transform: none;
+}
+.settings-provider-menu button:disabled {
+  color: var(--ink-2);
+  cursor: not-allowed;
+  opacity: .55;
+}
 .quick-setting select {
   background: transparent;
   border-style: dashed;
@@ -597,10 +627,49 @@ label { display: grid; gap: 4px; color: var(--ink-2); font-size: 11px; font-weig
   font-family: var(--sans);
 }
 .job-card { cursor: pointer; }
+.job-card-select {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+}
+.job-card-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .job-card .chip {
   display: inline-flex;
   margin-top: 0;
   font-size: 10.5px;
+}
+.queue-bulk-bar {
+  align-items: center;
+  border: 1.5px dashed var(--ink-3);
+  border-radius: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 10px;
+}
+.queue-bulk-bar span {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.inline-check {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+.inline-path-button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-style: wavy;
+  text-underline-offset: 3px;
 }
 .job-meta {
   display: flex;

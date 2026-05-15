@@ -1,4 +1,4 @@
-import type { ConfigViewModel, EnvironmentStatus, JobDetail, JobSummary, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
+import type { ConfigViewModel, EnvironmentStatus, JobDetail, JobLogEntry, JobSummary, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
 
 export type Screen =
   | "setup-check"
@@ -58,14 +58,17 @@ export type RenderProps = {
   chooseOutputDirectory: () => Promise<boolean>;
   chooseSubtitleOutputPath: (defaultPath: string) => Promise<string | null>;
   openJob: (jobId: string, screen: Screen) => Promise<void>;
+  getJobLogs: (jobId: string) => Promise<JobLogEntry[]>;
   openRunningQueue: () => void;
   startJob: (options?: { conflictResolved?: boolean; outputConflict?: ConfigViewModel["outputConflict"]; outputPath?: string; remoteUploadConfirmed?: boolean }) => Promise<void>;
   startToolJob: (type: "translate_srt" | "burn_in", inputPaths: string[]) => Promise<JobDetail>;
   retryJob: () => Promise<void>;
   openMock: (path: string) => Promise<void>;
   cancelJob: () => Promise<void>;
+  cancelJobs: (jobIds: string[]) => Promise<void>;
   cancelAllJobs: () => Promise<void>;
   deleteJob: () => Promise<void>;
+  deleteJobs: (jobIds: string[]) => Promise<void>;
   installModel: (id: string) => Promise<void>;
   removeModel: (id: string) => Promise<void>;
   repairDaemon: () => Promise<void>;

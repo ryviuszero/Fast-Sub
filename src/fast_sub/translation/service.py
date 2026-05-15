@@ -453,11 +453,6 @@ def _translate_openai_chat_segments(
     batch_size: int,
     timeout: float,
 ) -> TranslationResult:
-    if not api_key:
-        raise _TranslationProviderError(
-            "missing_api_key",
-            "api-openai-chat requires an explicit API key via --api-key or OPENAI_API_KEY.",
-        )
     if not model:
         raise _TranslationProviderError(
             "invalid_options",
@@ -489,7 +484,7 @@ def _translate_chat_batch_with_fallback(
     source_lang: str,
     target_lang: str,
     model: str,
-    api_key: str,
+    api_key: str | None,
     base_url: str,
     timeout: float,
 ) -> None:
@@ -548,7 +543,7 @@ def _request_openai_chat_translation(
     source_lang: str,
     target_lang: str,
     model: str,
-    api_key: str,
+    api_key: str | None,
     base_url: str,
     timeout: float,
 ) -> dict[int, str]:

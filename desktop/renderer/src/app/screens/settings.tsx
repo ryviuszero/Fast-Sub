@@ -14,9 +14,9 @@ export function SettingsPage(props: RenderProps & { tab: "general" | "models" | 
           {[
             ["settings-general", "◎", t("General")],
             ["settings-models", "◇", t("Models")],
-            ["settings-providers", "◌", "Provider"],
+            ["settings-providers", "◌", t("Provider")],
             ["settings-diagnostics", "⚙", t("Diagnostics")],
-            ["settings-benchmark", "▣", "Benchmark"]
+            ["settings-benchmark", "▣", t("Benchmark")]
           ].map(([id, icon, label]) => <button key={id} className={props.screen === id ? "active" : ""} onClick={() => props.setScreen(id as Screen)}>{icon} {label}</button>)}
           <span className="caption version">v0.11 mock</span>
         </aside>
@@ -88,19 +88,25 @@ export function SettingsGeneral(props: RenderProps) {
       <SettingRow label={t("Maximum folder files")}><select aria-label={t("Maximum folder files")} value={props.config.folderScanMaxFiles} onChange={(event) => void props.updateConfig({ folderScanMaxFiles: Number(event.currentTarget.value) })}>{folderScanMaxOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></SettingRow>
       <h3>{t("Transcription")}</h3>
       <SettingRow label={t("Default transcription Provider")}>
-        <select aria-label={t("Default transcription Provider")} value={props.config.asrProvider} onChange={(event) => void props.updateConfig({ asrProvider: event.currentTarget.value })}>
-          {asrProviders.map((provider) => <option disabled={!provider.enabled || provider.state !== "available"} key={provider.id} value={provider.id}>{providerOptionLabel(provider, t)}</option>)}
-        </select>
+        <ProviderDropdown
+          label={t("Default transcription Provider")}
+          providers={asrProviders}
+          value={props.config.asrProvider}
+          onChange={(value) => void props.updateConfig({ asrProvider: value })}
+        />
       </SettingRow>
       <SettingRow label={t("Device")}><Segment items={[t("Auto"), "CPU", "GPU"]} active={deviceIndex} onSelect={(index) => void props.updateConfig({ device: (["auto", "cpu", "gpu"] as ConfigViewModel["device"][])[index] })} /></SettingRow>
       <SettingRow label={t("Word timestamps")}><Toggle ariaLabel={t("Set word timestamps")} on={props.config.wordTimestamps} onClick={() => void props.updateConfig({ wordTimestamps: !props.config.wordTimestamps })} /></SettingRow>
       <h3>{t("Translation")}</h3>
       <SettingRow label={t("Default translation Provider")}>
-        <select aria-label={t("Default translation Provider")} value={props.config.translationProvider} onChange={(event) => void props.updateConfig({ translationProvider: event.currentTarget.value })}>
-          {translationProviders.map((provider) => <option disabled={!provider.enabled || provider.state !== "available"} key={provider.id} value={provider.id}>{providerOptionLabel(provider, t)}</option>)}
-        </select>
+        <ProviderDropdown
+          label={t("Default translation Provider")}
+          providers={translationProviders}
+          value={props.config.translationProvider}
+          onChange={(value) => void props.updateConfig({ translationProvider: value })}
+        />
       </SettingRow>
-      <SettingRow label={t("Target language")}><select value={props.config.targetLanguage} onChange={(event) => void props.updateConfig({ targetLanguage: event.target.value })}><option value="zh">{t("Simplified Chinese")}</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></SettingRow>
+      <SettingRow label={t("Target language")}><select value={props.config.targetLanguage} onChange={(event) => void props.updateConfig({ targetLanguage: event.target.value })}><option value="zh">{t("Simplified Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></SettingRow>
       <h3>{t("Defaults")}</h3>
       <SettingRow label={t("Output content")}><Segment items={outputTypes.map((item) => item.label)} active={outputTypeIndex} onSelect={(index) => selectOutputType(outputTypes[index].value)} /></SettingRow>
       {translationOutputWarning && (
@@ -117,6 +123,55 @@ export function SettingsGeneral(props: RenderProps) {
   );
 }
 
+function ProviderDropdown({ label, providers, value, onChange }: { label: string; providers: ProviderStatus[]; value: string; onChange: (value: string) => void }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const selected = providers.find((provider) => provider.id === value) ?? providers[0];
+  const selectProvider = (provider: ProviderStatus) => {
+    if (!provider.enabled || provider.state !== "available") {
+      return;
+    }
+    setOpen(false);
+    onChange(provider.id);
+  };
+  return (
+    <div className="settings-provider-dropdown">
+      <button
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={label}
+        className="quick-select-button settings-provider-button"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span>{selected ? providerOptionLabel(selected, t) : t("Not configured")}</span>
+        <span aria-hidden="true">›</span>
+      </button>
+      {open && (
+        <div className="quick-select-menu settings-provider-menu" role="listbox">
+          {providers.map((provider) => {
+            const disabled = !provider.enabled || provider.state !== "available";
+            return (
+              <button
+                aria-selected={provider.id === value}
+                className={provider.id === value ? "selected" : ""}
+                disabled={disabled}
+                key={provider.id}
+                onClick={() => selectProvider(provider)}
+                role="option"
+                title={disabled ? providerStateLabel(provider.state, t) : undefined}
+                type="button"
+              >
+                {providerOptionLabel(provider, t)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function outputTypeNeedsTranslation(outputType: ConfigViewModel["outputType"]): boolean {
   return outputType === "translated_srt" || outputType === "bilingual_srt";
 }
@@ -127,17 +182,18 @@ function translationOutputReady(config: ConfigViewModel, providers: ProviderStat
 }
 
 export function SettingsModels({ models, modelInstallJobs, installModel, removeModel, config, updateConfig }: RenderProps) {
+  const t = useT();
   const asrModels = models.filter((model) => model.kind === "asr");
   const translationModels = models.filter((model) => model.kind === "translation");
   return (
     <div className="settings-list">
-      <div className="between"><h2>模型管理</h2><span className="caption">存储路径：~/.fastsub/models</span></div>
-      <p className="caption">模型只负责下载和默认选择；Provider 页面负责具体转写/翻译服务配置。</p>
-      <h3>转写模型</h3>
+      <div className="between"><h2>{t("Model management")}</h2><span className="caption">{t("Storage path")}: ~/.fastsub/models</span></div>
+      <p className="caption">{t("Models page description")}</p>
+      <h3>{t("Transcription models")}</h3>
       {asrModels.map((model) => (
         <ModelCard key={model.id} model={model} installJob={modelInstallJobs[model.id]} isDefault={config.asrModel === model.id || Boolean(model.defaultFor?.includes(config.asrProvider))} onInstall={() => void installModel(model.id)} onRemove={() => void removeModel(model.id)} onDefault={() => void updateConfig({ asrModel: model.id })} />
       ))}
-      <h3>翻译模型</h3>
+      <h3>{t("Translation models")}</h3>
       {translationModels.map((model) => (
         <ModelCard key={model.id} model={model} installJob={modelInstallJobs[model.id]} isDefault={config.translationModel === model.id || Boolean(model.defaultFor?.includes(config.translationProvider))} onInstall={() => void installModel(model.id)} onRemove={() => void removeModel(model.id)} onDefault={() => void updateConfig({ translationModel: model.id })} />
       ))}
@@ -146,26 +202,27 @@ export function SettingsModels({ models, modelInstallJobs, installModel, removeM
 }
 
 function ModelCard({ model, installJob, isDefault, onInstall, onRemove, onDefault }: { model: ModelStatus; installJob?: RenderProps["activeJob"]; isDefault: boolean; onInstall: () => void; onRemove: () => void; onDefault: () => void }) {
-  const taskLabel = model.kind === "translation" ? "翻译" : "转写";
+  const t = useT();
+  const taskLabel = model.kind === "translation" ? t("Translation") : t("Transcription");
   const installing = installJob?.status === "queued" || installJob?.status === "running" || installJob?.status === "canceling" || model.state === "installing";
   const failed = installJob?.status === "failed" || model.state === "failed";
   const ready = installJob?.status === "succeeded" || model.state === "ready";
   const missing = !installing && !failed && !ready;
   const progress = Math.max(0, Math.min(100, installJob?.progressPercent ?? model.progressPercent ?? 0));
-  const stageLabel = modelInstallStageLabel(installJob);
+  const stageLabel = modelInstallStageLabel(installJob, t);
   return (
     <article className={`model-card model-card-rich ${ready ? "ok-card" : "dashed"}`}>
       <div className="model-main">
         <div className="row gap-8 wrap">
           <strong>{model.name}</strong>
-          {isDefault && <Chip tone="accent">当前默认</Chip>}
+          {isDefault && <Chip tone="accent">{t("Current default")}</Chip>}
           <Chip>{taskLabel}</Chip>
           {model.backend && <Chip tone="muted">{model.backend}</Chip>}
         </div>
-        <span>{model.sizeLabel} · 兼容 {formatProviders(model.compatibleProviders)}</span>
-        <p className="caption no-margin">{model.recommendation ?? modelRecommendation(model)}</p>
+        <span>{model.sizeLabel} · {t("Compatible with")} {formatProviders(model.compatibleProviders, t)}</span>
+        <p className="caption no-margin">{modelRecommendation(model, t)}</p>
         {installing && (
-          <div className="model-install-progress" role="status" aria-label={`${model.name} 下载进度`}>
+          <div className="model-install-progress" role="status" aria-label={t("Model download progress", { name: model.name })}>
             <div className="between">
               <strong>{progress}%</strong>
               <span>{stageLabel}</span>
@@ -176,14 +233,14 @@ function ModelCard({ model, installJob, isDefault, onInstall, onRemove, onDefaul
         {failed && installJob?.error && <p className="caption warn-text no-margin">{installJob.error.message}</p>}
       </div>
       <div className="row gap-8 wrap end">
-        {ready && <Chip tone="ok">可用</Chip>}
-        {installing && <Chip tone="accent">下载中 {progress}%</Chip>}
-        {failed && <Chip tone="warn">安装失败</Chip>}
-        {missing && <Chip tone="muted">未安装</Chip>}
-        {ready && !isDefault && <button className="btn sm ghost" onClick={onDefault}>设为默认</button>}
-        {failed && <button className="btn sm" onClick={onInstall}>重试下载</button>}
-        {missing && <button className="btn sm" onClick={onInstall}>下载</button>}
-        {!missing && <button className="btn sm ghost" onClick={onRemove}>移除</button>}
+        {ready && <Chip tone="ok">{t("Available")}</Chip>}
+        {installing && <Chip tone="accent">{t("Downloading")} {progress}%</Chip>}
+        {failed && <Chip tone="warn">{t("Install failed")}</Chip>}
+        {missing && <Chip tone="muted">{t("Not installed")}</Chip>}
+        {ready && !isDefault && <button className="btn sm ghost" onClick={onDefault}>{t("Set as default")}</button>}
+        {failed && <button className="btn sm" onClick={onInstall}>{t("Retry download")}</button>}
+        {missing && <button className="btn sm" onClick={onInstall}>{t("Download")}</button>}
+        {!missing && <button className="btn sm ghost" onClick={onRemove}>{t("Remove")}</button>}
       </div>
     </article>
   );
@@ -202,30 +259,30 @@ function providerStateLabel(state: ProviderState, t: (key: string) => string = (
   return t(labels[state]);
 }
 
-function modelInstallStageLabel(job: RenderProps["activeJob"] | undefined): string {
+function modelInstallStageLabel(job: RenderProps["activeJob"] | undefined, t: (key: string) => string): string {
   if (!job || job.status === "queued") {
-    return "等待下载";
+    return t("Waiting to download");
   }
   if (job.status === "canceling") {
-    return "正在取消下载";
+    return t("Canceling download");
   }
   if (job.status === "canceled") {
-    return "已取消下载";
+    return t("Download canceled");
   }
   if (job.status === "failed") {
-    return "模型下载失败";
+    return t("Model download failed");
   }
   if (job.status === "succeeded") {
-    return "模型已可用";
+    return t("Model is ready");
   }
   const stage = job.stageLabel;
   if (stage.includes("校验") || stage.includes("验证") || stage.includes("verify")) {
-    return "正在校验模型";
+    return t("Verifying model");
   }
   if (stage.includes("解压") || stage.includes("准备")) {
-    return "正在准备模型";
+    return t("Preparing model");
   }
-  return "正在下载模型";
+  return t("Downloading model");
 }
 
 function providerStateTone(provider: ProviderStatus): "ok" | "accent" | "warn" | "muted" {
@@ -241,7 +298,7 @@ function providerStateTone(provider: ProviderStatus): "ok" | "accent" | "warn" |
 function providerOptionLabel(provider: ProviderStatus, t: (key: string) => string = (key) => key): string {
   const state = providerStateLabel(provider.state, t);
   const prefix = provider.kind === "local" ? t("Local") : provider.kind === "api" ? "API" : provider.kind === "web" ? t("Web") : "Native";
-  return `${prefix} · ${provider.name}${provider.enabled && provider.state === "available" ? "" : ` (${state})`}`;
+  return `${prefix} · ${providerDisplayName(provider, t)}${provider.enabled && provider.state === "available" ? "" : ` (${state})`}`;
 }
 
 function providerKindLabel(kind: ProviderStatus["kind"], t: (key: string) => string = (key) => key): string {
@@ -253,39 +310,57 @@ function providerKindLabel(kind: ProviderStatus["kind"], t: (key: string) => str
   }
 }
 
-function formatProviders(values: string[] | undefined): string {
+function formatProviders(values: string[] | undefined, t: (key: string) => string): string {
   if (!values || values.length === 0) {
-    return "兼容 Provider";
+    return t("Compatible Provider");
   }
-  return values.map((value) => providerNameFromId(value)).join("、");
+  return values.map((value) => providerNameFromId(value, t)).join(" / ");
 }
 
-function providerNameFromId(id: string): string {
+function providerNameFromId(id: string, t: (key: string) => string): string {
   const labels: Record<string, string> = {
-    "local-faster-whisper": "Faster Whisper",
-    "local-whisper-cpp": "whisper.cpp",
-    "api-openai-transcription": "OpenAI 转写",
-    "local-nllb-ct2": "NLLB 本地翻译",
-    "web-bing": "Bing 网页翻译",
-    "web-google": "Google 网页翻译",
-    "api-openai-chat": "OpenAI 兼容翻译"
+    "local-faster-whisper": "Local Faster Whisper",
+    "local-whisper-cpp": "Local whisper.cpp",
+    "api-openai-transcription": "OpenAI Transcription API",
+    "local-nllb-ct2": "Local NLLB Translation",
+    "web-bing": "Bing Web Translation",
+    "web-google": "Google Web Translation",
+    "api-openai-chat": "OpenAI-compatible Translation API"
   };
-  return labels[id] ?? id;
+  return t(labels[id] ?? id);
 }
 
-function modelRecommendation(model: ModelStatus): string {
-  if (model.id === "whisper-base") return "快速预览、低内存机器和短音频。";
-  if (model.id === "whisper-small") return "默认推荐，速度和准确率比较均衡。";
-  if (model.id.includes("large-v3-turbo")) return "更高准确率，适合长音频和更好的硬件。";
-  if (model.backend === "whisper.cpp") return "Native 本地路径，适合轻依赖和 CPU 场景。";
-  if (model.kind === "translation") return "本地离线翻译，适合隐私优先的字幕文本。";
-  return "可用于兼容 Provider 的本地任务。";
+function providerDisplayName(provider: ProviderStatus, t: (key: string) => string): string {
+  return providerNameFromId(provider.id, t);
+}
+
+function providerPrivacyNote(provider: ProviderStatus, t: (key: string) => string): string {
+  const notes: Record<string, string> = {
+    "local-faster-whisper": "Local Faster Whisper privacy note",
+    "local-whisper-cpp": "Local whisper.cpp privacy note",
+    "api-openai-transcription": "OpenAI Transcription API privacy note",
+    "local-nllb-ct2": "Local NLLB privacy note",
+    "web-bing": "Bing Web Translation privacy note",
+    "web-google": "Google Web Translation privacy note",
+    "api-openai-chat": "OpenAI-compatible Translation API privacy note"
+  };
+  return notes[provider.id] ? t(notes[provider.id]) : provider.privacyNote;
+}
+
+function modelRecommendation(model: ModelStatus, t: (key: string) => string): string {
+  if (model.id === "whisper-base") return t("Whisper Base recommendation");
+  if (model.id === "whisper-small") return t("Whisper Small recommendation");
+  if (model.id.includes("large-v3-turbo")) return t("Whisper Large Turbo recommendation");
+  if (model.backend === "whisper.cpp") return t("Whisper cpp recommendation");
+  if (model.kind === "translation") return t("Translation model recommendation");
+  return model.recommendation ?? t("Generic model recommendation");
 }
 
 export function SettingsProviders(props: RenderProps) {
+  const t = useT();
   const { providers, models, config, updateConfig, testProvider } = props;
   const [providerViews, setProviderViews] = useState(providers);
-  const [refreshLabel, setRefreshLabel] = useState("未刷新");
+  const [refreshLabel, setRefreshLabel] = useState("Not refreshed");
   const [providerDrafts, setProviderDrafts] = useState<Record<string, ProviderDraft>>(() => providerDraftsFromConfig(providers, config));
   const [providerChecks, setProviderChecks] = useState<Record<string, ProviderCheckState>>({});
 
@@ -311,18 +386,18 @@ export function SettingsProviders(props: RenderProps) {
   };
 
   const refreshProviders = async () => {
-    setRefreshLabel("检查中");
+    setRefreshLabel("Checking");
     const nextProviders = await Promise.all(providerViews.map((provider) => testProvider(provider.id, "static")));
     setProviderViews(nextProviders);
     setProviderChecks(Object.fromEntries(nextProviders.map((provider) => [provider.id, {
       status: provider.state === "available" ? "ok" : "failed",
-      message: provider.state === "available" ? "静态检查通过" : providerStateLabel(provider.state)
+      message: provider.state === "available" ? "Static check passed" : providerStateLabel(provider.state, t)
     } satisfies ProviderCheckState])));
-    setRefreshLabel("刷新完成");
+    setRefreshLabel("Refreshed");
   };
 
   const runProviderCheck = async (providerId: string) => {
-    setProviderChecks((current) => ({ ...current, [providerId]: { status: "checking", message: "正在检查" } }));
+    setProviderChecks((current) => ({ ...current, [providerId]: { status: "checking", message: "Checking" } }));
     try {
       const currentProvider = providerViews.find((provider) => provider.id === providerId);
       const mode = currentProvider?.kind === "api" ? "live" : "static";
@@ -343,20 +418,20 @@ export function SettingsProviders(props: RenderProps) {
       setProviderViews((current) => current.map((provider) => provider.id === providerId ? checked : provider));
       setProviderChecks((current) => ({ ...current, [providerId]: {
         status: checked.state === "available" ? "ok" : "failed",
-        message: checked.state === "available" ? (mode === "live" ? "连接检查通过" : "静态检查通过") : providerStateLabel(checked.state)
+        message: checked.state === "available" ? (mode === "live" ? "Connection check passed" : "Static check passed") : providerStateLabel(checked.state, t)
       } }));
     } catch {
-      setProviderChecks((current) => ({ ...current, [providerId]: { status: "failed", message: "检查失败" } }));
+      setProviderChecks((current) => ({ ...current, [providerId]: { status: "failed", message: "Check failed" } }));
     }
   };
 
   return (
     <div className="settings-list">
-      <div className="between"><h2>Provider</h2><div className="row gap-8"><Chip tone={refreshLabel === "刷新完成" ? "ok" : "muted"}>{refreshLabel}</Chip><button className="btn sm ghost" onClick={() => void refreshProviders()}>刷新状态</button></div></div>
-      <p className="caption">Provider 按任务组织。静态检查不联网、不上传；网页/API Provider 执行任务前仍会要求确认。</p>
+      <div className="between"><h2>{t("Provider")}</h2><div className="row gap-8"><Chip tone={refreshLabel === "Refreshed" ? "ok" : "muted"}>{t(refreshLabel)}</Chip><button className="btn sm ghost" onClick={() => void refreshProviders()}>{t("Refresh status")}</button></div></div>
+      <p className="caption">{t("Provider page description")}</p>
       <ProviderSection
-        title="转写 Provider"
-        description="选择音频转字幕的默认服务。本地路径不会上传音频，API 路径会上传音频。"
+        title={t("Transcription Provider")}
+        description={t("Transcription Provider description")}
         providers={providerViews.filter((provider) => provider.capability === "stt")}
         models={models.filter((model) => model.kind === "asr")}
         activeProvider={config.asrProvider}
@@ -373,8 +448,8 @@ export function SettingsProviders(props: RenderProps) {
         updateProviderDraft={updateProviderDraft}
       />
       <ProviderSection
-        title="翻译 Provider"
-        description="选择字幕文本翻译服务。本地 NLLB 不上传文本，网页/API Provider 会上传字幕文本。"
+        title={t("Translation Provider")}
+        description={t("Translation Provider description")}
         providers={providerViews.filter((provider) => provider.capability === "translation")}
         models={models.filter((model) => model.kind === "translation")}
         activeProvider={config.translationProvider}
@@ -505,8 +580,8 @@ function ProviderCard(props: {
   const openAIBaseUrl = props.active ? providerApiConfig.openAIBaseUrl ?? props.draft.openAIBaseUrl : props.draft.openAIBaseUrl;
   const openAIModel = props.active ? providerApiConfig.openAIModel ?? props.draft.openAIModel : props.draft.openAIModel;
   const languageOptions = provider.id === "local-nllb-ct2"
-    ? [["en", "英语"], ["zh", "中文"], ["ja", "日语"], ["ko", "韩语"]]
-    : [["auto", "自动识别"], ["en", "英语"], ["zh", "中文"], ["ja", "日语"], ["ko", "韩语"]];
+    ? [["en", t("English")], ["zh", t("Chinese")], ["ja", t("Japanese")], ["ko", t("Korean")]]
+    : [["auto", t("Auto detect")], ["en", t("English")], ["zh", t("Chinese")], ["ja", t("Japanese")], ["ko", t("Korean")]];
   const updateModel = (model: string) => {
     props.onDraft({ model });
     if (props.active) props.onModel(model);
@@ -568,7 +643,7 @@ function ProviderCard(props: {
     }
   };
   const canSetDefault = provider.enabled && provider.state === "available";
-  const defaultBlockReason = providerDefaultBlockReason(provider);
+  const defaultBlockReason = providerDefaultBlockReason(provider, t);
   const selectAsDefault = () => {
     if (!canSetDefault) {
       return;
@@ -602,38 +677,38 @@ function ProviderCard(props: {
     <article className={`provider-card provider-card-rich ${provider.requiresUploadConfirmation ? "warn-card-soft" : "ok-card"} ${props.active ? "selected-card" : ""}`}>
       <div className="provider-main">
         <div className="row gap-8 wrap">
-          <strong>{provider.name}</strong>
+          <strong>{providerDisplayName(provider, t)}</strong>
           <Chip tone={providerStateTone(provider)}>{providerStateLabel(provider.state, t)}</Chip>
-          {props.active && <Chip tone="accent">当前默认</Chip>}
+          {props.active && <Chip tone="accent">{t("Current default")}</Chip>}
           <Chip>{providerKindLabel(provider.kind, t)}</Chip>
-          {provider.requiresUploadConfirmation && <Chip tone="warn">上传确认</Chip>}
+          {provider.requiresUploadConfirmation && <Chip tone="warn">{t("Upload confirmation")}</Chip>}
         </div>
-        <span>{provider.privacyNote}</span>
+        <span>{providerPrivacyNote(provider, t)}</span>
         <div className="job-meta">
-          {provider.requiresModel && <Chip tone="muted">需要模型</Chip>}
-          {provider.requiresApiKey && <Chip tone="muted">需要 API Key</Chip>}
-          {provider.supportsBatch && <Chip tone="muted">批量</Chip>}
-          {provider.supportsWordTimestamps && <Chip tone="muted">词级时间戳</Chip>}
+          {provider.requiresModel && <Chip tone="muted">{t("Requires model")}</Chip>}
+          {provider.requiresApiKey && <Chip tone="muted">{t("Requires API key")}</Chip>}
+          {provider.supportsBatch && <Chip tone="muted">{t("Batch")}</Chip>}
+          {provider.supportsWordTimestamps && <Chip tone="muted">{t("Word timestamps")}</Chip>}
           {(provider.supportedLanguages ?? []).slice(0, 5).map((lang) => <Chip key={lang} tone="muted">{lang}</Chip>)}
         </div>
         <div className={`provider-config ${provider.kind === "api" ? "api-provider-config" : ""}`}>
           {provider.requiresModel && provider.kind !== "api" && props.models.length > 0 && (
-            <label>模型<select value={modelValue} onChange={(event) => updateModel(event.currentTarget.value)}>
+            <label>{t("Model")}<select value={modelValue} onChange={(event) => updateModel(event.currentTarget.value)}>
               {props.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
             </select></label>
           )}
           {provider.capability === "stt" && provider.kind !== "api" && (
             <>
-              <label>设备<select value={deviceValue} onChange={(event) => updateDevice(event.currentTarget.value as ConfigViewModel["device"])}><option value="auto">自动</option><option value="cpu">CPU</option><option value="gpu">GPU</option></select></label>
-              <label className="inline-check"><input type="checkbox" checked={wordTimestamps} onChange={(event) => updateWordTimestamps(event.currentTarget.checked)} /> 词级时间戳</label>
+              <label>{t("Device")}<select value={deviceValue} onChange={(event) => updateDevice(event.currentTarget.value as ConfigViewModel["device"])}><option value="auto">{t("Auto")}</option><option value="cpu">CPU</option><option value="gpu">GPU</option></select></label>
+              <label className="inline-check"><input type="checkbox" checked={wordTimestamps} onChange={(event) => updateWordTimestamps(event.currentTarget.checked)} /> {t("Word timestamps")}</label>
             </>
           )}
           {provider.capability === "translation" && provider.kind !== "api" && (
             <>
-              <label>源语言<select value={provider.id === "local-nllb-ct2" && sourceLanguage === "auto" ? "en" : sourceLanguage} onChange={(event) => updateSourceLanguage(event.currentTarget.value)}>
+              <label>{t("Source language")}<select value={provider.id === "local-nllb-ct2" && sourceLanguage === "auto" ? "en" : sourceLanguage} onChange={(event) => updateSourceLanguage(event.currentTarget.value)}>
                 {languageOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select></label>
-              <label>目标语言<select value={targetLanguage} onChange={(event) => updateTargetLanguage(event.currentTarget.value)}><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select></label>
+              <label>{t("Target language")}<select value={targetLanguage} onChange={(event) => updateTargetLanguage(event.currentTarget.value)}><option value="zh">{t("Simplified Chinese")}</option><option value="en">English</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></label>
             </>
           )}
           {provider.kind === "api" && (
@@ -642,40 +717,40 @@ function ProviderCard(props: {
                 <span className="api-label">API Key</span>
                 <div className="api-key-row">
                   <input
-                    aria-label={`${provider.name} API Key`}
+                    aria-label={t("Provider API key", { provider: providerDisplayName(provider, t) })}
                     className="mono"
                     type={showSecret ? "text" : "password"}
                     value={secretValue}
-                    placeholder={providerSecretPlaceholder(provider, props.config)}
+                    placeholder={providerSecretPlaceholder(provider, props.config, t)}
                     onChange={(event) => {
                       setSecretValue(event.currentTarget.value);
                       if (secretStatus !== "idle") setSecretStatus("idle");
                     }}
                   />
-                  <button className="btn sm ghost" disabled={!secretValue} onClick={() => setShowSecret((shown) => !shown)} type="button">{showSecret ? "隐藏" : "显示"}</button>
+                  <button className="btn sm ghost" disabled={!secretValue} onClick={() => setShowSecret((shown) => !shown)} type="button">{showSecret ? t("Hide") : t("Show")}</button>
                 </div>
               </div>
-              <label>模型<input value={openAIModel || defaultAPIModel(provider)} placeholder={defaultAPIModel(provider)} onChange={(event) => updateOpenAIModel(event.currentTarget.value)} /></label>
+              <label>{t("Model")}<input value={openAIModel || defaultAPIModel(provider)} placeholder={defaultAPIModel(provider)} onChange={(event) => updateOpenAIModel(event.currentTarget.value)} /></label>
               <label>Base URL<input value={openAIBaseUrl} onChange={(event) => updateOpenAIBaseUrl(event.currentTarget.value)} /></label>
               <div className="api-form-footer">
-                <span>凭据：{secretConfigured ? `已保存到 ${secretAlias}` : "未配置"}</span>
+                <span>{t("Credential status")}: {secretConfigured ? t("Saved to alias", { alias: secretAlias }) : t("Not configured")}</span>
                 <button className="btn sm ghost" disabled={!secretValue.trim() || secretStatus === "saving"} onClick={() => void saveSecret()} type="button">
-                  {secretStatus === "saving" ? "保存中" : secretConfigured ? "替换密钥" : "保存密钥"}
+                  {secretStatus === "saving" ? t("Saving") : secretConfigured ? t("Replace key") : t("Save key")}
                 </button>
-                {secretStatus === "saved" && <Chip tone="ok">已保存</Chip>}
-                {secretStatus === "failed" && <Chip tone="warn">保存失败</Chip>}
+                {secretStatus === "saved" && <Chip tone="ok">{t("Saved")}</Chip>}
+                {secretStatus === "failed" && <Chip tone="warn">{t("Save failed")}</Chip>}
               </div>
-              <p className="caption no-margin">请求会通过本机 daemon 代理发送到你设置的 Base URL。Key 保存在系统安全存储中，不写入配置文件。</p>
+              <p className="caption no-margin">{t("API proxy secret note")}</p>
             </div>
           )}
         </div>
       </div>
       <div className="row gap-8 wrap end">
-        {!props.active && <button className="btn sm" disabled={!canSetDefault} title={defaultBlockReason} onClick={selectAsDefault}>设为默认</button>}
+        {!props.active && <button className="btn sm" disabled={!canSetDefault} title={defaultBlockReason} onClick={selectAsDefault}>{t("Set as default")}</button>}
         {!props.active && !canSetDefault && <Chip tone="warn">{defaultBlockReason}</Chip>}
-        <button className="btn sm ghost" disabled={checking} onClick={props.onTest}>{checking ? "检查中" : provider.kind === "api" ? "连接检查" : "静态检查"}</button>
+        <button className="btn sm ghost" disabled={checking} onClick={props.onTest}>{checking ? t("Checking") : provider.kind === "api" ? t("Connection check") : t("Static check")}</button>
         {props.check && props.check.status !== "idle" && (
-          <Chip tone={props.check.status === "ok" ? "ok" : props.check.status === "failed" ? "warn" : "accent"}>{props.check.message}</Chip>
+          <Chip tone={props.check.status === "ok" ? "ok" : props.check.status === "failed" ? "warn" : "accent"}>{t(props.check.message)}</Chip>
         )}
       </div>
     </article>
@@ -712,7 +787,7 @@ function providerSecretAliasForId(providerId: string, config: ConfigViewModel): 
 
 function isProviderSecretConfigured(provider: ProviderStatus, config: ConfigViewModel): boolean {
   const providerConfig = apiProviderConfig(config, provider.id);
-  return (providerConfig.apiKeyStatus === "configured" && Boolean(providerConfig.apiKeyAlias)) || Boolean(provider.maskedCredential && provider.maskedCredential !== "未配置");
+  return (providerConfig.apiKeyStatus === "configured" && Boolean(providerConfig.apiKeyAlias)) || Boolean(provider.maskedCredential && provider.maskedCredential !== "未配置" && provider.maskedCredential !== "Not configured");
 }
 
 function providerSecretAlias(provider: ProviderStatus, config: ConfigViewModel): string {
@@ -720,41 +795,42 @@ function providerSecretAlias(provider: ProviderStatus, config: ConfigViewModel):
   if (providerConfig.apiKeyStatus === "configured" && providerConfig.apiKeyAlias) {
     return providerConfig.apiKeyAlias;
   }
-  if (provider.maskedCredential && provider.maskedCredential !== "未配置") {
+  if (provider.maskedCredential && provider.maskedCredential !== "未配置" && provider.maskedCredential !== "Not configured") {
     return provider.maskedCredential;
   }
   return defaultSecretAlias(provider.id);
 }
 
-function providerSecretPlaceholder(provider: ProviderStatus, config: ConfigViewModel): string {
-  return isProviderSecretConfigured(provider, config) ? "输入新的 API Key 以替换已保存密钥" : "sk-...";
+function providerSecretPlaceholder(provider: ProviderStatus, config: ConfigViewModel, t: (key: string) => string): string {
+  return isProviderSecretConfigured(provider, config) ? t("Enter new API key placeholder") : "sk-...";
 }
 
 function defaultAPIModel(provider: ProviderStatus): string {
   return provider.capability === "stt" ? "gpt-4o-transcribe" : "gpt-4o-mini";
 }
 
-function providerDefaultBlockReason(provider: ProviderStatus): string {
+function providerDefaultBlockReason(provider: ProviderStatus, t: (key: string) => string): string {
   switch (provider.state) {
-    case "missing_api_key": return "先配置密钥";
-    case "missing_model": return "先安装模型";
-    case "missing_dependency": return "先安装依赖";
-    case "invalid_config": return "先修复配置";
-    case "disabled": return "Provider 已停用";
-    case "not_implemented": return "暂不可用";
-    default: return provider.enabled ? "" : "Provider 已停用";
+    case "missing_api_key": return t("Configure key first");
+    case "missing_model": return t("Install model first");
+    case "missing_dependency": return t("Install dependency first");
+    case "invalid_config": return t("Fix config first");
+    case "disabled": return t("Provider disabled");
+    case "not_implemented": return t("Unavailable");
+    default: return provider.enabled ? "" : t("Provider disabled");
   }
 }
 
 export function SettingsDiagnostics({ environment }: RenderProps) {
+  const t = useT();
   return (
     <div className="settings-list">
-      <div className="between"><h2>诊断</h2><Chip tone="accent">示例信息</Chip></div>
+      <div className="between"><h2>{t("Diagnostics")}</h2><Chip tone="accent">{t("Sample info")}</Chip></div>
       <section className="panel paper-muted">
-        <h3>本地服务状态</h3>
-        <KV k="状态" v={environment?.health === "ok" ? "正常" : "需要检查"} />
-        <KV k="最近检查" v="mock health ok" />
-        <KV k="敏感信息" v="已脱敏" />
+        <h3>{t("Local service status")}</h3>
+        <KV k={t("Status")} v={environment?.health === "ok" ? t("Ready") : t("Checking")} />
+        <KV k={t("Last checked")} v="mock health ok" />
+        <KV k={t("Sensitive info")} v={t("Redacted")} />
       </section>
       <pre>{`[12:43:01] local service ready\n[12:43:04] subtitle progress=62\ncredential=[REDACTED]\napi_key=[REDACTED]`}</pre>
     </div>
@@ -762,14 +838,15 @@ export function SettingsDiagnostics({ environment }: RenderProps) {
 }
 
 export function SettingsBenchmark() {
+  const t = useT();
   return (
     <div className="settings-list">
-      <div className="between"><h2>Benchmark</h2><Chip>第一版暂不实现</Chip></div>
+      <div className="between"><h2>{t("Benchmark")}</h2><Chip>{t("Future scope")}</Chip></div>
       <section className="panel dashed">
-        <h3>后续可能包含</h3>
-        <KV k="转写性能" v="RTFx · elapsed" />
-        <KV k="转写质量" v="WER / CER · 字幕健康度" />
-        <KV k="翻译质量" v="BLEU · chrF · exact match" />
+        <h3>{t("Future scope")}</h3>
+        <KV k={t("Transcription performance")} v="RTFx · elapsed" />
+        <KV k={t("Transcription quality")} v="WER / CER · subtitle health" />
+        <KV k={t("Translation quality")} v="BLEU · chrF · exact match" />
       </section>
     </div>
   );

@@ -34,6 +34,11 @@ function dropFileOn(label: string, file: File) {
   fireEvent.drop(target, { dataTransfer: { files: [file] } });
 }
 
+function chooseProviderDropdownOption(label: string, option: string | RegExp) {
+  fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(within(screen.getByRole("listbox")).getByRole("option", { name: option }));
+}
+
 function progressCardPercent(): number {
   const text = document.querySelector(".progress-card strong")?.textContent ?? "0%";
   return Number(text.replace("%", ""));
@@ -105,7 +110,7 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "详情" }));
     expect(screen.getByText("语言")).toBeInTheDocument();
     expect(screen.getByText("自动识别")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+    fireEvent.click(screen.getByRole("button", { name: "返回任务列表" }));
     fireEvent.click(within(document.querySelector(".tabs") as HTMLElement).getByRole("button", { name: "失败 1" }));
     expect(screen.getByText("raw-cam.mov")).toBeInTheDocument();
     expect(screen.queryByText("a b.mp4")).not.toBeInTheDocument();
@@ -129,15 +134,15 @@ describe("Fast Sub renderer flow", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "VTT" })).toHaveClass("on"));
     expect(screen.getByRole("button", { name: "双语字幕" })).toHaveClass("on");
     fireEvent.change(screen.getByDisplayValue("简体中文"), { target: { value: "en" } });
-    await waitFor(() => expect(screen.getByDisplayValue("English")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByDisplayValue("英语")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "跳过" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "跳过" })).toHaveClass("on"));
     expect(screen.getByRole("button", { name: "双语字幕" })).toHaveClass("on");
     expect(screen.getByRole("button", { name: "VTT" })).toHaveClass("on");
-    fireEvent.change(screen.getByLabelText("默认转写 Provider"), { target: { value: "api-openai-transcription" } });
-    await waitFor(() => expect(screen.getByLabelText("默认转写 Provider")).toHaveValue("api-openai-transcription"));
-    fireEvent.change(screen.getByLabelText("默认翻译 Provider"), { target: { value: "web-bing" } });
-    await waitFor(() => expect(screen.getByLabelText("默认翻译 Provider")).toHaveValue("web-bing"));
+    chooseProviderDropdownOption("默认转写 Provider", /whisper\.cpp/);
+    await waitFor(() => expect(screen.getByLabelText("默认转写 Provider")).toHaveTextContent("whisper.cpp"));
+    chooseProviderDropdownOption("默认翻译 Provider", /Bing/);
+    await waitFor(() => expect(screen.getByLabelText("默认翻译 Provider")).toHaveTextContent("Bing"));
     fireEvent.click(screen.getByRole("button", { name: "GPU" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "GPU" })).toHaveClass("on"));
     const wordToggle = screen.getByRole("button", { name: "设置词级时间戳" });
@@ -162,8 +167,8 @@ describe("Fast Sub renderer flow", () => {
     render(<App />);
     await enterMainScreen();
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
-    fireEvent.click(screen.getByRole("button", { name: /Provider/ }));
-    expect(await screen.findByRole("heading", { name: "转写 Provider" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /服务商/ }));
+    expect(await screen.findByRole("heading", { name: "转写方式" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "翻译 Provider" })).toBeInTheDocument();
     expect(screen.getAllByText("未配置密钥").length).toBeGreaterThan(0);
     expect(screen.queryByText("missing_api_key")).not.toBeInTheDocument();
@@ -191,14 +196,14 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(within(openAiTranslateCard).getByRole("button", { name: "连接检查" }));
     await waitFor(() => expect(within(openAiTranslateCard).getByText("未配置密钥")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "刷新状态" }));
-    await waitFor(() => expect(screen.getByText("刷新完成")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("已刷新")).toBeInTheDocument());
   });
 
   it("keeps provider card controls independent before selecting defaults", async () => {
     render(<App />);
     await enterMainScreen();
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
-    fireEvent.click(screen.getByRole("button", { name: /Provider/ }));
+    fireEvent.click(screen.getByRole("button", { name: /服务商/ }));
     const fasterCard = (await screen.findByText("本地 Faster Whisper")).closest("article") as HTMLElement;
     const whisperCppCard = screen.getByText("本地 whisper.cpp").closest("article") as HTMLElement;
     const fasterWord = within(fasterCard).getByLabelText("词级时间戳") as HTMLInputElement;
@@ -227,7 +232,7 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.getByRole("button", { name: "窗口" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "帮助" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("menuitem", { name: "翻译SRT" }));
-    expect(screen.getByText("翻译已有 SRT")).toBeInTheDocument();
+    expect(screen.getByText("翻译字幕 / 文本")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("menuitem", { name: "字幕生成" }));
     expect(screen.getByRole("button", { name: "添加视频" })).toBeInTheDocument();
   });
@@ -1081,7 +1086,7 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.getByText(/当前默认翻译模型未准备好/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始翻译" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "配置翻译 Provider" }));
-    expect(await screen.findByRole("heading", { name: "Provider" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "服务商" })).toBeInTheDocument();
   });
 
   it("blocks translated subtitle output selection until the translation model is configured", async () => {
@@ -1097,15 +1102,15 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.getByRole("button", { name: "原字幕" })).toHaveClass("on");
     expect(screen.getByRole("button", { name: "双语字幕" })).not.toHaveClass("on");
     fireEvent.click(screen.getByRole("button", { name: "配置翻译 Provider" }));
-    expect(await screen.findByRole("heading", { name: "Provider" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "服务商" })).toBeInTheDocument();
   });
 
   it("blocks translated subtitle output selection when the selected translation provider is not configured", async () => {
     render(<App />);
+    fireEvent.click(await screen.findByLabelText("打开调试面板"));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "nllbInstallFailed" } });
     await enterMainScreen();
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
-    fireEvent.change(screen.getByLabelText("默认翻译 Provider"), { target: { value: "api-openai-chat" } });
-    await waitFor(() => expect(screen.getByLabelText("默认翻译 Provider")).toHaveValue("api-openai-chat"));
 
     fireEvent.click(screen.getByRole("button", { name: "翻译字幕" }));
 
@@ -1128,11 +1133,9 @@ describe("Fast Sub renderer flow", () => {
 
   it("blocks invalid quick output choices on the empty main screen", async () => {
     render(<App />);
+    fireEvent.click(await screen.findByLabelText("打开调试面板"));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "nllbInstallFailed" } });
     await enterMainScreen();
-    fireEvent.click(screen.getByRole("button", { name: "设置" }));
-    fireEvent.change(screen.getByLabelText("默认翻译 Provider"), { target: { value: "api-openai-chat" } });
-    await waitFor(() => expect(screen.getByLabelText("默认翻译 Provider")).toHaveValue("api-openai-chat"));
-    fireEvent.click(screen.getByRole("menuitem", { name: "字幕生成" }));
 
     fireEvent.click(await screen.findByLabelText("输出内容"));
     fireEvent.click(within(screen.getByRole("listbox")).getByRole("option", { name: "双语字幕" }));

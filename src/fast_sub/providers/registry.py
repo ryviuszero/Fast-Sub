@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import os
 
 from fast_sub.contracts.provider import (
     ProviderLocation,
@@ -45,7 +44,6 @@ DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
             license="OpenAI API terms",
             privacy_note="Uploads prepared audio to the configured OpenAI-compatible API.",
         ),
-        api_key_env="OPENAI_API_KEY",
     ),
     ProviderDefinition(
         metadata=ProviderMetadata(
@@ -114,7 +112,6 @@ DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
             license="OpenAI API terms",
             privacy_note="Uploads subtitle text to the configured OpenAI-compatible API.",
         ),
-        api_key_env="OPENAI_API_KEY",
     ),
 )
 
@@ -136,12 +133,6 @@ def default_registry() -> ProviderRegistry:
 
 def _provider_status(definition: ProviderDefinition) -> ProviderStatus:
     metadata = definition.metadata
-    if definition.api_key_env and not os.getenv(definition.api_key_env):
-        return ProviderStatus(
-            id=metadata.id,
-            status=ProviderStatusCode.MISSING_API_KEY,
-            message=f"Missing {definition.api_key_env}.",
-        )
     missing_dependency = _missing_dependency_module(definition)
     if missing_dependency:
         return ProviderStatus(

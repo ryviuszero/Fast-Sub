@@ -99,11 +99,11 @@ func transcribeOpenAI(ctx context.Context, cfg Config, command, input string, pa
 
 func resolveAPIKey(parsed transcribeArgs) (string, *fserrors.AppError) {
 	if parsed.apiKeyEnv == "" {
-		return "", fserrors.New(fserrors.CodeMissingAPIKey, "api_openai_transcription", "--api-key-env is required for api-openai-transcription.", "Pass --api-key-env with an environment variable that contains the API key.", nil)
+		return "", nil
 	}
 	apiKey := os.Getenv(parsed.apiKeyEnv)
 	if apiKey == "" {
-		return "", fserrors.New(fserrors.CodeMissingAPIKey, "api_openai_transcription", "API key environment variable is not set.", "Set "+parsed.apiKeyEnv+" or pass a different --api-key-env.", map[string]any{"api_key_env": parsed.apiKeyEnv})
+		return "", nil
 	}
 	return apiKey, nil
 }

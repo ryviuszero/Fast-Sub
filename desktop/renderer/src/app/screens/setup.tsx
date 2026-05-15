@@ -1,11 +1,14 @@
 import type { RenderProps } from "../types";
 import { CheckItem, Chrome, Divider } from "../components";
-import { useT } from "../i18n";
+import { useRuntimeText, useT } from "../i18n";
 
 export function SetupCheck({ environment, models, setScreen, installModel, repairDaemon }: RenderProps) {
   const t = useT();
+  const rt = useRuntimeText();
   const disconnected = environment?.health === "disconnected";
   const asr = models.find((model) => model.id === "whisper-small");
+  const memory = environment?.memory ? rt(environment.memory) : t("16 GB available");
+  const disk = environment?.disk ? rt(environment.disk) : t("240 GB available");
   return (
     <div className="wf">
       <main className="content-flow setup-flow">
@@ -14,7 +17,7 @@ export function SetupCheck({ environment, models, setScreen, installModel, repai
           <p className="subtle">{t("Checking local environment")}</p>
         </div>
         <section className="panel paper-muted">
-          <CheckItem label={t("Local environment")} detail={`${environment?.os ?? "Windows"} · ${environment?.arch ?? "x64"} · ${environment?.memory ?? "16 GB 可用"} · ${environment?.disk ?? "240 GB 可用"}`} status="ready" />
+          <CheckItem label={t("Local environment")} detail={`${environment?.os ?? "Windows"} · ${environment?.arch ?? "x64"} · ${memory} · ${disk}`} status="ready" />
           <Divider />
           <CheckItem label="FFmpeg / FFprobe" detail={t("Used to extract audio tracks")} status={environment?.ffmpegReady ? "ready" : "checking"} />
           <Divider />

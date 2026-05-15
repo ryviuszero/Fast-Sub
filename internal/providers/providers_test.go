@@ -51,8 +51,11 @@ func TestTranslationProvidersAreListedWithMetadata(t *testing.T) {
 	if byID["web-bing"].Status != StatusAvailable {
 		t.Fatalf("web-bing status = %q", byID["web-bing"].Status)
 	}
-	if byID["api-openai-chat"].Status != StatusMissingAPIKey {
+	if byID["api-openai-chat"].Status != StatusAvailable {
 		t.Fatalf("api-openai-chat status = %q", byID["api-openai-chat"].Status)
+	}
+	if byID["api-openai-chat"].RequiresAPIKey {
+		t.Fatalf("api-openai-chat should let live connectivity decide whether auth is required")
 	}
 }
 
@@ -203,13 +206,16 @@ func TestExplicitCommandMustResolve(t *testing.T) {
 	}
 }
 
-func TestOpenAIKeyConfiguredWithoutNetwork(t *testing.T) {
-	missing, ok := Test(context.Background(), fakeRuntime(nil, false, nil), "api-openai-transcription")
+func TestOpenAIStaticCheckDoesNotRequireKeyWithoutNetwork(t *testing.T) {
+	noKey, ok := Test(context.Background(), fakeRuntime(nil, false, nil), "api-openai-transcription")
 	if !ok {
 		t.Fatal("provider missing")
 	}
-	if missing.Status != StatusMissingAPIKey {
-		t.Fatalf("status = %q", missing.Status)
+	if noKey.Status != StatusAvailable || !noKey.Available {
+		t.Fatalf("status = %#v", noKey)
+	}
+	if noKey.Details["api_key_configured"] != false {
+		t.Fatalf("api_key_configured = %#v", noKey.Details["api_key_configured"])
 	}
 
 	configured, _ := Test(context.Background(), fakeRuntime(map[string]string{"OPENAI_API_KEY": "sk-test-secret"}, false, nil), "api-openai-transcription")
@@ -218,6 +224,9 @@ func TestOpenAIKeyConfiguredWithoutNetwork(t *testing.T) {
 	}
 	if configured.Details["live_network"] != false {
 		t.Fatalf("provider test should be static, details = %#v", configured.Details)
+	}
+	if configured.Details["api_key_configured"] != true {
+		t.Fatalf("api_key_configured = %#v", configured.Details["api_key_configured"])
 	}
 }
 
@@ -268,15 +277,15 @@ model = "qwen/qwen3-4b-2507"
 	if result.Status != StatusAvailable || !result.Available {
 		t.Fatalf("local endpoint check = %#v", result)
 	}
-	if result.Details["api_key_optional"] != true {
-		t.Fatalf("api_key_optional = %#v", result.Details["api_key_optional"])
+	if result.Details["auth_decided_by_live_check"] != true {
+		t.Fatalf("auth_decided_by_live_check = %#v", result.Details["auth_decided_by_live_check"])
 	}
 	if result.Details["api_key_env"] != "OPENAI_API_KEY" {
 		t.Fatalf("api_key_env = %#v", result.Details["api_key_env"])
 	}
 }
 
-func TestOpenAILegacyAliasUsesFastSubOpenAIEnv(t *testing.T) {
+func TestOpenAITranscriptionLegacyAliasUsesProviderSpecificEnv(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "fast-sub-go.toml")
 	if err := os.WriteFile(configPath, []byte(`
 [providers.api-openai-transcription]
@@ -287,8 +296,8 @@ model = "gpt-4o-transcribe"
 	}
 
 	result, ok := Test(context.Background(), fakeRuntime(map[string]string{
-		"FAST_SUB_GO_CONFIG":      configPath,
-		"FAST_SUB_OPENAI_API_KEY": "sk-test-secret",
+		"FAST_SUB_GO_CONFIG":                    configPath,
+		"FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY": "sk-test-secret",
 	}, false, nil), "api-openai-transcription")
 	if !ok {
 		t.Fatal("provider missing")
@@ -296,7 +305,7 @@ model = "gpt-4o-transcribe"
 	if result.Status != StatusAvailable || !result.Available {
 		t.Fatalf("legacy alias check = %#v", result)
 	}
-	if result.Details["api_key_env"] != "FAST_SUB_OPENAI_API_KEY" {
+	if result.Details["api_key_env"] != "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY" {
 		t.Fatalf("api_key_env = %#v", result.Details["api_key_env"])
 	}
 }
@@ -371,8 +380,8 @@ model = "FenomAI/faster-whisper-large-v3"
 	if result.CheckMode != CheckModeLive || result.Status != StatusAvailable || !result.Available {
 		t.Fatalf("live check = %#v", result)
 	}
-	if result.Details["api_key_optional"] != true {
-		t.Fatalf("api_key_optional = %#v", result.Details["api_key_optional"])
+	if result.Details["auth_decided_by_live_check"] != true {
+		t.Fatalf("auth_decided_by_live_check = %#v", result.Details["auth_decided_by_live_check"])
 	}
 }
 

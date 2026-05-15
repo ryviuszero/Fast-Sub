@@ -121,7 +121,7 @@ func openAIProviderView(providerID string, cfg appconfig.OpenAIProviderConfig) m
 		"base_url":       stringDefault(cfg.BaseURL, "https://api.openai.com/v1"),
 		"model":          cfg.Model,
 		"upload_format":  stringDefault(cfg.APIUploadFormat, "wav"),
-		"api_key_alias":  stringDefault(normalizeOpenAIKeyAlias(cfg.APIKeyEnv), defaultOpenAIKeyAlias(providerID)),
+		"api_key_alias":  stringDefault(normalizeOpenAIKeyAliasForProvider(cfg.APIKeyEnv, providerID), defaultOpenAIKeyAlias(providerID)),
 		"api_key_status": "missing",
 	}
 	if cfg.APIKeyEnv != "" {
@@ -419,7 +419,7 @@ func openAIConfigFromView(view configView, fallback appconfig.OpenAIProviderConf
 		fallback.APIUploadFormat = value
 	}
 	if value, ok := openai["api_key_alias"].(string); ok {
-		fallback.APIKeyEnv = normalizeOpenAIKeyAlias(value)
+		fallback.APIKeyEnv = normalizeOpenAIKeyAliasForProvider(value, "api-openai-transcription")
 	}
 	return fallback
 }
@@ -438,7 +438,7 @@ func openAIProviderConfigsFromView(view configView, loaded appconfig.AppConfig) 
 			continue
 		}
 		fallback := next[providerID]
-		next[providerID] = openAIProviderConfigFromMap(providerView, fallback)
+		next[providerID] = openAIProviderConfigFromMap(providerID, providerView, fallback)
 	}
 	if view.OpenAICompatible != nil {
 		if _, hasSpecific := view.APIProviders["api-openai-transcription"]; hasSpecific {
@@ -449,7 +449,7 @@ func openAIProviderConfigsFromView(view configView, loaded appconfig.AppConfig) 
 	return next
 }
 
-func openAIProviderConfigFromMap(openai map[string]any, fallback appconfig.OpenAIProviderConfig) appconfig.OpenAIProviderConfig {
+func openAIProviderConfigFromMap(providerID string, openai map[string]any, fallback appconfig.OpenAIProviderConfig) appconfig.OpenAIProviderConfig {
 	if value, ok := openai["base_url"].(string); ok {
 		fallback.BaseURL = value
 	}
@@ -460,16 +460,16 @@ func openAIProviderConfigFromMap(openai map[string]any, fallback appconfig.OpenA
 		fallback.APIUploadFormat = value
 	}
 	if value, ok := openai["api_key_alias"].(string); ok {
-		fallback.APIKeyEnv = normalizeOpenAIKeyAlias(value)
+		fallback.APIKeyEnv = normalizeOpenAIKeyAliasForProvider(value, providerID)
 	}
 	return fallback
 }
 
-func normalizeOpenAIKeyAlias(value string) string {
-	if value == "openai-default" {
-		return "FAST_SUB_OPENAI_API_KEY"
+func normalizeOpenAIKeyAliasForProvider(value string, providerID string) string {
+	if value != "openai-default" {
+		return value
 	}
-	return value
+	return defaultOpenAIKeyAlias(providerID)
 }
 
 func boolPtr(value bool) *bool {

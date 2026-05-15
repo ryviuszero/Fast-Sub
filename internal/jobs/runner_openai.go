@@ -106,9 +106,15 @@ func (r DefaultRunner) openAIKeyEnv(req CreateRequest, loaded appconfig.AppConfi
 	}
 	providerConfig := openAIProviderConfig(loaded, "api-openai-transcription")
 	if providerConfig.APIKeyEnv != "" {
+		if providerConfig.APIKeyEnv == "openai-default" {
+			return "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY"
+		}
 		return providerConfig.APIKeyEnv
 	}
-	apiKeyEnv = "FAST_SUB_OPENAI_API_KEY"
+	apiKeyEnv = "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY"
+	if r.env(apiKeyEnv) == "" {
+		apiKeyEnv = "FAST_SUB_OPENAI_API_KEY"
+	}
 	if r.env(apiKeyEnv) == "" {
 		apiKeyEnv = "OPENAI_API_KEY"
 	}

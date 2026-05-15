@@ -678,7 +678,7 @@ PATCH /v1/config
 
 `openai_compatible` 是旧版兼容字段，语义等同 `api_providers["api-openai-transcription"]`。Round 12 后桌面 UI 应优先读写 `api_providers`，其中 key 为 provider id，确保 `api-openai-transcription` 和 `api-openai-chat` 的 Base URL、模型名和密钥 alias 互不影响。配置 view 只保存 `api_key_alias` / `api_key_status`，raw API key 必须继续由 Electron main process secret storage 管理。
 
-OpenAI-compatible provider 的可用性以实际端点请求为准：`api-openai-transcription` / `api-openai-chat` 的连接检查和 job 执行均允许未配置 key 的本地兼容服务；daemon 在未解析到 secret 时不得发送 `Authorization` header，也不得在请求前仅因 key 为空失败。若兼容端点返回 2xx，Provider 视为可用；若返回 401/403 且未发送 key，才映射为 `missing_api_key` 并提示用户保存密钥或切换到无需密钥的本地端点。
+OpenAI-compatible provider 的可用性以实际端点请求为准：`api-openai-transcription` / `api-openai-chat` 的静态检查不再把 key 缺失视为不可用；连接检查和 job 执行均允许未配置 key 的本地兼容服务。daemon 在未解析到 secret 时不得发送 `Authorization` header，也不得在请求前仅因 key 为空失败。若兼容端点返回 2xx，Provider 视为可用；若返回 401/403，才映射为 `missing_api_key` 或认证失败并提示用户保存密钥或切换到无需密钥的本地端点。
 
 示例 request：
 
@@ -794,7 +794,7 @@ Round 12 的 provider secret 由 Electron main process 管理的 secret storage 
 daemon 规则：
 
 - renderer 永远不读取 raw secret。
-- 配置文件只保存 `api_key_env` / alias，例如 `FAST_SUB_OPENAI_API_KEY`，不得保存 raw key。
+- 配置文件只保存 `api_key_env` / alias，不得保存 raw key。默认 alias 按 Provider 隔离：`api-openai-transcription` 使用 `FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY`，`api-openai-chat` 使用 `FAST_SUB_OPENAI_CHAT_API_KEY`；旧版 `FAST_SUB_OPENAI_API_KEY` / `OPENAI_API_KEY` 只作为兼容 fallback。
 - Electron main process 自管 daemon 时，可以在启动或 repair daemon 前从 safeStorage 读取已保存 key，并只按受控环境变量名注入给子进程；这些 env value 不得写入日志、事件或错误 payload。
 - 外部已启动 daemon 不由 Electron 注入 secret；此时必须由外部环境自行提供 `api_key_env` 对应变量，或后续切到 transient secret channel。
 - 创建 API job 或 live provider test 时，Electron main 可以读取 secret，并通过 main-controlled transient secret channel 传给 daemon 或 job runner。
