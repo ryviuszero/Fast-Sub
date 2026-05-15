@@ -189,7 +189,7 @@ def test_local_asr_missing_dependency_hint_uses_extra(work_dir: Path) -> None:
     assert "uv sync --extra local-asr" in (result.action_hint or "")
 
 
-def test_api_stt_provider_without_key_is_unavailable_and_does_not_leak_key(
+def test_api_stt_provider_without_key_is_selectable_and_does_not_leak_key(
     monkeypatch,
     work_dir: Path,
 ) -> None:
@@ -204,11 +204,10 @@ def test_api_stt_provider_without_key_is_unavailable_and_does_not_leak_key(
     )
 
     encoded = result.model_dump_json()
-    assert result.status == "missing_api_key"
+    assert result.status == "available"
     assert result.provider_location == "api"
     assert not result.local
     assert result.model_path is None
-    assert "OPENAI_API_KEY" in (result.action_hint or "")
     assert "sk-" not in encoded
 
 

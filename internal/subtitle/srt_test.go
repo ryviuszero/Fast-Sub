@@ -20,6 +20,16 @@ func TestRenderSRTFormatsAndNormalizesText(t *testing.T) {
 	}
 }
 
+func TestRenderSRTAllowsEmptySubtitle(t *testing.T) {
+	got, err := RenderSRT(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Fatalf("SRT = %q, want empty", got)
+	}
+}
+
 func TestRenderSRTRejectsInvalidSegments(t *testing.T) {
 	cases := []Segment{
 		{StartSec: -1, EndSec: 1, Text: "bad"},

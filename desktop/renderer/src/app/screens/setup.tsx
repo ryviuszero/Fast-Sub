@@ -1,83 +1,89 @@
 import type { RenderProps } from "../types";
 import { CheckItem, Chrome, Divider } from "../components";
+import { useRuntimeText, useT } from "../i18n";
 
 export function SetupCheck({ environment, models, setScreen, installModel, repairDaemon }: RenderProps) {
+  const t = useT();
+  const rt = useRuntimeText();
   const disconnected = environment?.health === "disconnected";
   const asr = models.find((model) => model.id === "whisper-small");
+  const memory = environment?.memory ? rt(environment.memory) : t("16 GB available");
+  const disk = environment?.disk ? rt(environment.disk) : t("240 GB available");
   return (
     <div className="wf">
       <main className="content-flow setup-flow">
         <div>
-          <h1>环境检查</h1>
-          <p className="subtle">正在检查本机运行环境，确保一切就绪...</p>
+          <h1>{t("Environment check")}</h1>
+          <p className="subtle">{t("Checking local environment")}</p>
         </div>
         <section className="panel paper-muted">
-          <CheckItem label="本机环境" detail={`${environment?.os ?? "Windows"} · ${environment?.arch ?? "x64"} · ${environment?.memory ?? "16 GB 可用"} · ${environment?.disk ?? "240 GB 可用"}`} status="ready" />
+          <CheckItem label={t("Local environment")} detail={`${environment?.os ?? "Windows"} · ${environment?.arch ?? "x64"} · ${memory} · ${disk}`} status="ready" />
           <Divider />
-          <CheckItem label="FFmpeg / FFprobe" detail="用于提取音频轨" status={environment?.ffmpegReady ? "ready" : "checking"} />
+          <CheckItem label="FFmpeg / FFprobe" detail={t("Used to extract audio tracks")} status={environment?.ffmpegReady ? "ready" : "checking"} />
           <Divider />
-          <CheckItem label="Fast Sub 服务" status={disconnected ? "failed" : "ready"} />
+          <CheckItem label={t("Fast Sub service")} status={disconnected ? "failed" : "ready"} />
           <Divider />
-          <CheckItem label="本地 Worker" status={environment?.localTranscriptionReady ? "ready" : "pending"} />
+          <CheckItem label={t("Local worker")} status={environment?.localTranscriptionReady ? "ready" : "pending"} />
           <Divider />
-          <CheckItem label="模型存储目录" status={environment?.modelDirectoryReady ? "ready" : "pending"} />
+          <CheckItem label={t("Model storage directory")} status={environment?.modelDirectoryReady ? "ready" : "pending"} />
           <Divider />
-          <CheckItem label="网络连接" detail="首次需要下载模型" status="ready" />
+          <CheckItem label={t("Network connection")} detail={t("Needed for first model download")} status="ready" />
         </section>
         {disconnected && (
           <section className="panel warn-panel">
-            <h2>Fast Sub 服务暂时不可用</h2>
-            <p>点击一键修复会重新准备本地服务状态。</p>
-            <button className="btn primary" onClick={() => void repairDaemon()}>一键修复</button>
+            <h2>{t("Fast Sub service unavailable")}</h2>
+            <p>{t("Repair service hint")}</p>
+            <button className="btn primary" onClick={() => void repairDaemon()}>{t("Repair")}</button>
           </section>
         )}
         {asr?.state !== "ready" && (
           <section className="panel warn-panel">
-            <h2>默认 ASR 模型未准备</h2>
-            <p>下载完成后即可使用本地转写。</p>
-            <button className="btn primary" onClick={() => void installModel("whisper-small")}>下载默认模型</button>
+            <h2>{t("Default ASR model not ready")}</h2>
+            <p>{t("Local transcription available after download")}</p>
+            <button className="btn primary" onClick={() => void installModel("whisper-small")}>{t("Download default model")}</button>
           </section>
         )}
         <div className="progress accent"><i style={{ width: disconnected ? "45%" : "100%" }} /></div>
-        <p className="center-text caption">{disconnected ? "等待修复服务..." : "检查完成 6 / 6"}</p>
-        <button className="btn primary setup-next" disabled={disconnected || asr?.state !== "ready"} onClick={() => setScreen("setup-done")}>进入主界面</button>
+        <p className="center-text caption">{disconnected ? t("Waiting for service repair") : t("Check complete 6 of 6")}</p>
+        <button className="btn primary setup-next" disabled={disconnected || asr?.state !== "ready"} onClick={() => setScreen("setup-done")}>{t("Enter app")}</button>
       </main>
     </div>
   );
 }
 
 export function SetupDone({ setScreen }: RenderProps) {
+  const t = useT();
   return (
     <div className="wf">
       <Chrome />
       <main className="content-flow setup-flow">
         <div className="center-stack">
           <div className="success-mark">✓</div>
-          <h1>准备就绪</h1>
-          <p className="subtle">环境已配置完成，可以开始使用了。</p>
+          <h1>{t("Setup ready")}</h1>
+          <p className="subtle">{t("Environment ready message")}</p>
         </div>
         <section className="panel paper-muted">
-          <h2>环境总结</h2>
-          <CheckItem label="本地转写" detail="whisper-small · 本地处理" status="ready" />
+          <h2>{t("Environment summary")}</h2>
+          <CheckItem label={t("Local transcription")} detail={`whisper-small · ${t("local processing")}`} status="ready" />
           <Divider />
-          <CheckItem label="本地翻译" detail="NLLB · 可稍后调整" status="ready" />
+          <CheckItem label={t("Local translation")} detail={`NLLB · ${t("Can be adjusted later")}`} status="ready" />
           <Divider />
           <CheckItem label="FFmpeg" detail="mock available" status="ready" />
           <Divider />
-          <CheckItem label="远程 API" status="skip" />
+          <CheckItem label={t("Remote API")} status="skip" />
         </section>
         <section className="panel dashed">
-          <h2>默认配置</h2>
+          <h2>{t("Default configuration")}</h2>
           <div className="summary-grid">
-            <span>语言<strong>自动识别</strong></span>
-            <span>输出<strong>SRT</strong></span>
-            <span>位置<strong>与源文件相同</strong></span>
-            <span>设备<strong>自动</strong></span>
+            <span>{t("Language")}<strong>{t("Auto detect")}</strong></span>
+            <span>{t("Output")}<strong>SRT</strong></span>
+            <span>{t("Location")}<strong>{t("Same as source file")}</strong></span>
+            <span>{t("Device")}<strong>{t("Auto")}</strong></span>
           </div>
         </section>
         <div className="center-actions">
-          <button className="btn ghost" onClick={() => setScreen("settings-general")}>更改设置</button>
-          <button className="btn primary wide-action" onClick={() => setScreen("main-empty")}>进入主界面</button>
+          <button className="btn ghost" onClick={() => setScreen("settings-general")}>{t("Change settings")}</button>
+          <button className="btn primary wide-action" onClick={() => setScreen("main-empty")}>{t("Enter app")}</button>
         </div>
       </main>
     </div>

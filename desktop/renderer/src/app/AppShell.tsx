@@ -1,40 +1,66 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ConfigViewModel, CreateJobRequest, EnvironmentStatus, FastSubClient, JobDetail, JobEvent, JobSummary, MockScenario, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import type { ConfigViewModel, CreateJobRequest, EnvironmentStatus, FastSubClient, JobDetail, JobEvent, JobStatus, JobSummary, MockScenario, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
 import { containsSecret } from "../../../shared/privacy/redaction";
 import { defaultConfig, mockPaths } from "../client/mockFixtures";
 import { AppMenu, DebugPanel, RemoteConfirmDialog } from "./components";
-import { createClient, makeFile, makeFilesFromList, seedFiles } from "./fixtures";
+import { createClient, filterSupportedMediaPaths, makeFile, makeFilesFromList } from "./fixtures";
+import { I18nProvider, useT } from "./i18n";
 import { renderScreen } from "./renderScreen";
-import type { MediaFile, Screen, UiLanguage } from "./types";
+import type { MediaFile, QueueFilter, Screen, UiFontStyle, UiLanguage } from "./types";
+
+const ONBOARDING_DONE_KEY = "fast-sub:onboarding-complete";
+const FILE_IMPORT_FEEDBACK_DELAY_MS = 32;
+const SYNC_MEDIA_IMPORT_LIMIT = 20;
+
+type PendingRemoteConfirmation = {
+  provider?: ProviderStatus;
+  files: MediaFile[];
+  onConfirm: () => void;
+};
 
 export function App({ client: providedClient }: { client?: FastSubClient }) {
   const [scenario, setScenario] = useState<MockScenario>("setupReady");
   const client = useMemo(() => providedClient ?? createClient(scenario), [providedClient, scenario]);
-  const [screen, setScreen] = useState<Screen>("setup-check");
+  const [screen, setScreen] = useState<Screen>(() => onboardingComplete() ? "main-empty" : "setup-check");
   const [debugOpen, setDebugOpen] = useState(false);
   const [environment, setEnvironment] = useState<EnvironmentStatus | null>(null);
   const [models, setModels] = useState<ModelStatus[]>([]);
   const [providers, setProviders] = useState<ProviderStatus[]>([]);
   const [config, setConfig] = useState<ConfigViewModel>(defaultConfig);
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>("system");
+  const [uiFontStyle, setUiFontStyle] = useState<UiFontStyle>("system");
+  const [queueInitialFilter, setQueueInitialFilter] = useState<QueueFilter>("all");
   const [files, setFiles] = useState<MediaFile[]>([]);
+  const [fileImportPending, setFileImportPending] = useState(false);
+  const [fileImportCount, setFileImportCount] = useState<number | null>(null);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [modelInstallJobs, setModelInstallJobs] = useState<Record<string, JobDetail>>({});
+  const [activeBatchJobIds, setActiveBatchJobIds] = useState<string[]>([]);
   const [activeJob, setActiveJob] = useState<JobDetail | null>(null);
-  const [remoteConfirmOpen, setRemoteConfirmOpen] = useState(false);
+  const [completedBatchJobs, setCompletedBatchJobs] = useState<JobDetail[]>([]);
   const [outputDirectoryLabel, setOutputDirectoryLabel] = useState("与源视频相同目录");
   const [outputDirectoryPath, setOutputDirectoryPath] = useState(mockPaths.output);
   const [openNotice, setOpenNotice] = useState<{ message: string; tone: "ok" | "warn" } | null>(null);
+  const [remoteConfirmRequest, setRemoteConfirmRequest] = useState<PendingRemoteConfirmation | null>(null);
   const backStackRef = useRef<Screen[]>([]);
   const forwardStackRef = useRef<Screen[]>([]);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const outputInputRef = useRef<HTMLInputElement | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const modelInstallUnsubscribeRef = useRef<Map<string, () => void>>(new Map());
   const activeJobRef = useRef<JobDetail | null>(null);
+  const activeBatchJobIdsRef = useRef<string[]>([]);
+  const completedBatchJobsRef = useRef<JobDetail[]>([]);
+  const backgroundQueueOpenRef = useRef(false);
 
   useEffect(() => {
     activeJobRef.current = activeJob;
   }, [activeJob]);
+
+  useEffect(() => {
+    activeBatchJobIdsRef.current = activeBatchJobIds;
+  }, [activeBatchJobIds]);
 
   const navigateScreen = useCallback((target: Screen) => {
     setScreen((current) => {
@@ -46,6 +72,13 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       return target;
     });
   }, []);
+
+  const navigateFromScreen = useCallback((target: Screen) => {
+    if ((screen === "setup-done" || screen === "setup-check") && target !== "setup-check" && target !== "setup-done") {
+      markOnboardingComplete();
+    }
+    navigateScreen(target);
+  }, [navigateScreen, screen]);
 
   const goBack = useCallback(() => {
     const previous = backStackRef.current.at(-1);
@@ -68,23 +101,45 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   }, [screen]);
 
   const loadBaseData = useCallback(async () => {
-    const [env, cfg, modelList, providerList, jobList] = await Promise.all([
+    const [envResult, cfgResult, modelsResult, providersResult, jobsResult] = await Promise.allSettled([
       client.getEnvironmentStatus(),
       client.getConfig(),
       client.listModels(),
       client.listProviders(),
       client.listJobs()
     ]);
+    const fallbackEnv: EnvironmentStatus = {
+      health: "disconnected" as const,
+      os: "Windows",
+      arch: "x64",
+      memory: "未知",
+      disk: "未知",
+      localTranscriptionReady: false,
+      localTranslationReady: false,
+      ffmpegReady: false,
+      modelDirectoryReady: false,
+      daemonReady: false,
+      warnings: ["本地服务暂时不可用"],
+      error: {
+        code: "daemon_disconnected",
+        title: "本地服务暂时不可用",
+        message: "请尝试一键修复，或检查 fast-sub-go 是否可启动。",
+        action: "打开诊断",
+        recoveryActions: ["repair_daemon", "open_diagnostics"],
+        diagnostic: "daemon startup failed"
+      }
+    };
+    const env = envResult.status === "fulfilled" ? envResult.value : fallbackEnv;
+    const cfg = cfgResult.status === "fulfilled" ? cfgResult.value : defaultConfig;
+    const modelList = modelsResult.status === "fulfilled" ? modelsResult.value : [];
+    const providerList = providersResult.status === "fulfilled" ? providersResult.value : [];
+    const jobList = jobsResult.status === "fulfilled" ? jobsResult.value : [];
     setEnvironment(env);
     setConfig(cfg);
     setModels(modelList);
     setProviders(providerList);
     setJobs(jobList);
-    const defaultAsrReady = modelList.some((model) => model.id === cfg.asrModel && model.kind === "asr" && model.state === "ready");
-    if (scenario === "missingAsr" && !defaultAsrReady) {
-      setScreen("main-missing");
-    }
-  }, [client, scenario]);
+  }, [client]);
 
   useEffect(() => {
     void loadBaseData();
@@ -98,6 +153,10 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     return () => {
       window.removeEventListener("keydown", onKey);
       unsubscribeRef.current?.();
+      for (const unsubscribe of modelInstallUnsubscribeRef.current.values()) {
+        unsubscribe();
+      }
+      modelInstallUnsubscribeRef.current.clear();
     };
   }, [loadBaseData]);
 
@@ -105,33 +164,189 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     setJobs(await client.listJobs());
   }, [client]);
 
+  const queueMediaImport = useCallback((inputCount: number | null, buildFiles: () => MediaFile[], reset?: () => void) => {
+    if (inputCount !== null && inputCount <= SYNC_MEDIA_IMPORT_LIMIT) {
+      const pickedFiles = buildFiles();
+      if (pickedFiles.length > 0) {
+        setFiles(pickedFiles);
+        setScreen("main-files");
+      }
+      reset?.();
+      return;
+    }
+    setFileImportPending(true);
+    setFileImportCount(inputCount);
+    setFiles([]);
+    setScreen("main-files");
+    window.setTimeout(() => {
+      try {
+        const pickedFiles = buildFiles();
+        setFiles(pickedFiles);
+        if (pickedFiles.length === 0) {
+          setScreen("main-empty");
+        }
+      } finally {
+        setFileImportPending(false);
+        setFileImportCount(null);
+        reset?.();
+      }
+    }, FILE_IMPORT_FEEDBACK_DELAY_MS);
+  }, []);
+
   const updateFromEvent = useCallback(async (event: JobEvent) => {
+    const continueBatchAfterTerminal = async (terminalJob: JobDetail): Promise<boolean> => {
+      const batchIds = activeBatchJobIdsRef.current;
+      if (batchIds.length <= 1) {
+        return false;
+      }
+      const nextJobs = mergeJobSummaries(await client.listJobs(), [terminalJob]);
+      setJobs(nextJobs);
+      const batchJobs = nextJobs.filter((job) => batchIds.includes(job.id));
+      const nextJob = batchJobs.find((job) => job.status === "running" || job.status === "queued" || job.status === "canceling");
+      if (nextJob) {
+        const detail = await client.getJob(nextJob.id);
+        activeJobRef.current = detail;
+        setActiveJob(detail);
+        if (!backgroundQueueOpenRef.current) {
+          setScreen("main-generating");
+        }
+        unsubscribeRef.current = client.subscribeJobEvents(detail.id, { onEvent: updateFromEvent });
+        return true;
+      }
+      if (batchJobs.length === batchIds.length && batchJobs.every((job) => isTerminalJobStatus(job.status))) {
+        if (!backgroundQueueOpenRef.current) {
+          setScreen("queue-failed");
+        } else {
+          setQueueInitialFilter(batchJobs.some((job) => job.status === "failed") ? "failed" : "done");
+        }
+        return true;
+      }
+      if (!backgroundQueueOpenRef.current) {
+        setScreen("main-generating");
+      }
+      return true;
+    };
+
     if (event.type === "snapshot" && event.job) {
-      setActiveJob(event.job);
-      setScreen("main-generating");
+      const snapshot = event.job;
+      setActiveJob((job) => mergeJobSnapshot(job, snapshot));
+      if (!backgroundQueueOpenRef.current) {
+        setScreen("main-generating");
+      }
     }
     if (event.type === "progress" && event.progress) {
       setActiveJob((job) => job ? { ...job, ...event.progress, statusLabel: "正在生成" } : job);
-      setScreen("main-generating");
+      if (!backgroundQueueOpenRef.current) {
+        setScreen("main-generating");
+      }
     }
     if (event.type === "log_tail" && event.logs) {
       setActiveJob((job) => job ? { ...job, logs: event.logs ?? job.logs } : job);
     }
     if (event.type === "succeeded" && event.result) {
-      setActiveJob((job) => job ? { ...job, status: "succeeded", statusLabel: "已完成", progressPercent: 100, stageLabel: "已完成", result: event.result } : job);
-      setScreen("main-done");
+      const completedJob = activeJobRef.current ? { ...activeJobRef.current, status: "succeeded" as const, statusLabel: "已完成", progressPercent: 100, stageLabel: "已完成", result: event.result } : null;
+      if (completedJob) {
+        activeJobRef.current = completedJob;
+        const nextCompletedJobs = mergeJobDetails(completedBatchJobsRef.current, [completedJob]);
+        completedBatchJobsRef.current = nextCompletedJobs;
+        setCompletedBatchJobs(nextCompletedJobs);
+        setActiveJob(completedJob);
+      }
       unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+      const batchIds = activeBatchJobIdsRef.current;
+      if (batchIds.length <= 1) {
+        if (!backgroundQueueOpenRef.current) {
+          setScreen("main-done");
+        } else {
+          setQueueInitialFilter("done");
+        }
+        await refreshJobs();
+        return;
+      }
+      const nextJobs = mergeJobSummaries(await client.listJobs(), completedJob ? [completedJob] : []);
+      setJobs(nextJobs);
+      const batchJobs = nextJobs.filter((job) => batchIds.includes(job.id));
+      const completedIds = new Set(completedBatchJobsRef.current.map((job) => job.id));
+      const nextJob = batchJobs.find((job) => job.status === "running" || job.status === "queued" || job.status === "canceling");
+      if (batchIds.every((id) => completedIds.has(id)) || (!nextJob && batchJobs.length === batchIds.length && batchJobs.every((job) => job.status === "succeeded"))) {
+        const completedDetails = await loadBatchJobDetails(client, batchIds, completedJob);
+        completedBatchJobsRef.current = completedDetails;
+        setCompletedBatchJobs(completedDetails);
+        if (completedDetails[0]) {
+          activeJobRef.current = completedDetails[0];
+          setActiveJob(completedDetails[0]);
+        }
+        if (!backgroundQueueOpenRef.current) {
+          setScreen("main-done");
+        } else {
+          setQueueInitialFilter("done");
+        }
+        return;
+      }
+      if (!nextJob && batchJobs.length === batchIds.length && batchJobs.every((job) => isTerminalJobStatus(job.status))) {
+        if (!backgroundQueueOpenRef.current) {
+          setScreen("queue-failed");
+        } else {
+          setQueueInitialFilter(batchJobs.some((job) => job.status === "failed") ? "failed" : "done");
+        }
+        return;
+      }
+      if (nextJob) {
+        const detail = await client.getJob(nextJob.id);
+        activeJobRef.current = detail;
+        setActiveJob(detail);
+        if (!backgroundQueueOpenRef.current) {
+          setScreen("main-generating");
+        }
+        unsubscribeRef.current = client.subscribeJobEvents(detail.id, { onEvent: updateFromEvent });
+        return;
+      }
+      if (!backgroundQueueOpenRef.current) {
+        setScreen("main-generating");
+      }
+      return;
     }
     if (event.type === "failed" && event.error) {
       const error = event.error;
-      setActiveJob((job) => job ? { ...job, status: "failed", statusLabel: "已失败", error, stageLabel: error.title } : job);
-      setScreen("queue-failed");
+      const failedJob = activeJobRef.current ? { ...activeJobRef.current, status: "failed" as const, statusLabel: "已失败", error, stageLabel: error.title } : null;
+      if (failedJob) {
+        activeJobRef.current = failedJob;
+        setActiveJob(failedJob);
+      } else {
+        setActiveJob((job) => job ? { ...job, status: "failed", statusLabel: "已失败", error, stageLabel: error.title } : job);
+      }
       unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+      if (failedJob && await continueBatchAfterTerminal(failedJob)) {
+        await refreshJobs();
+        return;
+      }
+      if (!backgroundQueueOpenRef.current) {
+        setScreen(error.code === "output_exists" && config.outputConflict === "ask" ? "main-conflict" : "queue-failed");
+      } else {
+        setQueueInitialFilter("failed");
+      }
     }
     if (event.type === "canceled") {
-      setActiveJob((job) => job ? { ...job, status: "canceled", statusLabel: "已取消", stageLabel: "已取消" } : job);
-      setScreen("queue-detail");
+      const canceledJob = activeJobRef.current ? { ...activeJobRef.current, status: "canceled" as const, statusLabel: "已取消", stageLabel: "已取消" } : null;
+      if (canceledJob) {
+        activeJobRef.current = canceledJob;
+        setActiveJob(canceledJob);
+      } else {
+        setActiveJob((job) => job ? { ...job, status: "canceled", statusLabel: "已取消", stageLabel: "已取消" } : job);
+      }
       unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+      if (canceledJob && await continueBatchAfterTerminal(canceledJob)) {
+        await refreshJobs();
+        return;
+      }
+      if (!backgroundQueueOpenRef.current) {
+        setScreen("queue-detail");
+      } else {
+        setQueueInitialFilter("failed");
+      }
     }
     if (event.type === "events_lost") {
       const jobId = activeJobRef.current?.id;
@@ -140,13 +355,58 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       }
     }
     await refreshJobs();
-  }, [client, refreshJobs]);
+  }, [client, config.outputConflict, refreshJobs]);
+
+  const updateModelInstallFromEvent = useCallback(async (modelId: string, event: JobEvent) => {
+    if (event.type === "snapshot" && event.job) {
+      const snapshot = event.job;
+      setModelInstallJobs((current) => ({ ...current, [modelId]: snapshot }));
+      return;
+    }
+    if (event.type === "progress" && event.progress) {
+      setModelInstallJobs((current) => {
+        const existing = current[modelId];
+        return existing ? { ...current, [modelId]: { ...existing, ...event.progress, statusLabel: "下载中" } } : current;
+      });
+      setModels((current) => current.map((model) => model.id === modelId ? { ...model, state: "installing", progressPercent: event.progress?.progressPercent ?? model.progressPercent } : model));
+      return;
+    }
+    if (event.type === "succeeded") {
+      setModelInstallJobs((current) => {
+        const existing = current[modelId];
+        return existing ? { ...current, [modelId]: { ...existing, status: "succeeded", statusLabel: "已完成", progressPercent: 100, stageLabel: "模型已可用", result: event.result } } : current;
+      });
+      setModels((current) => current.map((model) => model.id === modelId ? { ...model, state: "ready", progressPercent: 100, diagnostic: undefined } : model));
+      modelInstallUnsubscribeRef.current.get(modelId)?.();
+      modelInstallUnsubscribeRef.current.delete(modelId);
+      await loadBaseData();
+      return;
+    }
+    if (event.type === "failed" && event.error) {
+      setModelInstallJobs((current) => {
+        const existing = current[modelId];
+        return existing ? { ...current, [modelId]: { ...existing, status: "failed", statusLabel: "已失败", stageLabel: event.error?.title ?? "下载失败", error: event.error } } : current;
+      });
+      setModels((current) => current.map((model) => model.id === modelId ? { ...model, state: "failed", diagnostic: event.error?.diagnostic ?? event.error?.message } : model));
+      modelInstallUnsubscribeRef.current.get(modelId)?.();
+      modelInstallUnsubscribeRef.current.delete(modelId);
+      return;
+    }
+    if (event.type === "canceled") {
+      setModelInstallJobs((current) => {
+        const existing = current[modelId];
+        return existing ? { ...current, [modelId]: { ...existing, status: "canceled", statusLabel: "已取消", stageLabel: "已取消" } } : current;
+      });
+      modelInstallUnsubscribeRef.current.get(modelId)?.();
+      modelInstallUnsubscribeRef.current.delete(modelId);
+    }
+  }, [loadBaseData]);
 
   const addFiles = async () => {
     const picked = await window.fastSubSystem?.selectMediaFiles();
     if (picked && picked.length > 0) {
-      setFiles(picked.map((path, index) => makeFile(path, index)));
-      setScreen("main-files");
+      const paths = picked.slice();
+      queueMediaImport(paths.length, () => filterSupportedMediaPaths(paths).map((path, index) => makeFile(path, index)));
       return;
     }
     mediaInputRef.current?.click();
@@ -156,19 +416,23 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     if (!selected || selected.length === 0) {
       return;
     }
-    const pickedFiles = makeFilesFromList(selected);
-    setFiles(pickedFiles);
-    setScreen("main-files");
-    if (mediaInputRef.current) {
-      mediaInputRef.current.value = "";
-    }
+    const selectedFiles = Array.from(selected);
+    queueMediaImport(selectedFiles.length, () => makeFilesFromArray(selectedFiles), () => {
+      if (mediaInputRef.current) {
+        mediaInputRef.current.value = "";
+      }
+    });
   };
 
   const addFolder = async () => {
-    const folder = await window.fastSubSystem?.selectFolder();
-    if (folder) {
-      setFiles(seedFiles.map((file, index) => makeFile(`${folder}\\${file.name}`, index)));
-      setScreen("main-files");
+    const picked = await window.fastSubSystem?.selectMediaFolder({
+      includeSubfolders: config.folderScanIncludeSubfolders,
+      maxFiles: config.folderScanMaxFiles
+    });
+    if (picked && picked.length > 0) {
+      const paths = picked.slice();
+      const maxFiles = config.folderScanMaxFiles;
+      queueMediaImport(paths.length, () => filterSupportedMediaPaths(paths, maxFiles).map((path, index) => makeFile(path, index)));
       return;
     }
     folderInputRef.current?.click();
@@ -178,12 +442,16 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     if (!selected || selected.length === 0) {
       return;
     }
-    const pickedFiles = makeFilesFromList(selected, 8);
-    setFiles(pickedFiles);
-    setScreen("main-files");
-    if (folderInputRef.current) {
-      folderInputRef.current.value = "";
-    }
+    const selectedFiles = Array.from(selected);
+    const maxFiles = config.folderScanMaxFiles;
+    const includeSubfolders = config.folderScanIncludeSubfolders;
+    queueMediaImport(selectedFiles.length, () => makeFilesFromArray(selectedFiles, maxFiles, {
+      includeSubfolders
+    }), () => {
+      if (folderInputRef.current) {
+        folderInputRef.current.value = "";
+      }
+    });
   };
 
   const chooseOutputDirectory = async () => {
@@ -195,6 +463,10 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     }
     outputInputRef.current?.click();
     return false;
+  };
+
+  const chooseSubtitleOutputPath = async (defaultPath: string) => {
+    return await window.fastSubSystem?.selectSubtitleOutputPath(defaultPath) ?? null;
   };
 
   const updateOutputDirectory = (selected: FileList | null) => {
@@ -210,36 +482,97 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     }
   };
 
-  const asrReady = models.some((model) => model.id === config.asrModel && model.kind === "asr" && model.state === "ready");
-  const translationReady = models.some((model) => model.id === config.translationModel && model.kind === "translation" && model.state === "ready");
+  const resolvedASRSelection = resolveReadyProviderModel("stt", config.asrProvider, config.asrModel, providers, models);
+  const asrReady = Boolean(resolvedASRSelection);
+  const resolvedTranslationSelection = resolveConfiguredProviderModel("translation", config.translationProvider, config.translationModel, providers, models);
+  const translationReady = Boolean(resolvedTranslationSelection);
 
-  const startJob = async (options: { conflictResolved?: boolean; remoteUploadConfirmed?: boolean } = {}) => {
+  const requestRemoteConfirmation = (provider: ProviderStatus | undefined, inputPaths: string[], onConfirm: () => void) => {
+    setRemoteConfirmRequest({
+      provider,
+      files: inputPaths.map((path, index) => makeFile(path, index)),
+      onConfirm
+    });
+  };
+
+  const startJob = async (options: { conflictResolved?: boolean; inputPaths?: string[]; outputConflict?: ConfigViewModel["outputConflict"]; outputPath?: string; remoteUploadConfirmed?: boolean } = {}) => {
     const conflictResolved = options.conflictResolved ?? false;
-    const remoteUploadConfirmed = options.remoteUploadConfirmed ?? false;
-    if (!asrReady) {
+    const outputConflict = options.outputConflict ?? config.outputConflict;
+    let asrSelection = resolveReadyProviderModel("stt", config.asrProvider, config.asrModel, providers, models);
+    if (!asrSelection) {
       setScreen("main-missing");
       return;
     }
-    if (scenario === "outputConflict" && !conflictResolved) {
+    if (asrSelection.providerId !== config.asrProvider || asrSelection.modelId !== config.asrModel) {
+      const repairedSelection = asrSelection;
+      try {
+        const updated = await client.updateConfig({ asrProvider: repairedSelection.providerId, asrModel: repairedSelection.modelId });
+        setConfig(updated);
+        asrSelection = { providerId: updated.asrProvider, modelId: updated.asrModel };
+      } catch {
+        setConfig((current) => ({ ...current, asrProvider: repairedSelection.providerId, asrModel: repairedSelection.modelId }));
+      }
+    }
+    if (outputTypeNeedsTranslation(config.outputType) && !translationOutputReady(config, providers, translationReady)) {
+      setOpenNotice({ message: "当前翻译 Provider 或翻译模型未配置好，请先完成翻译配置。", tone: "warn" });
+      setScreen("settings-providers");
+      return;
+    }
+    if (scenario === "outputConflict" && outputConflict === "ask" && !conflictResolved) {
       setScreen("main-conflict");
       return;
     }
-    const remoteProvider = providers.find((provider) => provider.id === config.asrProvider && provider.requiresUploadConfirmation);
-    if ((remoteProvider || scenario === "remoteProviderConfirmRequired") && !remoteUploadConfirmed) {
-      setRemoteConfirmOpen(true);
+    const inputPaths = options.inputPaths?.length ? options.inputPaths : files.map((file) => file.path);
+    if (inputPaths.length === 0) {
+      setScreen("main-empty");
       return;
     }
-    const request: CreateJobRequest = {
-      type: "transcribe",
-      inputPaths: (files.length ? files : seedFiles).map((file) => file.path),
-      outputDirectory: outputDirectoryPath,
-      outputType: config.outputType,
-      language: config.defaultLanguage,
-      providerId: config.asrProvider,
-      modelId: config.asrModel,
-      remoteUploadConfirmed
-    };
-    const job = await client.createJob(request);
+    const asrRemoteProvider = providers.find((provider) => provider.id === config.asrProvider && provider.requiresUploadConfirmation);
+    const translationRemoteProvider = outputTypeNeedsTranslation(config.outputType)
+      ? providers.find((provider) => provider.id === config.translationProvider && provider.requiresUploadConfirmation)
+      : undefined;
+    const confirmedRemoteUpload = options.remoteUploadConfirmed === true;
+    if ((asrRemoteProvider || translationRemoteProvider) && !confirmedRemoteUpload) {
+      requestRemoteConfirmation(asrRemoteProvider ?? translationRemoteProvider, inputPaths, () => {
+        void startJob({ ...options, inputPaths, remoteUploadConfirmed: true });
+      });
+      return;
+    }
+    const remoteUploadConfirmed = Boolean(asrRemoteProvider) ? confirmedRemoteUpload : false;
+    const translationUploadConfirmed = Boolean(translationRemoteProvider) ? confirmedRemoteUpload : false;
+    const batchPaths = options.outputPath ? inputPaths.slice(0, 1) : inputPaths;
+    const createdJobs: JobDetail[] = [];
+    for (const path of batchPaths) {
+      const request: CreateJobRequest = {
+        type: "transcribe",
+        inputPaths: [path],
+        outputDirectory: effectiveOutputDirectory([path], config, outputDirectoryPath),
+        outputPath: options.outputPath,
+        outputType: config.outputType,
+        outputFormat: config.outputFormat,
+        outputConflict,
+        language: config.defaultLanguage,
+        targetLanguage: config.targetLanguage,
+        providerId: asrSelection.providerId,
+        modelId: asrSelection.modelId,
+        translationProviderId: outputTypeNeedsTranslation(config.outputType) ? config.translationProvider : undefined,
+        translationModelId: outputTypeNeedsTranslation(config.outputType) ? translationModelForRequest(config) : undefined,
+        translationUploadConfirmed: outputTypeNeedsTranslation(config.outputType) ? translationUploadConfirmed : false,
+        remoteUploadConfirmed
+      };
+      createdJobs.push(repairJobPathFromRequest(await client.createJob(request), request));
+    }
+    const job = createdJobs[0];
+    if (!job) {
+      return;
+    }
+    const batchJobIds = createdJobs.map((createdJob) => createdJob.id);
+    backgroundQueueOpenRef.current = false;
+    activeBatchJobIdsRef.current = batchJobIds;
+    completedBatchJobsRef.current = [];
+    setCompletedBatchJobs([]);
+    setActiveBatchJobIds(batchJobIds);
+    setJobs((currentJobs) => mergeCreatedJobs(currentJobs, createdJobs));
     activeJobRef.current = job;
     setActiveJob(job);
     setScreen("main-generating");
@@ -248,38 +581,68 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     await refreshJobs();
   };
 
-  const startToolJob = async (type: "translate_srt" | "burn_in", inputPaths: string[]) => {
-    const job = await client.createJob({
+  const startToolJob = async (type: "translate_srt" | "burn_in", inputPaths: string[], options: { remoteUploadConfirmed?: boolean } = {}) => {
+    const translationRemoteProvider = type === "translate_srt"
+      ? providers.find((provider) => provider.id === config.translationProvider && provider.requiresUploadConfirmation)
+      : undefined;
+    const confirmedRemoteUpload = options.remoteUploadConfirmed === true;
+    if (translationRemoteProvider && !confirmedRemoteUpload) {
+      requestRemoteConfirmation(translationRemoteProvider, inputPaths, () => {
+        void startToolJob(type, inputPaths, { remoteUploadConfirmed: true });
+      });
+      return null;
+    }
+    const request: CreateJobRequest = {
       type,
       inputPaths,
-      outputDirectory: outputDirectoryPath,
+      outputDirectory: effectiveOutputDirectory(inputPaths, config, outputDirectoryPath),
       outputType: type === "burn_in" ? "burned_video" : "translated_srt",
+      outputFormat: config.outputFormat,
+      outputConflict: config.outputConflict,
       language: config.defaultLanguage,
+      targetLanguage: config.targetLanguage,
       providerId: type === "burn_in" ? config.asrProvider : config.translationProvider,
-      modelId: type === "burn_in" ? config.asrModel : config.translationModel,
-      remoteUploadConfirmed: true
-    });
+      modelId: type === "burn_in" ? config.asrModel : translationModelForRequest(config),
+      translationUploadConfirmed: Boolean(translationRemoteProvider) ? confirmedRemoteUpload : false,
+      remoteUploadConfirmed: type === "translate_srt" && Boolean(translationRemoteProvider) ? confirmedRemoteUpload : false
+    };
+    const job = repairJobPathFromRequest(await client.createJob(request), request);
+    backgroundQueueOpenRef.current = false;
+    activeBatchJobIdsRef.current = [job.id];
+    completedBatchJobsRef.current = job.status === "succeeded" ? [job] : [];
+    setActiveBatchJobIds([job.id]);
+    setCompletedBatchJobs(job.status === "succeeded" ? [job] : []);
+    setJobs((currentJobs) => mergeCreatedJobs(currentJobs, [job]));
     activeJobRef.current = job;
     setActiveJob(job);
+    unsubscribeRef.current?.();
+    unsubscribeRef.current = null;
+    if (job.status === "succeeded") {
+      setScreen("main-done");
+    } else if (job.status === "failed") {
+      setScreen("queue-failed");
+    } else {
+      setScreen("main-generating");
+      unsubscribeRef.current = client.subscribeJobEvents(job.id, { onEvent: updateFromEvent });
+    }
     await refreshJobs();
     return job;
   };
 
   const addDroppedFiles = (selected: FileList) => {
-    const pickedFiles = makeFilesFromList(selected);
-    if (pickedFiles.length === 0) {
+    if (selected.length === 0) {
       return;
     }
-    setFiles(pickedFiles);
-    setScreen("main-files");
+    const selectedFiles = Array.from(selected);
+    queueMediaImport(selectedFiles.length, () => makeFilesFromArray(selectedFiles));
   };
 
   const retryJob = async () => {
-    const retryFiles = activeJob?.inputPaths?.length ? activeJob.inputPaths.map((path, index) => makeFile(path, index)) : files;
-    if (retryFiles.length > 0) {
-      setFiles(retryFiles);
+    const retryInputPaths = activeJob?.inputPaths?.length ? activeJob.inputPaths.slice(0, 1) : files.slice(0, 1).map((file) => file.path);
+    if (retryInputPaths.length > 0) {
+      setFiles(retryInputPaths.map((path, index) => makeFile(path, index)));
     }
-    await startJob({ conflictResolved: true, remoteUploadConfirmed: true });
+    await startJob({ conflictResolved: true, inputPaths: retryInputPaths });
   };
 
   const deleteActiveJob = async () => {
@@ -291,21 +654,44 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     setScreen("queue-list");
   };
 
+  const deleteJobs = async (jobIds: string[]) => {
+    const ids = [...new Set(jobIds)];
+    if (ids.length === 0) {
+      return;
+    }
+    await Promise.allSettled(ids.map((id) => client.deleteJob(id)));
+    if (activeJob && ids.includes(activeJob.id)) {
+      setActiveJob(null);
+    }
+    await refreshJobs();
+  };
+
   const openJob = async (jobId: string, target: Screen) => {
+    backgroundQueueOpenRef.current = false;
     const summary = jobs.find((job) => job.id === jobId);
     if (summary) {
       setActiveJob({
         ...summary,
         currentFile: summary.title,
         inputPaths: [],
-        outputDirectory: outputDirectoryPath,
-        providerName: "Fast Sub",
-        modelName: config.asrModel,
+        outputDirectory: summary.outputDirectory || outputDirectoryPath,
+        providerName: summary.providerName || "Fast Sub",
+        modelName: summary.modelName || config.asrModel,
         logs: []
       });
     }
     navigateScreen(target);
     setActiveJob(await client.getJob(jobId));
+  };
+
+  const getJobLogs = async (jobId: string) => {
+    return client.getJobLogs(jobId);
+  };
+
+  const openRunningQueue = () => {
+    backgroundQueueOpenRef.current = true;
+    setQueueInitialFilter("running");
+    navigateScreen("queue-list");
   };
 
   const cancelActiveJob = async () => {
@@ -326,63 +712,72 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     }, 860);
   };
 
+  const cancelJobs = async (jobIds: string[]) => {
+    const ids = [...new Set(jobIds)];
+    if (ids.length === 0) {
+      return;
+    }
+    await Promise.allSettled(ids.map((id) => client.cancelJob(id)));
+    if (activeJob && ids.includes(activeJob.id)) {
+      setActiveJob(await client.getJob(activeJob.id).catch(() => activeJob));
+    }
+    await refreshJobs();
+  };
+
   const cancelAllJobs = async () => {
     unsubscribeRef.current?.();
     unsubscribeRef.current = null;
     setActiveJob(null);
+    setActiveBatchJobIds([]);
     setJobs(await client.cancelAllJobs());
     setScreen("queue-list");
   };
 
   const openMock = async (path: string) => {
     const opened = await window.fastSubSystem?.openPathMock(path);
-    setOpenNotice(opened ? { message: `已模拟打开：${path}`, tone: "ok" } : { message: "无法打开该路径", tone: "warn" });
+    setOpenNotice(opened ? null : { message: "无法打开该路径", tone: "warn" });
   };
 
   return (
-    <div className="app-stage">
-      <div className="prototype-window">
-        <input
-          ref={mediaInputRef}
-          aria-label="选择视频文件"
-          className="native-file-picker"
-          type="file"
-          accept=".mp4,.mov,.mkv,.wav,.m4a,.mp3,video/*,audio/*"
-          multiple
-          onChange={(event) => addBrowserFiles(event.currentTarget.files)}
-        />
-        <input
-          ref={folderInputRef}
-          aria-label="选择媒体文件夹"
-          className="native-file-picker"
-          type="file"
-          multiple
-          // @ts-expect-error webkitdirectory is supported by Chromium/Electron but missing from React's input props.
-          webkitdirectory=""
-          onChange={(event) => addBrowserFolder(event.currentTarget.files)}
-        />
-        <input
-          ref={outputInputRef}
-          aria-label="选择输出目录"
-          className="native-file-picker"
-          type="file"
-          multiple
-          // @ts-expect-error webkitdirectory is supported by Chromium/Electron but missing from React's input props.
-          webkitdirectory=""
-          onChange={(event) => updateOutputDirectory(event.currentTarget.files)}
-        />
-        {screen !== "setup-check" && screen !== "setup-done" && (
-          <AppMenu
-            canGoBack={backStackRef.current.length > 0}
-            canGoForward={forwardStackRef.current.length > 0}
-            onBack={goBack}
-            onForward={goForward}
-            onNavigate={navigateScreen}
+    <I18nProvider language={uiLanguage}>
+      <AppContent
+        scenario={scenario}
+        setScenario={setScenario}
+        debugOpen={debugOpen}
+        setDebugOpen={setDebugOpen}
+        screen={screen}
+        setScreen={setScreen}
+        backStackLength={backStackRef.current.length}
+        canGoForward={forwardStackRef.current.length > 0}
+        goBack={goBack}
+        goForward={goForward}
+        navigateScreen={navigateScreen}
+        uiFontStyle={uiFontStyle}
+        mediaInputRef={mediaInputRef}
+        folderInputRef={folderInputRef}
+        outputInputRef={outputInputRef}
+        addBrowserFiles={addBrowserFiles}
+        addBrowserFolder={addBrowserFolder}
+        updateOutputDirectory={updateOutputDirectory}
+        providedClient={providedClient}
+        openNotice={openNotice}
+        setOpenNotice={setOpenNotice}
+      >
+        {remoteConfirmRequest && (
+          <RemoteConfirmDialog
+            provider={remoteConfirmRequest.provider}
+            files={remoteConfirmRequest.files}
+            onCancel={() => setRemoteConfirmRequest(null)}
+            onConfirm={() => {
+              const pending = remoteConfirmRequest;
+              setRemoteConfirmRequest(null);
+              pending.onConfirm();
+            }}
           />
         )}
         {renderScreen({
           screen,
-          setScreen: navigateScreen,
+          setScreen: navigateFromScreen,
           environment,
           models,
           providers,
@@ -390,69 +785,499 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
           setConfig,
           uiLanguage,
           setUiLanguage,
+          uiFontStyle,
+          setUiFontStyle,
           files,
           setFiles,
+          fileImportPending,
+          fileImportCount,
           outputDirectoryLabel,
           asrReady,
           translationReady,
           jobs,
+          modelInstallJobs,
+          queueInitialFilter,
+          activeBatchJobIds,
           activeJob,
+          completedBatchJobs,
           addFiles,
           addFolder,
           addDroppedFiles,
           chooseOutputDirectory,
+          chooseSubtitleOutputPath,
           openJob,
+          getJobLogs,
+          openRunningQueue,
           startJob,
           startToolJob,
           retryJob,
           openMock,
           cancelJob: cancelActiveJob,
+          cancelJobs,
           cancelAllJobs,
           deleteJob: deleteActiveJob,
+          deleteJobs,
           installModel: async (id) => {
-            await client.installModel(id);
+            const job = await client.createModelInstallJob(id);
+            setModelInstallJobs((current) => ({ ...current, [id]: job }));
+            setModels((current) => current.map((model) => model.id === id ? {
+              ...model,
+              state: job.status === "failed" ? "failed" : job.status === "succeeded" ? "ready" : "installing",
+              installJobId: job.id,
+              progressPercent: job.progressPercent
+            } : model));
+            modelInstallUnsubscribeRef.current.get(id)?.();
+            if (job.status === "queued" || job.status === "running" || job.status === "canceling") {
+              const unsubscribe = client.subscribeJobEvents(job.id, { onEvent: (event) => void updateModelInstallFromEvent(id, event) });
+              modelInstallUnsubscribeRef.current.set(id, unsubscribe);
+            }
+            await loadBaseData();
+          },
+          removeModel: async (id) => {
+            modelInstallUnsubscribeRef.current.get(id)?.();
+            modelInstallUnsubscribeRef.current.delete(id);
+            setModelInstallJobs((current) => {
+              const { [id]: _removed, ...rest } = current;
+              return rest;
+            });
+            const removed = await client.removeModel(id);
+            setModels((current) => current.map((model) => model.id === id ? removed : model));
             await loadBaseData();
           },
           repairDaemon: async () => {
             setEnvironment(await client.repairDaemon());
             setScreen("setup-check");
           },
-          testProvider: (id, mode) => client.testProvider(id, mode),
-          updateConfig: async (patch) => setConfig(await client.updateConfig(patch))
+          testProvider: async (id, mode) => {
+            const checked = await client.testProvider(id, mode);
+            setProviders((current) => current.map((provider) => provider.id === id ? checked : provider));
+            return checked;
+          },
+          updateConfig: async (patch) => {
+            const normalizedPatch = normalizeConfigPatch(patch, config, providers, models);
+            setConfig((current) => ({ ...current, ...normalizedPatch }));
+            try {
+              const updated = await client.updateConfig(normalizedPatch);
+              setConfig(updated);
+            } catch (error) {
+              setConfig(await client.getConfig().catch(() => defaultConfig));
+              throw error;
+            }
+          },
+          saveProviderSecret: async (providerId, alias, rawSecret) => {
+            setConfig(await client.saveProviderSecret(providerId, alias, rawSecret));
+            setProviders(await client.listProviders());
+          }
         })}
-      </div>
+      </AppContent>
+    </I18nProvider>
+  );
+}
 
-      <button className="debug-peek" aria-label="打开调试面板" title="调试面板 Ctrl+D" onClick={() => setDebugOpen((open) => !open)} />
-      {debugOpen && (
-        <DebugPanel
-          screen={screen}
-          setScreen={setScreen}
-          scenario={scenario}
-          setScenario={setScenario}
-          disabledScenario={Boolean(providedClient)}
+function onboardingComplete(): boolean {
+  try {
+    return window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markOnboardingComplete(): void {
+  try {
+    window.localStorage.setItem(ONBOARDING_DONE_KEY, "1");
+  } catch {
+    // Local storage can be disabled in hardened webviews; onboarding simply stays non-persistent.
+  }
+}
+
+function makeFilesFromArray(
+  selected: File[],
+  limit = Number.POSITIVE_INFINITY,
+  options: { includeSubfolders?: boolean } = {}
+): MediaFile[] {
+  const fileList = { length: selected.length, item: (index: number) => selected[index] ?? null } as FileList;
+  selected.forEach((file, index) => {
+    (fileList as unknown as Record<number, File>)[index] = file;
+  });
+  return makeFilesFromList(fileList, limit, options);
+}
+
+function AppContent(props: {
+  children: ReactNode;
+  scenario: MockScenario;
+  setScenario: (scenario: MockScenario) => void;
+  debugOpen: boolean;
+  setDebugOpen: (updater: (open: boolean) => boolean) => void;
+  screen: Screen;
+  setScreen: (screen: Screen) => void;
+  backStackLength: number;
+  canGoForward: boolean;
+  goBack: () => void;
+  goForward: () => void;
+  navigateScreen: (screen: Screen) => void;
+  uiFontStyle: UiFontStyle;
+  mediaInputRef: RefObject<HTMLInputElement | null>;
+  folderInputRef: RefObject<HTMLInputElement | null>;
+  outputInputRef: RefObject<HTMLInputElement | null>;
+  addBrowserFiles: (selected: FileList | null) => void;
+  addBrowserFolder: (selected: FileList | null) => void;
+  updateOutputDirectory: (selected: FileList | null) => void;
+  providedClient?: FastSubClient;
+  openNotice: { message: string; tone: "ok" | "warn" } | null;
+  setOpenNotice: (notice: { message: string; tone: "ok" | "warn" } | null) => void;
+}) {
+  const t = useT();
+  const appMenuBackTarget = resolveAppMenuBackTarget(props.screen);
+  const canGoBack = Boolean(appMenuBackTarget) || props.backStackLength > 0;
+  const handleBack = () => {
+    if (appMenuBackTarget) {
+      props.navigateScreen(appMenuBackTarget);
+      return;
+    }
+    props.goBack();
+  };
+  return (
+    <div className="app-stage">
+    <div className={`prototype-window font-${props.uiFontStyle}`}>
+        <input
+          ref={props.mediaInputRef}
+          aria-label={t("Choose video files")}
+          className="native-file-picker"
+          type="file"
+          accept=".mp4,.mov,.mkv,.wav,.m4a,.mp3,video/*,audio/*"
+          multiple
+          onChange={(event) => props.addBrowserFiles(event.currentTarget.files)}
         />
-      )}
-        {remoteConfirmOpen && (
-          <RemoteConfirmDialog
-          provider={providers.find((item) => item.id === config.asrProvider)}
-          files={files.length ? files : seedFiles}
-          onCancel={() => setRemoteConfirmOpen(false)}
-          onConfirm={() => {
-            setRemoteConfirmOpen(false);
-            void startJob({ conflictResolved: true, remoteUploadConfirmed: true });
-          }}
+        <input
+          ref={props.folderInputRef}
+          aria-label={t("Choose media folder")}
+          className="native-file-picker"
+          type="file"
+          accept=".mp4,.mov,.mkv,.wav,.m4a,.mp3,video/*,audio/*"
+          multiple
+          // @ts-expect-error webkitdirectory is supported by Chromium/Electron but missing from React's input props.
+          webkitdirectory=""
+          onChange={(event) => props.addBrowserFolder(event.currentTarget.files)}
+        />
+        <input
+          ref={props.outputInputRef}
+          aria-label={t("Choose output folder")}
+          className="native-file-picker"
+          type="file"
+          multiple
+          // @ts-expect-error webkitdirectory is supported by Chromium/Electron but missing from React's input props.
+          webkitdirectory=""
+          onChange={(event) => props.updateOutputDirectory(event.currentTarget.files)}
+        />
+        {props.screen !== "setup-check" && props.screen !== "setup-done" && (
+          <AppMenu
+            canGoBack={canGoBack}
+            canGoForward={props.canGoForward}
+            onBack={handleBack}
+            onForward={props.goForward}
+            onNavigate={props.navigateScreen}
           />
         )}
-        {openNotice && (
-          <div className={`open-notice ${openNotice.tone}`} role="status">
-            <span>{openNotice.message}</span>
-            <button aria-label="关闭打开提示" onClick={() => setOpenNotice(null)} type="button">×</button>
+        {props.children}
+      </div>
+
+      <button className="debug-peek" aria-label={t("Open debug panel")} title={t("Debug panel Ctrl+D")} onClick={() => props.setDebugOpen((open) => !open)} />
+      {props.debugOpen && (
+        <DebugPanel
+          screen={props.screen}
+          setScreen={props.setScreen}
+          scenario={props.scenario}
+          setScenario={props.setScenario}
+          disabledScenario={Boolean(props.providedClient)}
+        />
+      )}
+        {props.openNotice && (
+          <div className={`open-notice ${props.openNotice.tone}`} role="status">
+            <span>{t(props.openNotice.message)}</span>
+            <button aria-label={t("Dismiss notice")} onClick={() => props.setOpenNotice(null)} type="button">×</button>
           </div>
         )}
       </div>
   );
 }
 
+function resolveAppMenuBackTarget(screen: Screen): Screen | null {
+  if (screen === "queue-detail" || screen === "queue-failed") {
+    return "main-empty";
+  }
+  return null;
+}
+
 export function renderHasSecret(text: string): boolean {
   return containsSecret(text);
+}
+
+function effectiveOutputDirectory(inputPaths: string[], config: ConfigViewModel, selectedOutputDirectory: string): string {
+  const source = sourceDirectory(inputPaths[0] ?? "");
+  if (config.outputLocation !== "source" && selectedOutputDirectory !== mockPaths.output && !selectedOutputDirectory.startsWith("mock-output://")) {
+    return selectedOutputDirectory;
+  }
+  return source ?? selectedOutputDirectory;
+}
+
+function outputTypeNeedsTranslation(outputType: ConfigViewModel["outputType"]): boolean {
+  return outputType === "translated_srt" || outputType === "bilingual_srt";
+}
+
+function translationModelForRequest(config: ConfigViewModel): string {
+  if (config.translationProvider === "local-nllb-ct2") {
+    return config.translationModel;
+  }
+  if (config.translationProvider === "api-openai-chat") {
+    return apiProviderModel(config, "api-openai-chat");
+  }
+  return "";
+}
+
+function apiProviderModel(config: ConfigViewModel, providerId: string): string {
+  return config.apiProviderConfigs?.[providerId]?.openAIModel || config.openAIModel || "";
+}
+
+function normalizeConfigPatch(patch: Partial<ConfigViewModel>, current: ConfigViewModel, providers: ProviderStatus[], models: ModelStatus[]): Partial<ConfigViewModel> {
+  const next = { ...current, ...patch };
+  const normalized = { ...patch };
+  if (patch.asrProvider !== undefined && patch.asrModel === undefined) {
+    const selection = resolveReadyProviderModel("stt", next.asrProvider, next.asrModel, providers, models);
+    if (selection?.providerId === next.asrProvider) {
+      normalized.asrModel = selection.modelId;
+    }
+  }
+  if (patch.asrModel !== undefined && !modelCompatibleWithProvider(patch.asrModel, next.asrProvider, "asr", models)) {
+    const selection = resolveReadyProviderModel("stt", next.asrProvider, next.asrModel, providers, models);
+    if (selection) {
+      normalized.asrProvider = selection.providerId;
+      normalized.asrModel = selection.modelId;
+    }
+  }
+  if (patch.translationProvider !== undefined && patch.translationModel === undefined) {
+    const selection = resolveReadyProviderModel("translation", next.translationProvider, next.translationModel, providers, models);
+    if (selection?.providerId === next.translationProvider) {
+      normalized.translationModel = selection.modelId;
+    }
+  }
+  if (patch.translationModel !== undefined && !modelCompatibleWithProvider(patch.translationModel, next.translationProvider, "translation", models)) {
+    const selection = resolveReadyProviderModel("translation", next.translationProvider, next.translationModel, providers, models);
+    if (selection) {
+      normalized.translationProvider = selection.providerId;
+      normalized.translationModel = selection.modelId;
+    }
+  }
+  return normalized;
+}
+
+function resolveReadyProviderModel(capability: ProviderStatus["capability"], providerId: string, modelId: string, providers: ProviderStatus[], models: ModelStatus[]): { providerId: string; modelId: string } | null {
+  const kind = capability === "translation" ? "translation" : "asr";
+  const preferredProviders = [
+    providerId,
+    capability === "stt" ? "local-faster-whisper" : "local-nllb-ct2",
+    ...providers
+      .filter((provider) => provider.capability === capability && provider.kind !== "api" && provider.kind !== "web")
+      .map((provider) => provider.id)
+  ];
+  for (const id of uniqueStrings(preferredProviders)) {
+    const provider = providers.find((item) => item.id === id && item.capability === capability);
+    if (!provider || !provider.enabled || provider.state !== "available") {
+      continue;
+    }
+    if ((provider.kind === "api" || provider.kind === "web") && id !== providerId) {
+      continue;
+    }
+    if (provider.kind === "api" || provider.kind === "web" || !provider.requiresModel) {
+      return { providerId: id, modelId };
+    }
+    const model = selectReadyCompatibleModel(id, kind, modelId, models);
+    if (model) {
+      return { providerId: id, modelId: model.id };
+    }
+  }
+  return null;
+}
+
+function resolveConfiguredProviderModel(capability: ProviderStatus["capability"], providerId: string, modelId: string, providers: ProviderStatus[], models: ModelStatus[]): { providerId: string; modelId: string } | null {
+  const kind = capability === "translation" ? "translation" : "asr";
+  const provider = providers.find((item) => item.id === providerId && item.capability === capability);
+  if (!provider || !provider.enabled || provider.state !== "available") {
+    return null;
+  }
+  if (provider.kind === "api" || provider.kind === "web" || !provider.requiresModel) {
+    return { providerId, modelId };
+  }
+  const model = selectReadyCompatibleModel(providerId, kind, modelId, models);
+  return model ? { providerId, modelId: model.id } : null;
+}
+
+function selectReadyCompatibleModel(providerId: string, kind: ModelStatus["kind"], preferredModelId: string, models: ModelStatus[]): ModelStatus | null {
+  const preferredModel = models.find((model) => model.id === preferredModelId && model.kind === kind);
+  if (preferredModel && modelCompatible(preferredModel, providerId)) {
+    return preferredModel.state === "ready" ? preferredModel : null;
+  }
+  const compatible = models.filter((model) => model.kind === kind && model.state === "ready" && modelCompatible(model, providerId));
+  return compatible.find((model) => model.id === preferredModelId)
+    ?? compatible.find((model) => model.requiredForMainFlow)
+    ?? compatible.find((model) => model.defaultFor?.includes(providerId))
+    ?? compatible[0]
+    ?? null;
+}
+
+function modelCompatibleWithProvider(modelId: string, providerId: string, kind: ModelStatus["kind"], models: ModelStatus[]): boolean {
+  const model = models.find((item) => item.id === modelId && item.kind === kind);
+  return Boolean(model && modelCompatible(model, providerId));
+}
+
+function modelCompatible(model: ModelStatus, providerId: string): boolean {
+  return !model.compatibleProviders || model.compatibleProviders.length === 0 || model.compatibleProviders.includes(providerId);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function translationOutputReady(config: ConfigViewModel, providers: ProviderStatus[], translationReady: boolean): boolean {
+  const provider = providers.find((item) => item.id === config.translationProvider);
+  return translationReady && Boolean(provider?.enabled && provider.state === "available");
+}
+
+function sourceDirectory(path: string): string | null {
+  const index = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
+  if (index <= 0) {
+    return null;
+  }
+  if (index === 2 && /^[A-Za-z]:[\\/]/.test(path)) {
+    return path.slice(0, 3);
+  }
+  return path.slice(0, index);
+}
+
+function repairJobPathFromRequest(job: JobDetail, request: CreateJobRequest): JobDetail {
+  const inputPath = request.inputPaths[0] ?? "";
+  if (!inputPath || hasReplacementChar(fileName(inputPath))) {
+    return job;
+  }
+  const hasCorruptInput = job.inputPaths.some((path) => hasReplacementChar(fileName(path))) || hasReplacementChar(fileName(job.currentFile)) || hasReplacementChar(fileName(job.title));
+  const outputDirectory = job.outputDirectory && !hasReplacementChar(job.outputDirectory) ? job.outputDirectory : request.outputDirectory;
+  const repaired: JobDetail = {
+    ...job,
+    inputPaths: hasCorruptInput || job.inputPaths.length === 0 ? request.inputPaths : job.inputPaths,
+    currentFile: hasCorruptInput || !job.currentFile ? inputPath : job.currentFile,
+    title: hasReplacementChar(fileName(job.title)) || !job.title ? titleFromRequest(request) : job.title,
+    outputDirectory
+  };
+  if (job.result?.subtitlePath && hasReplacementChar(fileName(job.result.subtitlePath))) {
+    const subtitlePath = outputPathFromRequest(request);
+    repaired.result = {
+      ...job.result,
+      subtitlePath,
+      outputFolder: sourceDirectory(subtitlePath) ?? job.result.outputFolder
+    };
+  }
+  return repaired;
+}
+
+function titleFromRequest(request: CreateJobRequest): string {
+  const inputName = fileName(request.inputPaths[0] ?? "") || "subtitle";
+  if (request.type === "burn_in") {
+    return inputName.replace(/\.[^.\\/]+$/, ".burned.mp4");
+  }
+  if (request.type === "translate_srt") {
+    return inputName.replace(/\.[^.\\/]+$/i, isPlainTextTranslationInput(inputName) ? ".translated.txt" : ".translated.srt");
+  }
+  return inputName;
+}
+
+function outputPathFromRequest(request: CreateJobRequest): string {
+  if (request.outputPath) {
+    return request.outputPath;
+  }
+  const first = request.inputPaths[0] ?? "output";
+  const stem = fileName(first).replace(/\.[^.\\/]+$/, "") || "output";
+  const directory = request.outputDirectory || sourceDirectory(first) || "";
+  const sep = directory.includes("/") && !directory.includes("\\") ? "/" : "\\";
+  if (request.type === "burn_in") {
+    return directory ? `${directory}${sep}${stem}.burned.mp4` : `${stem}.burned.mp4`;
+  }
+  if (request.type === "translate_srt") {
+    const extension = isPlainTextTranslationInput(first) ? "txt" : request.outputFormat;
+    return directory ? `${directory}${sep}${stem}.translated.${extension}` : `${stem}.translated.${extension}`;
+  }
+  return directory ? `${directory}${sep}${stem}.${request.outputFormat}` : `${stem}.${request.outputFormat}`;
+}
+
+function hasReplacementChar(value: string): boolean {
+  return value.includes("\uFFFD");
+}
+
+function fileName(path: string): string {
+  return path.split(/[\\/]/).pop() || "";
+}
+
+function isPlainTextTranslationInput(path: string): boolean {
+  return [".txt", ".text", ".md", ".markdown"].some((extension) => path.toLowerCase().endsWith(extension));
+}
+
+function mergeJobSnapshot(current: JobDetail | null, snapshot: JobDetail): JobDetail {
+  const normalizedSnapshot = normalizeTerminalProgress(snapshot);
+  if (!current) {
+    return normalizedSnapshot;
+  }
+  return {
+    ...current,
+    status: normalizedSnapshot.status,
+    statusLabel: normalizedSnapshot.statusLabel,
+    progressPercent: normalizedSnapshot.progressPercent || current.progressPercent,
+    stageLabel: normalizedSnapshot.stageLabel || current.stageLabel,
+    currentFile: normalizedSnapshot.currentFile || current.currentFile,
+    createdAt: normalizedSnapshot.createdAt || current.createdAt,
+    logs: normalizedSnapshot.logs.length ? normalizedSnapshot.logs : current.logs
+  };
+}
+
+function mergeCreatedJobs(currentJobs: JobSummary[], createdJobs: JobDetail[]): JobSummary[] {
+  return mergeJobSummaries(currentJobs, createdJobs);
+}
+
+function mergeJobSummaries(currentJobs: JobSummary[], details: JobDetail[]): JobSummary[] {
+  const next = new Map(currentJobs.map((job) => [job.id, job]));
+  for (const job of details) {
+    const normalizedJob = normalizeTerminalProgress(job);
+    const { logs: _logs, inputPaths: _inputPaths, result: _result, error: _error, estimatedRemaining: _estimatedRemaining, ...summary } = normalizedJob;
+    next.set(job.id, summary);
+  }
+  return Array.from(next.values());
+}
+
+function mergeJobDetails(currentJobs: JobDetail[], details: JobDetail[]): JobDetail[] {
+  const next = new Map(currentJobs.map((job) => [job.id, job]));
+  for (const job of details) {
+    next.set(job.id, normalizeTerminalProgress(job));
+  }
+  return Array.from(next.values());
+}
+
+function normalizeTerminalProgress<T extends JobSummary>(job: T): T {
+  return job.status === "succeeded" ? { ...job, progressPercent: 100 } : job;
+}
+
+function isTerminalJobStatus(status: JobStatus): boolean {
+  return status === "succeeded" || status === "failed" || status === "canceled" || status === "interrupted";
+}
+
+async function loadBatchJobDetails(client: FastSubClient, batchIds: string[], latestJob: JobDetail | null): Promise<JobDetail[]> {
+  const latestById = latestJob ? new Map([[latestJob.id, latestJob]]) : new Map<string, JobDetail>();
+  const details = await Promise.all(batchIds.map(async (id) => {
+    const latest = latestById.get(id);
+    if (latest) {
+      return latest;
+    }
+    try {
+      return await client.getJob(id);
+    } catch {
+      return null;
+    }
+  }));
+  return details.filter((job): job is JobDetail => Boolean(job));
 }

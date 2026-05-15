@@ -8,6 +8,7 @@
     "dev": "electron-vite dev",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
+    "test:round12": "node scripts/round12-check.mjs",
     "build": "electron-vite build",
     "smoke": "node test/smoke.mjs"
   },

@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"fast-sub/internal/contracts"
@@ -25,15 +26,18 @@ type Config struct {
 	Token          string
 	MaxRunningJobs int
 	JobRoot        string
+	ConfigPath     string
 	Version        string
 	Runner         jobs.Runner
 	Providers      providers.RuntimeConfig
 }
 
 type Server struct {
-	cfg     Config
-	manager *jobs.Manager
-	mux     *http.ServeMux
+	cfg           Config
+	manager       *jobs.Manager
+	mux           *http.ServeMux
+	configMu      sync.Mutex
+	runtimeConfig configView
 }
 
 func New(cfg Config) (*Server, error) {
@@ -55,6 +59,7 @@ func New(cfg Config) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{cfg: cfg, manager: manager, mux: http.NewServeMux()}
+	s.runtimeConfig = s.defaultConfigView()
 	s.routes()
 	return s, nil
 }
@@ -98,7 +103,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/health", s.handleHealth)
 	s.mux.HandleFunc("/v1/version", s.handleVersion)
 	s.mux.HandleFunc("/v1/models", s.auth(s.handleModels))
+	s.mux.HandleFunc("/v1/models/", s.auth(s.handleModel))
 	s.mux.HandleFunc("/v1/providers", s.auth(s.handleProviders))
+	s.mux.HandleFunc("/v1/config", s.auth(s.handleConfig))
 	s.mux.HandleFunc("/v1/jobs", s.auth(s.handleJobs))
 	s.mux.HandleFunc("/v1/jobs/", s.auth(s.handleJob))
 }

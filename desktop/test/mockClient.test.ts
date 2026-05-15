@@ -38,6 +38,7 @@ describe("MockFastSubClient", () => {
       inputPaths: [mockPaths.spaced],
       outputDirectory: mockPaths.output,
       outputType: "original_srt",
+      outputFormat: "srt",
       language: "auto",
       providerId: "local-faster-whisper",
       modelId: "whisper-small",
@@ -60,6 +61,7 @@ describe("MockFastSubClient", () => {
       inputPaths: [mockPaths.spaced],
       outputDirectory: mockPaths.output,
       outputType: "original_srt",
+      outputFormat: "srt",
       language: "auto",
       providerId: "local-faster-whisper",
       modelId: "whisper-small",
@@ -67,6 +69,23 @@ describe("MockFastSubClient", () => {
     });
     const canceling = await client.cancelJob(job.id);
     expect(canceling.status).toBe("canceling");
+  });
+
+  it("creates model installation as a job", async () => {
+    const client = new MockFastSubClient("setupReady");
+    const job = await client.createModelInstallJob("whisper-small");
+    expect(job.type).toBe("model_install");
+    expect(job.title).toContain("Whisper Small");
+    const models = await client.listModels();
+    expect(models.find((model) => model.id === "whisper-small")?.installJobId).toBe(job.id);
+  });
+
+  it("removes installed models", async () => {
+    const client = new MockFastSubClient("setupReady");
+    const removed = await client.removeModel("whisper-small");
+    expect(removed.state).toBe("missing");
+    const models = await client.listModels();
+    expect(models.find((model) => model.id === "whisper-small")?.state).toBe("missing");
   });
 
   it("blocks remote providers until upload is confirmed", async () => {
@@ -77,6 +96,7 @@ describe("MockFastSubClient", () => {
       inputPaths: [mockPaths.spaced],
       outputDirectory: mockPaths.output,
       outputType: "original_srt",
+      outputFormat: "srt",
       language: "auto",
       providerId: "api-openai-transcription",
       modelId: "whisper-small",

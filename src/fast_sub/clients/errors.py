@@ -24,6 +24,10 @@ class TranscriptionRequestError(ClientError):
 class WebTranslationClientError(ClientError):
     """Raised when a web translation request cannot be completed."""
 
+    def __init__(self, message: str, *, code: str = "provider_failed") -> None:
+        super().__init__(message)
+        self.code = code
+
 
 __all__ = [
     "ClientError",

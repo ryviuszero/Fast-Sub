@@ -30,7 +30,7 @@ func (r DefaultRunner) runOpenAI(
 		)
 	}
 	if req.Model == "" {
-		req.Model = loaded.OpenAI.Model
+		req.Model = openAIProviderConfig(loaded, "api-openai-transcription").Model
 	}
 	if req.Model == "" {
 		return Result{}, fserrors.New(
@@ -43,19 +43,10 @@ func (r DefaultRunner) runOpenAI(
 	}
 	apiKeyEnv := r.openAIKeyEnv(req, loaded)
 	apiKey := r.env(apiKeyEnv)
-	if apiKey == "" {
-		return Result{}, fserrors.New(
-			fserrors.CodeMissingAPIKey,
-			"api_openai_transcription",
-			"OpenAI transcription API key is required.",
-			"Set an API key env var before selecting this provider.",
-			nil,
-		)
-	}
-	baseURL := stringDefault(stringOption(req, "base_url"), loaded.OpenAI.BaseURL)
+	baseURL := stringDefault(stringOption(req, "base_url"), openAIProviderConfig(loaded, "api-openai-transcription").BaseURL)
 	format := apiUploadFormat(req)
 	output := outputPath(req)
-	if appErr := validateOutput(output); appErr != nil {
+	if appErr := validateOutput(output, boolOption(req, "overwrite")); appErr != nil {
 		return Result{}, appErr
 	}
 	runner := r.ffmpegRunner()
@@ -113,14 +104,31 @@ func (r DefaultRunner) openAIKeyEnv(req CreateRequest, loaded appconfig.AppConfi
 	if apiKeyEnv != "" {
 		return apiKeyEnv
 	}
-	if loaded.OpenAI.APIKeyEnv != "" {
-		return loaded.OpenAI.APIKeyEnv
+	providerConfig := openAIProviderConfig(loaded, "api-openai-transcription")
+	if providerConfig.APIKeyEnv != "" {
+		if providerConfig.APIKeyEnv == "openai-default" {
+			return "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY"
+		}
+		return providerConfig.APIKeyEnv
 	}
-	apiKeyEnv = "FAST_SUB_OPENAI_API_KEY"
+	apiKeyEnv = "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY"
+	if r.env(apiKeyEnv) == "" {
+		apiKeyEnv = "FAST_SUB_OPENAI_API_KEY"
+	}
 	if r.env(apiKeyEnv) == "" {
 		apiKeyEnv = "OPENAI_API_KEY"
 	}
 	return apiKeyEnv
+}
+
+func openAIProviderConfig(loaded appconfig.AppConfig, providerID string) appconfig.OpenAIProviderConfig {
+	if providerConfig, ok := loaded.OpenAIProviders[providerID]; ok {
+		return providerConfig
+	}
+	if providerID == "api-openai-transcription" {
+		return loaded.OpenAI
+	}
+	return appconfig.OpenAIProviderConfig{}
 }
 
 func apiUploadFormat(req CreateRequest) ffmpeg.APIUploadFormat {

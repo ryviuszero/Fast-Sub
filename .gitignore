@@ -33,3 +33,4 @@ desktop/.vite/
 desktop/coverage/
 desktop/test-results/
 desktop/playwright-report/
+desktop/local/

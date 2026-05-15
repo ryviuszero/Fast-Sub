@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -28,7 +29,12 @@ class CliContext:
 def echo_json(payload: Any, *, pretty: bool = False, indent: int | None = None) -> None:
     """Print a JSON payload using the CLI's UTF-8 friendly formatting."""
     json_indent = indent if indent is not None else (2 if pretty else None)
-    typer.echo(json.dumps(payload, ensure_ascii=False, indent=json_indent))
+    text = json.dumps(payload, ensure_ascii=False, indent=json_indent)
+    try:
+        sys.stdout.buffer.write(text.encode("utf-8", errors="replace") + b"\n")
+        sys.stdout.flush()
+    except AttributeError:
+        typer.echo(text)
 
 
 def redact_value(value: Any) -> Any:

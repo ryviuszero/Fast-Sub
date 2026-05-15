@@ -142,14 +142,55 @@ func TestOfficialUploadLimitOnlyAppliesToOfficialBaseURL(t *testing.T) {
 	}
 }
 
-func TestMissingAPIKey(t *testing.T) {
-	_, appErr := Client{BaseURL: "http://127.0.0.1:1"}.Transcribe(context.Background(), TranscribeOptions{
-		AudioPath: writeAudio(t, "small"),
+func TestTranscribeWithoutAPIKeyAllowsNoAuthEndpoint(t *testing.T) {
+	audio := writeAudio(t, "small")
+	var authHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader = r.Header.Get("Authorization")
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			t.Fatalf("multipart: %v", err)
+		}
+		if got := r.FormValue("model"); got != "compatible-stt" {
+			t.Fatalf("model = %q", got)
+		}
+		_, _ = io.WriteString(w, `{"language":"en","text":"hello from local endpoint"}`)
+	}))
+	defer server.Close()
+
+	result, appErr := Client{BaseURL: server.URL}.Transcribe(context.Background(), TranscribeOptions{
+		AudioPath: audio,
 		FileName:  "audio.m4a",
-		Model:     "gpt-4o-transcribe",
+		Model:     "compatible-stt",
+	})
+	if appErr != nil {
+		t.Fatalf("appErr = %v", appErr)
+	}
+	if authHeader != "" {
+		t.Fatalf("Authorization header should be omitted, got %q", authHeader)
+	}
+	if result.Language != "en" || len(result.Segments) != 1 || result.Segments[0].Text != "hello from local endpoint" {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestTranscribeWithoutAPIKeyUnauthorizedMapsMissingKey(t *testing.T) {
+	audio := writeAudio(t, "small")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"error":{"message":"missing bearer token"}}`)
+	}))
+	defer server.Close()
+
+	_, appErr := Client{BaseURL: server.URL}.Transcribe(context.Background(), TranscribeOptions{
+		AudioPath: audio,
+		FileName:  "audio.m4a",
+		Model:     "compatible-stt",
 	})
 	if appErr == nil || appErr.Code != "missing_api_key" {
 		t.Fatalf("appErr = %#v", appErr)
+	}
+	if !strings.Contains(appErr.Message, "HTTP 401") {
+		t.Fatalf("message = %q", appErr.Message)
 	}
 }
 

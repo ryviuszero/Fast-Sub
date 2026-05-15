@@ -82,6 +82,29 @@ func TestInstallDirectoryModelAndVerify(t *testing.T) {
 	}
 }
 
+func TestRemoveInstalledModel(t *testing.T) {
+	store := Store{Root: t.TempDir()}
+	payload := []byte("model")
+	entry := fixtureEntry(payload)
+	_, appErr := store.Install(context.Background(), entry, InstallOptions{
+		Backend:   &fakeBackend{payloads: map[string][]byte{"https://example.test/model.bin": payload}},
+		FreeSpace: func(string) (int64, error) { return 1 << 30, nil },
+	})
+	if appErr != nil {
+		t.Fatalf("install error: %#v", appErr)
+	}
+	status, appErr := store.Remove(entry)
+	if appErr != nil {
+		t.Fatalf("remove error: %#v", appErr)
+	}
+	if status.Installed || status.Status != "missing" {
+		t.Fatalf("remove status = %#v", status)
+	}
+	if _, err := os.Stat(store.ModelDir(entry)); !os.IsNotExist(err) {
+		t.Fatalf("model dir still exists or stat failed: %v", err)
+	}
+}
+
 func TestInstallPreservesPartAcrossRetry(t *testing.T) {
 	store := Store{Root: t.TempDir()}
 	payload := []byte("model")

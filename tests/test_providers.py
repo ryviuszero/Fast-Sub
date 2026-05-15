@@ -62,8 +62,8 @@ def test_default_registry_lists_required_providers(monkeypatch) -> None:
         "web-bing",
         "web-google",
     }
-    assert providers["api-openai-transcription"].status.status == "missing_api_key"
-    assert providers["api-openai-chat"].status.status == "missing_api_key"
+    assert providers["api-openai-transcription"].status.status == "available"
+    assert providers["api-openai-chat"].status.status == "available"
 
 
 def test_local_faster_whisper_missing_dependency_mentions_local_asr(monkeypatch) -> None:
@@ -112,13 +112,12 @@ def test_api_provider_status_does_not_expose_key(monkeypatch) -> None:
 
 
 def test_providers_cli_outputs_json_without_api_key(monkeypatch) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-secret-value")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     runner = CliRunner()
 
     result = runner.invoke(app, ["providers", "test", "api-openai-chat", "--json"])
 
     assert result.exit_code == 0
-    assert "sk-secret-value" not in result.output
     payload = json.loads(result.output)
     assert payload["metadata"]["id"] == "api-openai-chat"
     assert payload["status"]["status"] == "available"

@@ -9,17 +9,26 @@ export const mockPaths = {
 
 export const defaultConfig: ConfigViewModel = {
   defaultLanguage: "auto",
+  targetLanguage: "zh",
   outputLocation: "source",
   outputConflict: "ask",
+  outputFormat: "srt",
   device: "auto",
   outputType: "original_srt",
+  burnInVideo: false,
   asrProvider: "local-faster-whisper",
   translationProvider: "local-nllb-ct2",
   asrModel: "whisper-small",
-  translationModel: "nllb-ct2-base",
+  translationModel: "nllb-200-distilled-600m-ct2-int8",
   keepTempFiles: false,
   wordTimestamps: false,
-  apiKeyAlias: "openai-default (sk-****1234)"
+  folderScanIncludeSubfolders: false,
+  folderScanMaxFiles: 100,
+  apiKeyAlias: "FAST_SUB_OPENAI_API_KEY",
+  openAIBaseUrl: "https://api.openai.com/v1",
+  openAIModel: "",
+  openAIUploadFormat: "wav",
+  apiKeyStatus: "missing"
 };
 
 export const disconnectedError: UiError = {
@@ -46,16 +55,22 @@ export const baseEnvironment: EnvironmentStatus = {
 };
 
 export const baseModels: ModelStatus[] = [
-  { id: "whisper-small", name: "Whisper Small", kind: "asr", state: "ready", sizeLabel: "约 466 MB", requiredForMainFlow: true },
-  { id: "nllb-ct2-base", name: "NLLB CTranslate2", kind: "translation", state: "ready", sizeLabel: "约 1.2 GB", requiredForMainFlow: false },
-  { id: "whisper-cpp-base", name: "whisper.cpp Base", kind: "asr", state: "missing", sizeLabel: "约 142 MB", requiredForMainFlow: false }
+  { id: "whisper-base", name: "Whisper Base", kind: "asr", state: "ready", sizeLabel: "约 141 MB", backend: "faster-whisper", compatibleProviders: ["local-faster-whisper"], defaultFor: ["local-faster-whisper"], recommendation: "快速预览、低内存机器和短音频。", requiredForMainFlow: false },
+  { id: "whisper-small", name: "Whisper Small", kind: "asr", state: "ready", sizeLabel: "约 464 MB", backend: "faster-whisper", compatibleProviders: ["local-faster-whisper"], recommendation: "默认推荐，速度和准确率比较均衡。", requiredForMainFlow: true },
+  { id: "whisper-large-v3-turbo", name: "Whisper Large v3 Turbo", kind: "asr", state: "missing", sizeLabel: "约 1547 MB", backend: "faster-whisper", compatibleProviders: ["local-faster-whisper"], recommendation: "更高准确率，适合长音频和更好的硬件。", requiredForMainFlow: false },
+  { id: "whispercpp-base", name: "Whisper Base GGML for whisper.cpp", kind: "asr", state: "ready", sizeLabel: "约 141 MB", backend: "whisper.cpp", compatibleProviders: ["local-whisper-cpp"], defaultFor: ["local-whisper-cpp"], recommendation: "Native 本地路径，适合轻依赖和 CPU 场景。", requiredForMainFlow: false },
+  { id: "whispercpp-small", name: "Whisper Small GGML for whisper.cpp", kind: "asr", state: "missing", sizeLabel: "约 465 MB", backend: "whisper.cpp", compatibleProviders: ["local-whisper-cpp"], recommendation: "whisper.cpp 的平衡选择。", requiredForMainFlow: false },
+  { id: "nllb-200-distilled-600m-ct2-int8", name: "NLLB-200 Distilled 600M CTranslate2 INT8", kind: "translation", state: "ready", sizeLabel: "约 601 MB", backend: "nllb-ct2", compatibleProviders: ["local-nllb-ct2"], defaultFor: ["local-nllb-ct2"], recommendation: "本地离线翻译，适合隐私优先的字幕文本。", requiredForMainFlow: false }
 ];
 
 export const baseProviders: ProviderStatus[] = [
-  { id: "local-faster-whisper", name: "本地 Faster Whisper", kind: "local", capability: "stt", state: "available", enabled: true, privacyNote: "本地处理音频，不上传。", requiresUploadConfirmation: false },
-  { id: "local-nllb-ct2", name: "本地 NLLB 翻译", kind: "local", capability: "translation", state: "available", enabled: true, privacyNote: "本地处理字幕文本。", requiresUploadConfirmation: false },
-  { id: "api-openai-transcription", name: "OpenAI 音频转写 API", kind: "api", capability: "stt", state: "missing_api_key", enabled: false, privacyNote: "会上传音频，可能产生费用。", requiresUploadConfirmation: true, maskedCredential: "未配置" },
-  { id: "web-bing", name: "Bing 网页翻译", kind: "web", capability: "translation", state: "disabled", enabled: false, privacyNote: "会把字幕文本发送到第三方网页翻译服务。", requiresUploadConfirmation: true }
+  { id: "local-faster-whisper", name: "本地 Faster Whisper", kind: "local", capability: "stt", state: "available", enabled: true, privacyNote: "本地处理音频，不上传。", requiresUploadConfirmation: false, requiresModel: true, supportsBatch: true, supportsWordTimestamps: true, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["transcribe", "srt", "word_timestamps"], compatibleModelTypes: ["asr"] },
+  { id: "local-whisper-cpp", name: "本地 whisper.cpp", kind: "native", capability: "stt", state: "available", enabled: true, privacyNote: "Native 本地转写，不上传音频。", requiresUploadConfirmation: false, requiresModel: true, supportsBatch: false, supportsWordTimestamps: false, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["transcribe", "native_binary"], compatibleModelTypes: ["asr"] },
+  { id: "api-openai-transcription", name: "OpenAI 音频转写 API", kind: "api", capability: "stt", state: "available", enabled: true, privacyNote: "会上传音频，可能产生费用。", requiresUploadConfirmation: true, requiresApiKey: false, requiresModel: true, supportsBatch: false, supportsWordTimestamps: false, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["transcribe", "remote_api"], compatibleModelTypes: ["api"], maskedCredential: "未配置" },
+  { id: "local-nllb-ct2", name: "本地 NLLB 翻译", kind: "local", capability: "translation", state: "available", enabled: true, privacyNote: "本地处理字幕文本。", requiresUploadConfirmation: false, requiresModel: true, supportsBatch: true, supportedLanguages: ["en", "zh", "ja", "ko"], capabilities: ["translate_srt", "offline"], compatibleModelTypes: ["translation"] },
+  { id: "web-bing", name: "Bing 网页翻译", kind: "web", capability: "translation", state: "available", enabled: true, privacyNote: "会把字幕文本发送到第三方网页翻译服务。", requiresUploadConfirmation: true, supportsBatch: true, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["translate_srt", "web"] },
+  { id: "web-google", name: "Google 网页翻译", kind: "web", capability: "translation", state: "available", enabled: true, privacyNote: "会把字幕文本发送到第三方网页翻译服务。", requiresUploadConfirmation: true, supportsBatch: true, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["translate_srt", "web"] },
+  { id: "api-openai-chat", name: "OpenAI 兼容翻译 API", kind: "api", capability: "translation", state: "available", enabled: true, privacyNote: "会上传字幕文本，可能产生费用。", requiresUploadConfirmation: true, requiresApiKey: false, supportsBatch: true, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["translate_srt", "remote_api"], maskedCredential: "未配置" }
 ];
 
 export const redactedLogs: JobLogEntry[] = [
@@ -76,6 +91,7 @@ export function createSeedJob(overrides: Partial<JobDetail> = {}): JobDetail {
     progressPercent: 0,
     stageLabel: "等待开始",
     createdAt: "刚刚",
+    language: "自动识别",
     inputPaths: [mockPaths.spaced],
     outputDirectory: mockPaths.output,
     providerName: "本地 Faster Whisper",

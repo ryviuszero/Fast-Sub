@@ -55,24 +55,29 @@ def translate_srt(input_file: Path, options: TranslateOptions) -> TranslateSrtRe
     errors: list[TranslationError] = []
     warnings: list[str] = []
 
-    _translate_missing_segments(
-        segments,
-        options,
-        translated_by_id=translated_by_id,
-        errors=errors,
-        warnings=warnings,
-        progress_path=paths.progress,
-        fingerprint=fingerprint,
-    )
+    try:
+        _translate_missing_segments(
+            segments,
+            options,
+            translated_by_id=translated_by_id,
+            errors=errors,
+            warnings=warnings,
+            progress_path=paths.progress,
+            fingerprint=fingerprint,
+            checkpoint_enabled=options.resume,
+        )
 
-    return _finish_translate_srt(
-        segments,
-        options,
-        paths,
-        translated_by_id=translated_by_id,
-        errors=errors,
-        warnings=warnings,
-    )
+        return _finish_translate_srt(
+            segments,
+            options,
+            paths,
+            translated_by_id=translated_by_id,
+            errors=errors,
+            warnings=warnings,
+        )
+    finally:
+        if not options.resume:
+            _remove_checkpoint(paths.progress)
 
 
 def _translate_paths(input_file: Path, options: TranslateOptions) -> _TranslatePaths:
@@ -128,6 +133,7 @@ def _translate_missing_segments(
     warnings: list[str],
     progress_path: Path,
     fingerprint: dict[str, Any],
+    checkpoint_enabled: bool,
 ) -> None:
     to_translate = [segment for segment in segments if segment.id not in translated_by_id]
     if not to_translate:
@@ -151,8 +157,9 @@ def _translate_missing_segments(
     errors.extend(result.errors)
     for segment in result.segments:
         if segment.translation:
-            translated_by_id[segment.id] = segment.translation
-            _write_checkpoint(progress_path, fingerprint, translated_by_id, errors)
+            translated_by_id[segment.id] = _target_text_only(segment.translation, segment.text)
+            if checkpoint_enabled:
+                _write_checkpoint(progress_path, fingerprint, translated_by_id, errors)
 
 
 def _finish_translate_srt(
@@ -202,6 +209,51 @@ def _final_segments(
     return final_segments
 
 
+def _target_text_only(translation: str, source_text: str) -> str:
+    """Drop provider-echoed source text from a translated cue.
+
+    Some OpenAI-compatible local models ignore the JSON-only prompt and put
+    "source + translation" into the text field. The renderer decides whether
+    to show bilingual subtitles; the provider translation field must contain
+    target-language text only.
+    """
+    text = _normalize_text(translation)
+    source = _normalize_text(source_text)
+    if not text or not source:
+        return text
+
+    labeled = _translation_after_label(text)
+    if labeled:
+        text = labeled
+
+    if text == source:
+        return text
+    if text.startswith(source):
+        remainder = text[len(source) :]
+        if not remainder[:1].isspace():
+            return text
+        remainder = re.sub(r"^[\s:：\-—–|/\\]+", "", remainder)
+        labeled_remainder = _translation_after_label(remainder)
+        if labeled_remainder:
+            remainder = labeled_remainder
+        remainder = remainder.strip()
+        if remainder:
+            return remainder
+    return text
+
+
+def _translation_after_label(text: str) -> str:
+    matches = list(
+        re.finditer(
+            r"(?im)^\s*(?:translation|translated(?:\s+text)?|target|译文|翻译|目标译文)\s*[:：]\s*",
+            text,
+        )
+    )
+    if not matches:
+        return ""
+    return text[matches[-1].end() :].strip()
+
+
 def _segment_has_error(segment_id: int, errors: list[TranslationError]) -> bool:
     return any(error.batch_start_id <= segment_id <= error.batch_end_id for error in errors)
 
@@ -226,9 +278,13 @@ def _raise_if_no_translation(
             )
         )
         write_translation_errors(errors_path, provider=options.provider, errors=errors)
+    first_error = _sanitize_error(errors[0].message).strip() if errors else ""
+    detail = "All translation cues failed; no final SRT was written."
+    if first_error:
+        detail = f"{detail} First error: {first_error}"
     raise _TranslationProviderError(
         "provider_failed",
-        "All translation cues failed; no final SRT was written.",
+        detail,
         hint=f"See {errors_path} for per-cue errors.",
     )
 
@@ -314,6 +370,7 @@ def translate_segments(
             source_lang=source_lang,
             target_lang=target_lang,
             retries=retries,
+            timeout=timeout,
             sleep_seconds=sleep_seconds,
         )
     if resolved_provider == "api-openai-chat":
@@ -349,6 +406,7 @@ def _translate_web_segments(
     source_lang: str,
     target_lang: str,
     retries: int,
+    timeout: float,
     sleep_seconds: float,
 ) -> TranslationResult:
     translated = [segment.model_copy() for segment in segments]
@@ -362,6 +420,7 @@ def _translate_web_segments(
                     translator=translator,
                     from_language=source_lang,
                     to_language=target_lang,
+                    timeout=timeout,
                 )
                 segment.translation = str(result).strip()
                 if not segment.translation:
@@ -394,11 +453,6 @@ def _translate_openai_chat_segments(
     batch_size: int,
     timeout: float,
 ) -> TranslationResult:
-    if not api_key:
-        raise _TranslationProviderError(
-            "missing_api_key",
-            "api-openai-chat requires an explicit API key via --api-key or OPENAI_API_KEY.",
-        )
     if not model:
         raise _TranslationProviderError(
             "invalid_options",
@@ -430,7 +484,7 @@ def _translate_chat_batch_with_fallback(
     source_lang: str,
     target_lang: str,
     model: str,
-    api_key: str,
+    api_key: str | None,
     base_url: str,
     timeout: float,
 ) -> None:
@@ -489,7 +543,7 @@ def _request_openai_chat_translation(
     source_lang: str,
     target_lang: str,
     model: str,
-    api_key: str,
+    api_key: str | None,
     base_url: str,
     timeout: float,
 ) -> dict[int, str]:
@@ -659,6 +713,7 @@ def _translate_text(
     translator: str,
     from_language: str,
     to_language: str,
+    timeout: float | None = None,
 ) -> str:
     try:
         return translate_text(
@@ -666,10 +721,12 @@ def _translate_text(
             translator=translator,
             from_language=from_language,
             to_language=to_language,
+            timeout=timeout,
         )
     except WebTranslationClientError as exc:
+        code = getattr(exc, "code", "provider_failed")
         raise _TranslationProviderError(
-            "missing_dependency",
+            "missing_dependency" if code == "missing_dependency" else "provider_failed",
             str(exc),
         ) from exc
 
@@ -726,6 +783,15 @@ def _write_checkpoint(
         ),
         encoding="utf-8",
     )
+
+
+def _remove_checkpoint(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError:
+        return
 
 
 def sha256_file(path: Path) -> str:

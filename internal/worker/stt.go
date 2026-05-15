@@ -2,17 +2,18 @@
 package worker
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	fserrors "fast-sub/internal/errors"
+	"fast-sub/internal/procutil"
 	"fast-sub/internal/subtitle"
 )
 
@@ -74,7 +75,7 @@ func (r Runner) RunSTT(ctx context.Context, requestPath, responsePath string, re
 	if r.TailLimit <= 0 {
 		r.TailLimit = defaultTailLimit
 	}
-	command, appErr := r.resolveCommand()
+	command, baseArgs, appErr := r.resolveCommand()
 	if appErr != nil {
 		return STTResponse{}, appErr
 	}
@@ -97,7 +98,8 @@ func (r Runner) RunSTT(ctx context.Context, requestPath, responsePath string, re
 	}
 	defer cancel()
 
-	args := append([]string{}, r.ExtraArgs...)
+	args := append([]string{}, baseArgs...)
+	args = append(args, r.ExtraArgs...)
 	args = append(args, "--request", requestPath, "--response", responsePath)
 	completed := runCommand(runCtx, command, args, r.TailLimit)
 	stderrTail := fserrors.Redact(completed.Stderr)
@@ -130,6 +132,19 @@ func (r Runner) RunSTT(ctx context.Context, requestPath, responsePath string, re
 		return STTResponse{}, appErr
 	}
 	if response.Error != nil {
+		if strings.EqualFold(response.Error.Code, "EMPTY_SEGMENTS") {
+			language := request.Language
+			if strings.TrimSpace(language) == "" {
+				language = "unknown"
+			}
+			return STTResponse{
+				SchemaVersion: STTSchemaVersion,
+				Provider:      "local-faster-whisper",
+				Language:      language,
+				Segments:      []subtitle.Segment{},
+				Warnings:      []string{"No speech segments were detected; generated an empty subtitle file."},
+			}, nil
+		}
 		return STTResponse{}, workerErrorToApp(response.Error, stderrTail)
 	}
 	if completed.Err != nil {
@@ -175,67 +190,178 @@ func ReadSTTResponse(responsePath string) (STTResponse, *fserrors.AppError) {
 	if response.OK != nil && !*response.OK {
 		return STTResponse{}, fserrors.New(fserrors.CodeWorkerFailed, "transcribing", "worker returned ok=false without an error payload", "Check worker logs and protocol compatibility.", nil)
 	}
-	if len(response.Segments) == 0 {
-		return STTResponse{}, fserrors.New(fserrors.CodeWorkerFailed, "transcribing", "worker returned no subtitle segments", "Check that the input contains speech and the selected model is valid.", nil)
-	}
 	if _, err := subtitle.RenderSRT(response.Segments); err != nil {
 		return STTResponse{}, fserrors.New(fserrors.CodeWorkerProtocol, "transcribing", "worker returned invalid subtitle segments: "+err.Error(), "Check worker protocol compatibility.", nil)
 	}
 	return response, nil
 }
 
-func (r Runner) resolveCommand() (string, *fserrors.AppError) {
+func (r Runner) resolveCommand() (string, []string, *fserrors.AppError) {
 	command := r.Command
 	if command == "" {
 		command = os.Getenv("FAST_SUB_STT_WORKER_COMMAND")
+	}
+	if command != "" {
+		parts := splitCommandLine(command)
+		if len(parts) == 0 {
+			return "", nil, fserrors.New(fserrors.CodeMissingWorker, "transcribing", "STT worker command is empty.", "Set FAST_SUB_STT_WORKER_COMMAND or pass --worker-command.", nil)
+		}
+		if isUVCommand(parts[0]) {
+			path, err := exec.LookPath(parts[0])
+			if err != nil {
+				return "", nil, missingWorker(parts[0])
+			}
+			return path, withUVExtra(parts[1:], "local-asr"), nil
+		}
+		path, err := exec.LookPath(parts[0])
+		if err != nil {
+			return "", nil, missingWorker(parts[0])
+		}
+		return path, parts[1:], nil
+	}
+	if path, err := exec.LookPath("uv"); err == nil {
+		return path, []string{"run", "--extra", "local-asr", "fast-sub-worker-faster-whisper"}, nil
 	}
 	if command == "" {
 		command = "fast-sub-worker-faster-whisper"
 	}
 	path, err := exec.LookPath(command)
 	if err != nil {
-		return "", fserrors.New(
-			fserrors.CodeMissingWorker,
-			"transcribing",
-			"STT worker was not found.",
-			"Install fast-sub-worker-faster-whisper or pass --worker-command.",
-			map[string]any{"worker_command": command},
-		)
+		return "", nil, missingWorker(command)
 	}
-	return path, nil
+	return path, nil, nil
 }
 
-type completedProcess struct {
-	Stdout   string
-	Stderr   string
-	ExitCode int
-	Err      error
+func missingWorker(command string) *fserrors.AppError {
+	return fserrors.New(
+		fserrors.CodeMissingWorker,
+		"transcribing",
+		"STT worker was not found.",
+		"Install fast-sub-worker-faster-whisper or pass --worker-command.",
+		map[string]any{"worker_command": command},
+	)
 }
+
+type completedProcess = procutil.CompletedProcess
 
 func runCommand(ctx context.Context, name string, args []string, tailLimit int) completedProcess {
-	cmd := exec.CommandContext(ctx, name, args...)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	exitCode := 0
-	if err != nil {
-		exitCode = 1
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			exitCode = exitErr.ExitCode()
+	env := sttWorkerEnv(os.Getenv)
+	if os.Getenv("UV_CACHE_DIR") == "" {
+		env = append(env, "UV_CACHE_DIR=.uv-cache")
+	}
+	env = appendPythonUTF8Env(env)
+	return procutil.Run(ctx, name, args, env, tailLimit)
+}
+
+func sttWorkerEnv(getenv func(string) string) []string {
+	allowlist := []string{
+		"PATH",
+		"PATHEXT",
+		"SYSTEMROOT",
+		"SystemRoot",
+		"WINDIR",
+		"TEMP",
+		"TMP",
+		"HOME",
+		"USERPROFILE",
+		"APPDATA",
+		"LOCALAPPDATA",
+		"VIRTUAL_ENV",
+		"PYTHONHOME",
+		"PYTHONPATH",
+		"UV_CACHE_DIR",
+		"XDG_CACHE_HOME",
+		"HF_HOME",
+		"HF_HUB_CACHE",
+		"TRANSFORMERS_CACHE",
+		"OMP_NUM_THREADS",
+		"CUDA_HOME",
+		"CUDA_PATH",
+		"CUDA_VISIBLE_DEVICES",
+		"LD_LIBRARY_PATH",
+		"DYLD_LIBRARY_PATH",
+	}
+	env := make([]string, 0, len(allowlist))
+	seen := map[string]bool{}
+	for _, key := range allowlist {
+		normalized := strings.ToUpper(key)
+		if seen[normalized] {
+			continue
+		}
+		value := getenv(key)
+		if value == "" {
+			continue
+		}
+		env = append(env, key+"="+value)
+		seen[normalized] = true
+	}
+	return env
+}
+
+func appendPythonUTF8Env(env []string) []string {
+	return append(env,
+		"PYTHONUTF8=1",
+		"PYTHONIOENCODING=utf-8:replace",
+		"PYTHONLEGACYWINDOWSSTDIO=0",
+	)
+}
+
+func isUVCommand(command string) bool {
+	return strings.EqualFold(filepath.Base(command), "uv") || strings.EqualFold(filepath.Base(command), "uv.exe")
+}
+
+func withUVExtra(args []string, extra string) []string {
+	out := append([]string(nil), args...)
+	if hasUVExtra(out, extra) {
+		return out
+	}
+	insert := 0
+	if len(out) > 0 && out[0] == "run" {
+		insert = 1
+	}
+	next := append([]string{}, out[:insert]...)
+	next = append(next, "--extra", extra)
+	next = append(next, out[insert:]...)
+	return next
+}
+
+func hasUVExtra(args []string, extra string) bool {
+	for i, arg := range args {
+		if arg == "--extra" && i+1 < len(args) && args[i+1] == extra {
+			return true
+		}
+		if strings.HasPrefix(arg, "--extra=") && strings.TrimPrefix(arg, "--extra=") == extra {
+			return true
 		}
 	}
-	if ctx.Err() != nil {
-		err = ctx.Err()
+	return false
+}
+
+func splitCommandLine(value string) []string {
+	var parts []string
+	var current strings.Builder
+	inQuote := false
+	for _, r := range value {
+		switch r {
+		case '"':
+			inQuote = !inQuote
+		case ' ', '\t':
+			if inQuote {
+				current.WriteRune(r)
+				continue
+			}
+			if current.Len() > 0 {
+				parts = append(parts, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteRune(r)
+		}
 	}
-	return completedProcess{
-		Stdout:   tail(stdout.String(), tailLimit),
-		Stderr:   tail(stderr.String(), tailLimit),
-		ExitCode: exitCode,
-		Err:      err,
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
 	}
+	return parts
 }
 
 func writeJSONFile(path string, payload any) error {
