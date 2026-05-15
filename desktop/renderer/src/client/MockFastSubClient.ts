@@ -322,8 +322,11 @@ export class MockFastSubClient implements FastSubClient {
 
   async testProvider(providerId: string, mode: "static" | "live"): Promise<ProviderStatus> {
     const provider = this.providers.find((item) => item.id === providerId) ?? this.providers[0];
-    if (mode === "live" && provider.requiresUploadConfirmation) {
+    if (mode === "live" && provider.kind === "web" && provider.requiresUploadConfirmation) {
       return clone({ ...provider, state: "disabled", privacyNote: `${provider.privacyNote} Live 测试需要单独确认上传。` });
+    }
+    if (mode === "live" && provider.kind === "api") {
+      return clone({ ...provider, state: "available" });
     }
     return clone(provider);
   }

@@ -365,6 +365,8 @@ export function MainGenerating({ activeJob, jobs, activeBatchJobIds, cancelJob, 
   const batchIds = activeBatchJobIds.length > 0 ? activeBatchJobIds : activeId ? [activeId] : [];
   const batchJobs = jobs.filter((job) => batchIds.includes(job.id));
   const waitingJobs = batchJobs.filter((job) => job.id !== activeId && (job.status === "queued" || job.status === "running" || job.status === "canceling"));
+  const visibleWaitingJobs = waitingJobs.slice(0, 8);
+  const hiddenWaitingJobs = Math.max(0, waitingJobs.length - visibleWaitingJobs.length);
   const activeIndex = activeId && batchIds.length > 0 ? Math.max(0, batchIds.indexOf(activeId)) : 0;
   const totalJobs = batchIds.length || batchJobs.length || 1;
   const remainingLabel = activeJob?.estimatedRemaining ? t("Estimated remaining", { time: activeJob.estimatedRemaining }) : t("Waiting for progress");
@@ -385,7 +387,8 @@ export function MainGenerating({ activeJob, jobs, activeBatchJobIds, cancelJob, 
         {waitingJobs.length > 0 && (
           <section className="next-list">
             <h3>{t("Next")}</h3>
-            {waitingJobs.map((job) => <p key={job.id}><Chip>{job.statusLabel}</Chip> {job.title}</p>)}
+            {visibleWaitingJobs.map((job) => <p key={job.id}><Chip>{job.statusLabel}</Chip> {job.title}</p>)}
+            {hiddenWaitingJobs > 0 && <p className="caption">{t("More waiting jobs hidden", { count: hiddenWaitingJobs })}</p>}
           </section>
         )}
         <div className="center-actions">

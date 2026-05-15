@@ -956,8 +956,8 @@ button.toggle { cursor: pointer; }
 .setting-control-with-note {
   display: grid;
   gap: 4px;
-  width: min(100%, 420px);
-  max-width: 420px;
+  width: min(100%, 520px);
+  max-width: 520px;
   justify-items: stretch;
   margin-left: auto;
 }
@@ -969,6 +969,8 @@ button.toggle { cursor: pointer; }
   width: 100%;
   justify-self: stretch;
   overflow-wrap: anywhere;
+  color: var(--ink-3);
+  line-height: 1.45;
 }
 .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 

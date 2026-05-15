@@ -91,6 +91,7 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
     expect(await screen.findByRole("heading", { name: "还不能生成字幕" })).toBeInTheDocument();
     expect(screen.getByText("缺少默认 ASR 模型。下载完成后即可使用本地转写。")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("确认使用 API 服务");
   });
 
   it("shows task queue and settings entrances", async () => {
@@ -170,11 +171,11 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getByRole("button", { name: /服务商/ }));
     expect(await screen.findByRole("heading", { name: "转写方式" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "翻译 Provider" })).toBeInTheDocument();
-    expect(screen.getAllByText("未配置密钥").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("可用").length).toBeGreaterThan(0);
     expect(screen.queryByText("missing_api_key")).not.toBeInTheDocument();
     const openAiCard = screen.getByText("OpenAI 音频转写 API").closest("article") as HTMLElement;
-    expect(within(openAiCard).getByRole("button", { name: "设为默认" })).toBeDisabled();
-    expect(within(openAiCard).getByText("先配置密钥")).toBeInTheDocument();
+    expect(within(openAiCard).getByRole("button", { name: "设为默认" })).not.toBeDisabled();
+    expect(within(openAiCard).queryByText("先做连接检查")).not.toBeInTheDocument();
     fireEvent.change(within(openAiCard).getByLabelText("OpenAI 音频转写 API API Key"), { target: { value: "sk-test-secret" } });
     fireEvent.click(within(openAiCard).getByRole("button", { name: "保存密钥" }));
     await waitFor(() => expect(within(openAiCard).getByText(/已保存到 FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY/)).toBeInTheDocument());
@@ -186,15 +187,16 @@ describe("Fast Sub renderer flow", () => {
     expect(within(openAiCard).getByLabelText("模型")).toHaveValue("custom-transcribe-model");
     expect(within(openAiCard).queryByText("NLLB-200 Distilled 600M CTranslate2 INT8")).not.toBeInTheDocument();
     const openAiTranslateCard = screen.getByText("OpenAI 兼容翻译 API").closest("article") as HTMLElement;
-    expect(within(openAiTranslateCard).getByRole("button", { name: "设为默认" })).toBeDisabled();
-    expect(within(openAiTranslateCard).getByText("先配置密钥")).toBeInTheDocument();
+    expect(within(openAiTranslateCard).getByRole("button", { name: "设为默认" })).not.toBeDisabled();
+    expect(within(openAiTranslateCard).queryByText("先做连接检查")).not.toBeInTheDocument();
     expect(within(openAiTranslateCard).queryByText("快速填充提供方")).not.toBeInTheDocument();
     expect(within(openAiTranslateCard).getByLabelText("模型")).toHaveValue("gpt-4o-mini");
     expect(within(openAiTranslateCard).queryByText("NLLB-200 Distilled 600M CTranslate2 INT8")).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "静态检查" })[0]);
     await waitFor(() => expect(within(screen.getByText("本地 Faster Whisper").closest("article") as HTMLElement).getByText("静态检查通过")).toBeInTheDocument());
     fireEvent.click(within(openAiTranslateCard).getByRole("button", { name: "连接检查" }));
-    await waitFor(() => expect(within(openAiTranslateCard).getByText("未配置密钥")).toBeInTheDocument());
+    await waitFor(() => expect(within(openAiTranslateCard).getByText("连接检查通过")).toBeInTheDocument());
+    expect(within(openAiTranslateCard).getByRole("button", { name: "设为默认" })).not.toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "刷新状态" }));
     await waitFor(() => expect(screen.getByText("已刷新")).toBeInTheDocument());
   });

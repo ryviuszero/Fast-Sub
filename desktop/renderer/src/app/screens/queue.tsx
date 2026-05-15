@@ -137,7 +137,7 @@ export function QueueDetail({ activeJob, setScreen, failed, retryJob, deleteJob,
   const error = activeJob?.error;
   const title = activeJob?.title ?? t("No task selected");
   const subtitle = activeJob ? `${succeeded ? activeJob.completedAt || activeJob.createdAt : activeJob.createdAt} · ${rt(activeJob.statusLabel)}` : t("Choose a task from the list");
-  const progress = activeJob?.progressPercent ?? 0;
+  const progress = succeeded ? 100 : activeJob?.progressPercent ?? 0;
   const progressText = canceled
     ? t("Task canceled message")
     : canceling

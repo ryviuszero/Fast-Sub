@@ -296,7 +296,7 @@ function providerStateTone(provider: ProviderStatus): "ok" | "accent" | "warn" |
 }
 
 function providerOptionLabel(provider: ProviderStatus, t: (key: string) => string = (key) => key): string {
-  const state = providerStateLabel(provider.state, t);
+  const state = provider.kind === "api" && provider.state === "missing_api_key" ? t("Needs connection check") : providerStateLabel(provider.state, t);
   const prefix = provider.kind === "local" ? t("Local") : provider.kind === "api" ? "API" : provider.kind === "web" ? t("Web") : "Native";
   return `${prefix} · ${providerDisplayName(provider, t)}${provider.enabled && provider.state === "available" ? "" : ` (${state})`}`;
 }
@@ -625,6 +625,14 @@ function ProviderCard(props: {
     });
   };
   const checking = props.check?.status === "checking";
+  const liveCheckAvailable = provider.kind === "api" && props.check?.status === "ok";
+  const providerAvailable = provider.state === "available" || liveCheckAvailable;
+  const providerStateText = liveCheckAvailable
+    ? t("Available")
+    : provider.kind === "api" && provider.state === "missing_api_key"
+      ? t("Needs connection check")
+      : providerStateLabel(provider.state, t);
+  const providerTone = providerAvailable ? "ok" : providerStateTone(provider);
   const secretConfigured = isProviderSecretConfigured(provider, props.config);
   const secretAlias = providerSecretAlias(provider, props.config);
   const saveSecret = async () => {
@@ -642,8 +650,8 @@ function ProviderCard(props: {
       setSecretStatus("failed");
     }
   };
-  const canSetDefault = provider.enabled && provider.state === "available";
-  const defaultBlockReason = providerDefaultBlockReason(provider, t);
+  const canSetDefault = provider.enabled && providerAvailable;
+  const defaultBlockReason = providerAvailable ? "" : providerDefaultBlockReason(provider, t);
   const selectAsDefault = () => {
     if (!canSetDefault) {
       return;
@@ -678,7 +686,7 @@ function ProviderCard(props: {
       <div className="provider-main">
         <div className="row gap-8 wrap">
           <strong>{providerDisplayName(provider, t)}</strong>
-          <Chip tone={providerStateTone(provider)}>{providerStateLabel(provider.state, t)}</Chip>
+          <Chip tone={providerTone}>{providerStateText}</Chip>
           {props.active && <Chip tone="accent">{t("Current default")}</Chip>}
           <Chip>{providerKindLabel(provider.kind, t)}</Chip>
           {provider.requiresUploadConfirmation && <Chip tone="warn">{t("Upload confirmation")}</Chip>}
@@ -811,7 +819,7 @@ function defaultAPIModel(provider: ProviderStatus): string {
 
 function providerDefaultBlockReason(provider: ProviderStatus, t: (key: string) => string): string {
   switch (provider.state) {
-    case "missing_api_key": return t("Configure key first");
+    case "missing_api_key": return provider.kind === "api" ? t("Run connection check first") : t("Configure key first");
     case "missing_model": return t("Install model first");
     case "missing_dependency": return t("Install dependency first");
     case "invalid_config": return t("Fix config first");

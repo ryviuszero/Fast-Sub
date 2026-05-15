@@ -83,7 +83,7 @@ export function ToolTranslate({ setScreen, startToolJob, translationReady, provi
 
 function providerOptionLabel(provider: RenderProps["providers"][number], t: (key: string) => string): string {
   const prefix = provider.kind === "local" ? t("Local") : provider.kind === "web" ? t("Web") : provider.kind === "api" ? "API" : "Native";
-  const state = provider.state === "available" ? "" : ` (${providerStateLabel(provider.state, t)})`;
+  const state = provider.state === "available" ? "" : ` (${provider.kind === "api" && provider.state === "missing_api_key" ? t("Needs connection check") : providerStateLabel(provider.state, t)})`;
   return `${prefix} · ${providerDisplayName(provider.id, t)}${state}`;
 }
 

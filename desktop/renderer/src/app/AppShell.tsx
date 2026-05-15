@@ -1031,11 +1031,16 @@ function resolveReadyProviderModel(capability: ProviderStatus["capability"], pro
   const preferredProviders = [
     providerId,
     capability === "stt" ? "local-faster-whisper" : "local-nllb-ct2",
-    ...providers.filter((provider) => provider.capability === capability).map((provider) => provider.id)
+    ...providers
+      .filter((provider) => provider.capability === capability && provider.kind !== "api" && provider.kind !== "web")
+      .map((provider) => provider.id)
   ];
   for (const id of uniqueStrings(preferredProviders)) {
     const provider = providers.find((item) => item.id === id && item.capability === capability);
     if (!provider || !provider.enabled || provider.state !== "available") {
+      continue;
+    }
+    if ((provider.kind === "api" || provider.kind === "web") && id !== providerId) {
       continue;
     }
     if (provider.kind === "api" || provider.kind === "web" || !provider.requiresModel) {
