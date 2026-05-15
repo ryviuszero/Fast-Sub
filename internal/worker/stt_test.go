@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -127,6 +128,32 @@ func main() {
 	})
 	if appErr != nil {
 		t.Fatal(appErr)
+	}
+}
+
+func TestSTTWorkerEnvScrubsSecrets(t *testing.T) {
+	values := map[string]string{
+		"PATH":                    "C:\\safe-bin",
+		"TEMP":                    "C:\\Temp",
+		"OPENAI_API_KEY":          "sk-secret",
+		"FAST_SUB_OPENAI_API_KEY": "sk-fast-sub-secret",
+		"FAST_SUB_DAEMON_TOKEN":   "ready-token",
+		"AUTHORIZATION":           "Bearer token",
+	}
+	env := appendPythonUTF8Env(sttWorkerEnv(func(key string) string {
+		return values[key]
+	}))
+	joined := strings.Join(env, "\n")
+	for _, secret := range []string{"sk-secret", "sk-fast-sub-secret", "ready-token", "Bearer token"} {
+		if strings.Contains(joined, secret) {
+			t.Fatalf("worker env leaked secret %q in %q", secret, joined)
+		}
+	}
+	if !strings.Contains(joined, "PATH=C:\\safe-bin") {
+		t.Fatalf("expected PATH to be preserved in %q", joined)
+	}
+	if !strings.Contains(joined, "PYTHONIOENCODING=utf-8:replace") {
+		t.Fatalf("expected Python UTF-8 env in %q", joined)
 	}
 }
 

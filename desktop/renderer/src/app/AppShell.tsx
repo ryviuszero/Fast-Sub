@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type
 import type { ConfigViewModel, CreateJobRequest, EnvironmentStatus, FastSubClient, JobDetail, JobEvent, JobStatus, JobSummary, MockScenario, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
 import { containsSecret } from "../../../shared/privacy/redaction";
 import { defaultConfig, mockPaths } from "../client/mockFixtures";
-import { AppMenu, DebugPanel } from "./components";
+import { AppMenu, DebugPanel, RemoteConfirmDialog } from "./components";
 import { createClient, filterSupportedMediaPaths, makeFile, makeFilesFromList } from "./fixtures";
 import { I18nProvider, useT } from "./i18n";
 import { renderScreen } from "./renderScreen";
@@ -11,6 +11,12 @@ import type { MediaFile, QueueFilter, Screen, UiFontStyle, UiLanguage } from "./
 const ONBOARDING_DONE_KEY = "fast-sub:onboarding-complete";
 const FILE_IMPORT_FEEDBACK_DELAY_MS = 32;
 const SYNC_MEDIA_IMPORT_LIMIT = 20;
+
+type PendingRemoteConfirmation = {
+  provider?: ProviderStatus;
+  files: MediaFile[];
+  onConfirm: () => void;
+};
 
 export function App({ client: providedClient }: { client?: FastSubClient }) {
   const [scenario, setScenario] = useState<MockScenario>("setupReady");
@@ -35,6 +41,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const [outputDirectoryLabel, setOutputDirectoryLabel] = useState("与源视频相同目录");
   const [outputDirectoryPath, setOutputDirectoryPath] = useState(mockPaths.output);
   const [openNotice, setOpenNotice] = useState<{ message: string; tone: "ok" | "warn" } | null>(null);
+  const [remoteConfirmRequest, setRemoteConfirmRequest] = useState<PendingRemoteConfirmation | null>(null);
   const backStackRef = useRef<Screen[]>([]);
   const forwardStackRef = useRef<Screen[]>([]);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
@@ -480,6 +487,14 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const resolvedTranslationSelection = resolveConfiguredProviderModel("translation", config.translationProvider, config.translationModel, providers, models);
   const translationReady = Boolean(resolvedTranslationSelection);
 
+  const requestRemoteConfirmation = (provider: ProviderStatus | undefined, inputPaths: string[], onConfirm: () => void) => {
+    setRemoteConfirmRequest({
+      provider,
+      files: inputPaths.map((path, index) => makeFile(path, index)),
+      onConfirm
+    });
+  };
+
   const startJob = async (options: { conflictResolved?: boolean; inputPaths?: string[]; outputConflict?: ConfigViewModel["outputConflict"]; outputPath?: string; remoteUploadConfirmed?: boolean } = {}) => {
     const conflictResolved = options.conflictResolved ?? false;
     const outputConflict = options.outputConflict ?? config.outputConflict;
@@ -507,17 +522,24 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       setScreen("main-conflict");
       return;
     }
-    const asrRemoteProvider = providers.find((provider) => provider.id === config.asrProvider && provider.requiresUploadConfirmation);
-    const translationRemoteProvider = outputTypeNeedsTranslation(config.outputType)
-      ? providers.find((provider) => provider.id === config.translationProvider && provider.requiresUploadConfirmation)
-      : undefined;
-    const remoteUploadConfirmed = Boolean(asrRemoteProvider) || options.remoteUploadConfirmed === true || scenario === "remoteProviderConfirmRequired";
-    const translationUploadConfirmed = Boolean(translationRemoteProvider) || options.remoteUploadConfirmed === true || scenario === "remoteProviderConfirmRequired";
     const inputPaths = options.inputPaths?.length ? options.inputPaths : files.map((file) => file.path);
     if (inputPaths.length === 0) {
       setScreen("main-empty");
       return;
     }
+    const asrRemoteProvider = providers.find((provider) => provider.id === config.asrProvider && provider.requiresUploadConfirmation);
+    const translationRemoteProvider = outputTypeNeedsTranslation(config.outputType)
+      ? providers.find((provider) => provider.id === config.translationProvider && provider.requiresUploadConfirmation)
+      : undefined;
+    const confirmedRemoteUpload = options.remoteUploadConfirmed === true;
+    if ((asrRemoteProvider || translationRemoteProvider) && !confirmedRemoteUpload) {
+      requestRemoteConfirmation(asrRemoteProvider ?? translationRemoteProvider, inputPaths, () => {
+        void startJob({ ...options, inputPaths, remoteUploadConfirmed: true });
+      });
+      return;
+    }
+    const remoteUploadConfirmed = Boolean(asrRemoteProvider) ? confirmedRemoteUpload : false;
+    const translationUploadConfirmed = Boolean(translationRemoteProvider) ? confirmedRemoteUpload : false;
     const batchPaths = options.outputPath ? inputPaths.slice(0, 1) : inputPaths;
     const createdJobs: JobDetail[] = [];
     for (const path of batchPaths) {
@@ -559,7 +581,17 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     await refreshJobs();
   };
 
-  const startToolJob = async (type: "translate_srt" | "burn_in", inputPaths: string[]) => {
+  const startToolJob = async (type: "translate_srt" | "burn_in", inputPaths: string[], options: { remoteUploadConfirmed?: boolean } = {}) => {
+    const translationRemoteProvider = type === "translate_srt"
+      ? providers.find((provider) => provider.id === config.translationProvider && provider.requiresUploadConfirmation)
+      : undefined;
+    const confirmedRemoteUpload = options.remoteUploadConfirmed === true;
+    if (translationRemoteProvider && !confirmedRemoteUpload) {
+      requestRemoteConfirmation(translationRemoteProvider, inputPaths, () => {
+        void startToolJob(type, inputPaths, { remoteUploadConfirmed: true });
+      });
+      return null;
+    }
     const request: CreateJobRequest = {
       type,
       inputPaths,
@@ -571,8 +603,8 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       targetLanguage: config.targetLanguage,
       providerId: type === "burn_in" ? config.asrProvider : config.translationProvider,
       modelId: type === "burn_in" ? config.asrModel : translationModelForRequest(config),
-      translationUploadConfirmed: type === "translate_srt",
-      remoteUploadConfirmed: true
+      translationUploadConfirmed: Boolean(translationRemoteProvider) ? confirmedRemoteUpload : false,
+      remoteUploadConfirmed: type === "translate_srt" && Boolean(translationRemoteProvider) ? confirmedRemoteUpload : false
     };
     const job = repairJobPathFromRequest(await client.createJob(request), request);
     backgroundQueueOpenRef.current = false;
@@ -610,7 +642,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     if (retryInputPaths.length > 0) {
       setFiles(retryInputPaths.map((path, index) => makeFile(path, index)));
     }
-    await startJob({ conflictResolved: true, inputPaths: retryInputPaths, remoteUploadConfirmed: true });
+    await startJob({ conflictResolved: true, inputPaths: retryInputPaths });
   };
 
   const deleteActiveJob = async () => {
@@ -731,6 +763,18 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
         openNotice={openNotice}
         setOpenNotice={setOpenNotice}
       >
+        {remoteConfirmRequest && (
+          <RemoteConfirmDialog
+            provider={remoteConfirmRequest.provider}
+            files={remoteConfirmRequest.files}
+            onCancel={() => setRemoteConfirmRequest(null)}
+            onConfirm={() => {
+              const pending = remoteConfirmRequest;
+              setRemoteConfirmRequest(null);
+              pending.onConfirm();
+            }}
+          />
+        )}
         {renderScreen({
           screen,
           setScreen: navigateFromScreen,

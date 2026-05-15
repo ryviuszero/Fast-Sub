@@ -245,12 +245,57 @@ func missingWorker(command string) *fserrors.AppError {
 type completedProcess = procutil.CompletedProcess
 
 func runCommand(ctx context.Context, name string, args []string, tailLimit int) completedProcess {
-	env := os.Environ()
+	env := sttWorkerEnv(os.Getenv)
 	if os.Getenv("UV_CACHE_DIR") == "" {
 		env = append(env, "UV_CACHE_DIR=.uv-cache")
 	}
 	env = appendPythonUTF8Env(env)
 	return procutil.Run(ctx, name, args, env, tailLimit)
+}
+
+func sttWorkerEnv(getenv func(string) string) []string {
+	allowlist := []string{
+		"PATH",
+		"PATHEXT",
+		"SYSTEMROOT",
+		"SystemRoot",
+		"WINDIR",
+		"TEMP",
+		"TMP",
+		"HOME",
+		"USERPROFILE",
+		"APPDATA",
+		"LOCALAPPDATA",
+		"VIRTUAL_ENV",
+		"PYTHONHOME",
+		"PYTHONPATH",
+		"UV_CACHE_DIR",
+		"XDG_CACHE_HOME",
+		"HF_HOME",
+		"HF_HUB_CACHE",
+		"TRANSFORMERS_CACHE",
+		"OMP_NUM_THREADS",
+		"CUDA_HOME",
+		"CUDA_PATH",
+		"CUDA_VISIBLE_DEVICES",
+		"LD_LIBRARY_PATH",
+		"DYLD_LIBRARY_PATH",
+	}
+	env := make([]string, 0, len(allowlist))
+	seen := map[string]bool{}
+	for _, key := range allowlist {
+		normalized := strings.ToUpper(key)
+		if seen[normalized] {
+			continue
+		}
+		value := getenv(key)
+		if value == "" {
+			continue
+		}
+		env = append(env, key+"="+value)
+		seen[normalized] = true
+	}
+	return env
 }
 
 func appendPythonUTF8Env(env []string) []string {

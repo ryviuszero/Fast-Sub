@@ -1210,7 +1210,7 @@ describe("Fast Sub renderer flow", () => {
     await waitFor(() => expect(requests[0]?.outputPath).toBe("F:\\game\\others\\input-copy.srt"));
   });
 
-  it("continues directly after resolving an output conflict for remote providers", async () => {
+  it("requires upload confirmation after resolving an output conflict for remote providers", async () => {
     render(<App />);
     fireEvent.click(await screen.findByLabelText("打开调试面板"));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "outputConflict" } });
@@ -1222,11 +1222,13 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
     expect(await screen.findByText("字幕文件已存在")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "覆盖" }));
+    expect(await screen.findByText("确认使用 API 服务")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "确认并继续" }));
     await waitFor(() => expect(screen.queryByText("确认使用 API 服务")).not.toBeInTheDocument());
     expect(await screen.findByRole("heading", { name: "正在生成字幕..." })).toBeInTheDocument();
   });
 
-  it("starts remote provider jobs without an extra upload confirmation modal", async () => {
+  it("starts remote provider jobs only after upload confirmation", async () => {
     render(<App />);
     fireEvent.click(await screen.findByLabelText("打开调试面板"));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "remoteProviderConfirmRequired" } });
@@ -1241,6 +1243,8 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.change(providerSelect, { target: { value: "api-openai-transcription" } });
     await waitFor(() => expect(providerSelect.value).toBe("api-openai-transcription"));
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    expect(await screen.findByText("确认使用 API 服务")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "确认并继续" }));
     await waitFor(() => expect(screen.queryByText("确认使用 API 服务")).not.toBeInTheDocument());
     expect(await screen.findByRole("heading", { name: "正在生成字幕..." })).toBeInTheDocument();
   });
