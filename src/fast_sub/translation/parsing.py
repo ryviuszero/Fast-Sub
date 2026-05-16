@@ -22,6 +22,7 @@ def parse_chat_translations(content: str, *, expected_ids: list[int]) -> dict[in
             if text:
                 return {expected_ids[0]: text}
         raise ValueError("Could not parse provider JSON response.") from exc
+    items: object
     if isinstance(payload, list):
         if len(expected_ids) == 1 and len(payload) == 1 and isinstance(payload[0], str):
             text = _plain_text_translation(payload[0])
@@ -31,15 +32,15 @@ def parse_chat_translations(content: str, *, expected_ids: list[int]) -> dict[in
     elif isinstance(payload, dict):
         items = payload.get("translations") or payload.get("results") or payload.get("items")
         if items is None and len(expected_ids) == 1:
-            text = (
+            raw_text = (
                 payload.get("text")
                 or payload.get("translation")
                 or payload.get("translated_text")
                 or payload.get("target")
                 or payload.get(str(expected_ids[0]))
             )
-            if isinstance(text, str) and text.strip():
-                return {expected_ids[0]: text.strip()}
+            if isinstance(raw_text, str) and raw_text.strip():
+                return {expected_ids[0]: raw_text.strip()}
     else:
         items = None
     if not isinstance(items, list):

@@ -256,9 +256,7 @@ def test_empty_segments_is_worker_failure(workdir: Path, monkeypatch: pytest.Mon
     assert exc_info.value.code == "EMPTY_SEGMENTS"
 
 
-def test_empty_segments_retries_without_vad(
-    workdir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_empty_segments_retries_without_vad(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, object]] = []
 
     class FakeWhisperModel:
@@ -297,7 +295,8 @@ def test_vad_off_retries_with_vad_when_clip_timestamps_are_required(
             calls.append(dict(kwargs))
             if kwargs.get("vad_filter") is False:
                 raise RuntimeError(
-                    "No clip timestamps found. Set 'vad_filter' to True or provide 'clip_timestamps'."
+                    "No clip timestamps found. Set 'vad_filter' to True or "
+                    "provide 'clip_timestamps'."
                 )
             return (
                 iter([SimpleNamespace(start=0.0, end=1.0, text="recovered", words=[])]),

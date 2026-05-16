@@ -80,7 +80,7 @@ def test_translate_replace_success_json_pure(monkeypatch, work_dir: Path) -> Non
     output = tmp_path / "out.srt"
     calls = []
 
-    def fake_translate_text(*, text, translator, from_language, to_language):  # noqa: ANN001
+    def fake_translate_text(*, text, translator, from_language, to_language, timeout=None):  # noqa: ANN001
         calls.append((text, translator, from_language, to_language))
         return f"{text}-zh"
 
@@ -118,7 +118,7 @@ def test_translate_bilingual_success(monkeypatch, work_dir: Path) -> None:
 
     monkeypatch.setattr(
         "fast_sub.translation.service._translate_text",
-        lambda *, text, translator, from_language, to_language: f"{text}-zh",
+        lambda *, text, translator, from_language, to_language, timeout=None: f"{text}-zh",
     )
 
     result = runner.invoke(
@@ -153,7 +153,7 @@ def test_translate_partial_failure_writes_errors_and_keeps_original(
     input_file = _write_srt(tmp_path)
     output = tmp_path / "out.srt"
 
-    def fake_translate_text(*, text, translator, from_language, to_language):  # noqa: ANN001
+    def fake_translate_text(*, text, translator, from_language, to_language, timeout=None):  # noqa: ANN001
         if text == "World":
             raise RuntimeError("service down sk-secret123456")
         return "你好"
@@ -228,7 +228,7 @@ def test_translate_checkpoint_resume_and_no_resume(monkeypatch, work_dir: Path) 
     output = tmp_path / "out.srt"
     calls = []
 
-    def fake_translate_text(*, text, translator, from_language, to_language):  # noqa: ANN001
+    def fake_translate_text(*, text, translator, from_language, to_language, timeout=None):  # noqa: ANN001
         calls.append(text)
         return f"{text}-zh"
 
