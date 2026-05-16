@@ -10,12 +10,15 @@ import type {
   JobSummary,
   ModelStatus,
   ProviderStatus,
+  FFmpegPackageManager,
   UiError
 } from "../../shared/contracts/types";
 import { mapDaemonEventToJobEvent, type DaemonEventType } from "../../shared/contracts/daemonEventMapping";
 import { existsSync } from "node:fs";
 import { redactSecretText } from "../../shared/privacy/redaction";
 import { type DaemonSession, DaemonProcessManager } from "./daemonProcess";
+import { ensureFFmpegInstalled, ensureWhisperCPPInstalled, installFFmpegWithPackageManager } from "./nativeDependencies";
+import { defaultSecretStorePath, SafeStorageSecretStore } from "./secretStore";
 import { daemonTransportLog } from "./transportLog";
 import { errorFromUnknown, uiError } from "./uiError";
 
@@ -287,6 +290,9 @@ function providerName(id: string): string {
 }
 
 export class MainDaemonFastSubClient {
+  private nativeDependenciesSynced = false;
+  private readonly secretStore = new SafeStorageSecretStore(defaultSecretStorePath());
+
   constructor(private readonly processManager: DaemonProcessManager) {}
 
   async health(): Promise<HealthStatus> {
@@ -304,28 +310,61 @@ export class MainDaemonFastSubClient {
   }
 
   async getEnvironmentStatus(): Promise<EnvironmentStatus> {
+    const ffmpeg = await ensureFFmpegInstalled();
+    if (ffmpeg.installedNow) {
+      await this.processManager.repair().catch(() => undefined);
+    }
     const [health, models] = await Promise.all([this.health(), this.listModels().catch(() => [] as ModelStatus[])]);
     const asrReady = models.some((model) => model.kind === "asr" && model.state === "ready");
     const translationReady = models.some((model) => model.kind === "translation" && model.state === "ready");
+    const warnings = [
+      ...(health === "ok" ? [] : ["本地服务连接中断"]),
+      ...(ffmpeg.available ? [] : [`FFmpeg 未安装或安装失败：${ffmpeg.message ?? "请检查网络后重试"}`])
+    ];
     return {
-      health,
+      health: health === "ok" && !ffmpeg.available ? "degraded" : health,
       os: process.platform,
       arch: process.arch,
       memory: "由本地服务检查",
       disk: "由本地服务检查",
       localTranscriptionReady: asrReady,
       localTranslationReady: translationReady,
-      ffmpegReady: health === "ok",
+      ffmpegReady: ffmpeg.available,
+      ffmpegInstalling: ffmpeg.installing,
+      ffmpegInstallProgressPercent: ffmpeg.progressPercent,
+      ffmpegInstallLogs: ffmpeg.logs,
       modelDirectoryReady: health === "ok",
       daemonReady: health === "ok",
-      warnings: health === "ok" ? [] : ["本地服务连接中断"],
+      warnings,
       error: health === "ok" ? undefined : uiError("daemon_disconnected", "本地服务暂时不可用", "请尝试一键修复后重新检查。")
     };
   }
 
   async repairDaemon(): Promise<EnvironmentStatus> {
     await this.processManager.repair();
+    this.nativeDependenciesSynced = true;
     return this.getEnvironmentStatus();
+  }
+
+  async installFFmpegWithPackageManager(manager: FFmpegPackageManager): Promise<EnvironmentStatus> {
+    const ffmpeg = await installFFmpegWithPackageManager(manager);
+    if (ffmpeg.available) {
+      await this.processManager.repair().catch(() => undefined);
+      this.nativeDependenciesSynced = true;
+    }
+    return this.getEnvironmentStatus();
+  }
+
+  async installProviderDependency(providerId: string): Promise<ProviderStatus> {
+    if (providerId !== "local-whisper-cpp") {
+      throw uiError("unsupported_dependency_install", "暂不支持自动安装该依赖", "当前只能自动安装 local-whisper-cpp 的 whisper.cpp native binary。");
+    }
+    const dependency = await ensureWhisperCPPInstalled();
+    if (dependency.available) {
+      await this.processManager.repair().catch(() => undefined);
+      this.nativeDependenciesSynced = true;
+    }
+    return this.testProvider(providerId, "static");
   }
 
   async getConfig(): Promise<ConfigViewModel> {
@@ -397,7 +436,9 @@ export class MainDaemonFastSubClient {
 
   async testProvider(providerId: string, mode: "static" | "live"): Promise<ProviderStatus> {
     try {
-      const result = record(await this.request(`/v1/providers?provider_id=${encodeURIComponent(providerId)}&mode=${encodeURIComponent(mode)}`));
+      const secretRef = mode === "live" && isAPIProvider(providerId) ? await this.createProviderSecretRef(providerId) : "";
+      const secretParam = secretRef ? `&secret_ref=${encodeURIComponent(secretRef)}` : "";
+      const result = record(await this.request(`/v1/providers?provider_id=${encodeURIComponent(providerId)}&mode=${encodeURIComponent(mode)}${secretParam}`));
       return mapProvider(record(result.provider));
     } catch (error) {
       if (!isDaemonUnavailable(error)) {
@@ -409,7 +450,34 @@ export class MainDaemonFastSubClient {
   }
 
   async createJob(request: CreateJobRequest): Promise<JobDetail> {
+    if (jobNeedsFFmpeg(request)) {
+      await this.syncNativeDependenciesForJobs();
+    }
     const first = request.inputPaths[0] ?? "";
+    const options: Record<string, unknown> = {
+      yes: request.remoteUploadConfirmed,
+      overwrite: request.outputConflict === "overwrite",
+      output_conflict: request.outputConflict ?? "ask",
+      output_type: request.outputType,
+      translation_provider: request.translationProviderId,
+      translation_model: request.translationModelId,
+      translation_upload_confirmed: request.translationUploadConfirmed ?? false,
+      target_language: request.targetLanguage ?? "zh",
+      keep_temp: false,
+      device: "auto"
+    };
+    if (request.providerId === "api-openai-transcription") {
+      const secretRef = await this.createProviderSecretRef("api-openai-transcription");
+      if (secretRef) {
+        options.api_key_secret_ref = secretRef;
+      }
+    }
+    if (request.translationProviderId === "api-openai-chat" || request.type === "translate_srt" && request.providerId === "api-openai-chat") {
+      const secretRef = await this.createProviderSecretRef("api-openai-chat");
+      if (secretRef) {
+        options.translation_api_key_secret_ref = secretRef;
+      }
+    }
     const body = {
       schema_version: 1,
       type: request.type,
@@ -426,20 +494,32 @@ export class MainDaemonFastSubClient {
       translation_model: request.translationModelId,
       translation_upload_confirmed: request.translationUploadConfirmed ?? false,
       word_timestamps: request.outputType === "original_srt" ? "off" : "auto",
-      options: {
-        yes: request.remoteUploadConfirmed,
-        overwrite: request.outputConflict === "overwrite",
-        output_conflict: request.outputConflict ?? "ask",
-        output_type: request.outputType,
-        translation_provider: request.translationProviderId,
-        translation_model: request.translationModelId,
-        translation_upload_confirmed: request.translationUploadConfirmed ?? false,
-        target_language: request.targetLanguage ?? "zh",
-        keep_temp: false,
-        device: "auto"
-      }
+      options
     };
-    return this.createDaemonJob(body);
+    try {
+      return await this.createDaemonJob(body);
+    } catch (error) {
+      if (isFFmpegDependencyError(error)) {
+        const ffmpeg = await ensureFFmpegInstalled();
+        if (ffmpeg.available) {
+          await this.processManager.repair().catch(() => undefined);
+          return this.createDaemonJob(body);
+        }
+      }
+      throw error;
+    }
+  }
+
+  private async syncNativeDependenciesForJobs(): Promise<void> {
+    if (this.nativeDependenciesSynced) {
+      return;
+    }
+    const ffmpeg = await ensureFFmpegInstalled();
+    if (!ffmpeg.available || ffmpeg.installing) {
+      return;
+    }
+    await this.processManager.repair().catch(() => undefined);
+    this.nativeDependenciesSynced = true;
   }
 
   async listJobs(): Promise<JobSummary[]> {
@@ -499,6 +579,20 @@ export class MainDaemonFastSubClient {
     const created = record(await this.request("/v1/jobs", { method: "POST", body }));
     const id = str(created.job_id, "");
     return id ? this.getJob(id) : mapJob(created);
+  }
+
+  private async createProviderSecretRef(providerId: string): Promise<string> {
+    const config = await this.getConfig().catch(() => mapConfig({}));
+    const alias = providerSecretAlias(providerId, config);
+    const secret = await this.secretStore.read(providerId, alias);
+    if (!secret) {
+      return "";
+    }
+    const result = record(await this.request("/v1/secrets", {
+      method: "POST",
+      body: { schema_version: 1, provider_id: providerId, secret }
+    }));
+    return str(result.secret_ref, "");
   }
 
   private async request(path: string, options: { method?: string; body?: unknown; auth?: boolean } = {}): Promise<unknown> {
@@ -682,6 +776,14 @@ function normalizeOpenAIKeyAlias(value: string, providerId = ""): string {
   return "FAST_SUB_OPENAI_API_KEY";
 }
 
+function providerSecretAlias(providerId: string, config: ConfigViewModel): string {
+  return config.apiProviderConfigs?.[providerId]?.apiKeyAlias || normalizeOpenAIKeyAlias("", providerId);
+}
+
+function isAPIProvider(providerId: string): boolean {
+  return providerId === "api-openai-transcription" || providerId === "api-openai-chat";
+}
+
 function configPatch(patch: Partial<ConfigViewModel>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (patch.defaultLanguage !== undefined) out.language = patch.defaultLanguage;
@@ -759,6 +861,7 @@ function mapProvider(value: unknown): ProviderStatus {
     kind,
     capability,
     state,
+    checkMode: (str(item.check_mode, "") as ProviderStatus["checkMode"]) || undefined,
     enabled: state === "available",
     privacyNote: str(item.privacy_note, kind === "api" ? "会上传内容，可能产生费用。" : kind === "web" ? "会把字幕文本发送到第三方网页翻译服务。" : "本地处理，不上传。"),
     requiresUploadConfirmation: kind === "api" || kind === "web",
@@ -823,6 +926,17 @@ function isDaemonUnavailable(error: unknown): boolean {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && (error.name === "AbortError" || error.message.toLowerCase().includes("aborted"));
+}
+
+function isFFmpegDependencyError(error: unknown): boolean {
+  const item = record(error);
+  const code = str(item.code, "");
+  const message = str(item.message, "").toLowerCase();
+  return code === "missing_dependency" && (message.includes("ffmpeg") || message.includes("ffprobe"));
+}
+
+function jobNeedsFFmpeg(request: CreateJobRequest): boolean {
+  return request.type === "transcribe" || request.type === "burn_in";
 }
 
 function eventSummary(value: unknown): Record<string, unknown> {

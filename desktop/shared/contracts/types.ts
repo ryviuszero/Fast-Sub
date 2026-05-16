@@ -22,6 +22,7 @@ export type JobStage =
   | "done";
 export type JobEventType = "snapshot" | "progress" | "log_tail" | "succeeded" | "failed" | "canceled" | "events_lost";
 export type RecoveryAction = "retry" | "install_model" | "open_settings" | "open_diagnostics" | "repair_daemon" | "dismiss";
+export type FFmpegPackageManager = "scoop" | "winget" | "choco";
 export type MockScenario =
   | "setupReady"
   | "missingAsr"
@@ -54,6 +55,9 @@ export interface EnvironmentStatus {
   localTranscriptionReady: boolean;
   localTranslationReady: boolean;
   ffmpegReady: boolean;
+  ffmpegInstalling?: boolean;
+  ffmpegInstallProgressPercent?: number;
+  ffmpegInstallLogs?: string[];
   modelDirectoryReady: boolean;
   daemonReady: boolean;
   warnings: string[];
@@ -82,6 +86,7 @@ export interface ProviderStatus {
   kind: ProviderKind;
   capability: ProviderCapability;
   state: ProviderState;
+  checkMode?: "static" | "live";
   enabled: boolean;
   privacyNote: string;
   requiresUploadConfirmation: boolean;
@@ -216,6 +221,8 @@ export interface FastSubClient {
   version(): Promise<string>;
   getEnvironmentStatus(): Promise<EnvironmentStatus>;
   repairDaemon(): Promise<EnvironmentStatus>;
+  installFFmpegWithPackageManager(manager: FFmpegPackageManager): Promise<EnvironmentStatus>;
+  installProviderDependency(providerId: string): Promise<ProviderStatus>;
   getConfig(): Promise<ConfigViewModel>;
   updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel>;
   saveProviderSecret(providerId: string, alias: string, rawSecret: string): Promise<ConfigViewModel>;

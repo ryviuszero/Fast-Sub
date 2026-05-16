@@ -322,7 +322,7 @@ func checkFasterWhisper(ctx context.Context, cfg RuntimeConfig, metadata Metadat
 
 func checkWhisperCPP(_ context.Context, cfg RuntimeConfig, metadata Metadata) CheckResult {
 	checks := []Check{
-		checkCommand(cfg, "binary", envFirst(cfg, "FAST_SUB_WHISPER_CPP_COMMAND"), "whisper-cli", "Set FAST_SUB_WHISPER_CPP_COMMAND or install whisper-cli on PATH."),
+		checkWhisperCPPCommand(cfg),
 		checkModel(cfg, metadata.ID, envFirst(cfg, "FAST_SUB_WHISPER_CPP_MODEL_PATH", "FAST_SUB_MODEL_PATH"), true, "Install a compatible model with `fast-sub-go models install <id>`, or set FAST_SUB_WHISPER_CPP_MODEL_PATH."),
 	}
 	return summarize(metadata, checks, nil)
@@ -504,6 +504,19 @@ func checkCommand(cfg RuntimeConfig, name, explicitCommand, pathName, actionHint
 		return Check{Name: name, OK: true, Status: StatusAvailable, Message: name + " was found on PATH."}
 	}
 	return Check{Name: name, OK: false, Status: StatusMissingDependency, Message: name + " was not found.", ActionHint: actionHint}
+}
+
+func checkWhisperCPPCommand(cfg RuntimeConfig) Check {
+	actionHint := "Install whisper.cpp, set FAST_SUB_WHISPER_CPP_COMMAND, or install whisper-cli on PATH."
+	if explicitCommand := envFirst(cfg, "FAST_SUB_WHISPER_CPP_COMMAND"); explicitCommand != "" {
+		return checkCommand(cfg, "binary", explicitCommand, "whisper-cli", actionHint)
+	}
+	for _, pathName := range []string{"whisper-cli", "main", "whisper-cpp"} {
+		if _, err := cfg.LookPath(pathName); err == nil {
+			return Check{Name: "binary", OK: true, Status: StatusAvailable, Message: "whisper.cpp binary was found on PATH."}
+		}
+	}
+	return Check{Name: "binary", OK: false, Status: StatusMissingDependency, Message: "whisper.cpp binary was not found.", ActionHint: actionHint}
 }
 
 func checkSTTWorkerCommand(cfg RuntimeConfig) Check {

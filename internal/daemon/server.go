@@ -38,6 +38,7 @@ type Server struct {
 	mux           *http.ServeMux
 	configMu      sync.Mutex
 	runtimeConfig configView
+	secrets       *transientSecretStore
 }
 
 func New(cfg Config) (*Server, error) {
@@ -58,7 +59,7 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, manager: manager, mux: http.NewServeMux()}
+	s := &Server{cfg: cfg, manager: manager, mux: http.NewServeMux(), secrets: newTransientSecretStore()}
 	s.runtimeConfig = s.defaultConfigView()
 	s.routes()
 	return s, nil
@@ -105,6 +106,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/models", s.auth(s.handleModels))
 	s.mux.HandleFunc("/v1/models/", s.auth(s.handleModel))
 	s.mux.HandleFunc("/v1/providers", s.auth(s.handleProviders))
+	s.mux.HandleFunc("/v1/secrets", s.auth(s.handleSecrets))
 	s.mux.HandleFunc("/v1/config", s.auth(s.handleConfig))
 	s.mux.HandleFunc("/v1/jobs", s.auth(s.handleJobs))
 	s.mux.HandleFunc("/v1/jobs/", s.auth(s.handleJob))

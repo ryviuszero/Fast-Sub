@@ -101,7 +101,16 @@ func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 	}
 	if providerID := r.URL.Query().Get("provider_id"); providerID != "" {
 		mode := r.URL.Query().Get("mode")
-		result, ok := providers.TestMode(r.Context(), s.cfg.Providers, providerID, mode)
+		runtimeConfig := s.cfg.Providers
+		if ref := r.URL.Query().Get("secret_ref"); ref != "" {
+			secret, appErr := s.secrets.consume(ref, providerID)
+			if appErr != nil {
+				writeAppError(w, appErr)
+				return
+			}
+			runtimeConfig = withProviderSecret(runtimeConfig, providerID, secret)
+		}
+		result, ok := providers.TestMode(r.Context(), runtimeConfig, providerID, mode)
 		if !ok {
 			writeError(w, http.StatusNotFound, unknownRoute())
 			return
@@ -110,6 +119,38 @@ func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeOK(w, map[string]any{"providers": providers.List(r.Context(), s.cfg.Providers)})
+}
+
+type createSecretRequest struct {
+	SchemaVersion int    `json:"schema_version"`
+	ProviderID    string `json:"provider_id"`
+	Secret        string `json:"secret"`
+}
+
+func (s *Server) handleSecrets(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusNotFound, unknownRoute())
+		return
+	}
+	var req createSecretRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err := decoder.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, fserrors.New(fserrors.CodeInvalidInput, "secret", "request body is invalid JSON.", "", nil))
+		return
+	}
+	if req.SchemaVersion != 0 && req.SchemaVersion != 1 {
+		writeError(w, http.StatusBadRequest, fserrors.New(fserrors.CodeInvalidInput, "secret", "unsupported schema_version", "", nil))
+		return
+	}
+	if strings.TrimSpace(req.ProviderID) == "" || strings.TrimSpace(req.Secret) == "" {
+		writeError(w, http.StatusBadRequest, fserrors.New(fserrors.CodeInvalidInput, "secret", "provider_id and secret are required.", "", nil))
+		return
+	}
+	ref, expiresAt := s.secrets.create(req.ProviderID, req.Secret)
+	writeOK(w, map[string]any{
+		"secret_ref": ref,
+		"expires_at": expiresAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+	})
 }
 
 func providerResponse(result providers.CheckResult) map[string]any {
@@ -156,6 +197,10 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
+	if appErr := s.resolveJobSecretRefs(&req); appErr != nil {
+		writeAppError(w, appErr)
+		return
+	}
 	job, appErr := s.manager.Create(req)
 	if appErr != nil {
 		writeAppError(w, appErr)
@@ -166,6 +211,80 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		"status":     job.Status,
 		"events_url": "/v1/jobs/" + job.ID + "/events",
 	})
+}
+
+func (s *Server) resolveJobSecretRefs(req *jobs.CreateRequest) *fserrors.AppError {
+	if req.Options == nil {
+		return nil
+	}
+	if ref, ok := req.Options["api_key_secret_ref"].(string); ok && strings.TrimSpace(ref) != "" {
+		providerID := req.Provider
+		if providerID == "" {
+			providerID = "api-openai-transcription"
+		}
+		secret, appErr := s.secrets.consume(ref, providerID)
+		if appErr != nil {
+			return appErr
+		}
+		if req.Extra == nil {
+			req.Extra = map[string]string{}
+		}
+		req.Extra["openai_transcription_api_key"] = secret
+	}
+	if ref, ok := req.Options["translation_api_key_secret_ref"].(string); ok && strings.TrimSpace(ref) != "" {
+		providerID := req.TranslationProvider
+		if providerID == "" {
+			providerID = stringOption(req.Options, "translation_provider")
+		}
+		if providerID == "" {
+			providerID = req.Provider
+		}
+		secret, appErr := s.secrets.consume(ref, providerID)
+		if appErr != nil {
+			return appErr
+		}
+		if req.Extra == nil {
+			req.Extra = map[string]string{}
+		}
+		req.Extra["openai_chat_api_key"] = secret
+	}
+	return nil
+}
+
+func stringOption(options map[string]any, key string) string {
+	if value, ok := options[key].(string); ok {
+		return value
+	}
+	return ""
+}
+
+func withProviderSecret(cfg providers.RuntimeConfig, providerID, secret string) providers.RuntimeConfig {
+	previousEnv := cfg.Env
+	if previousEnv == nil {
+		previousEnv = providers.DefaultRuntimeConfig().Env
+	}
+	allowed := providerSecretEnvNames(providerID)
+	cfg.Env = func(key string) string {
+		if allowed[key] {
+			return secret
+		}
+		return previousEnv(key)
+	}
+	return cfg
+}
+
+func providerSecretEnvNames(providerID string) map[string]bool {
+	allowed := map[string]bool{
+		"FAST_SUB_OPENAI_API_KEY": true,
+		"OPENAI_API_KEY":          true,
+	}
+	switch providerID {
+	case "api-openai-chat":
+		allowed["FAST_SUB_OPENAI_CHAT_API_KEY"] = true
+	case "api-openai-transcription":
+		allowed["FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY"] = true
+	}
+	return allowed
 }
 
 func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {

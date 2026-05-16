@@ -17,7 +17,7 @@ Round 13 只做打包、安装器、发布检查、E2E/smoke、诊断 polish 和
 - 模型安装走独立 `model_install` job，通过同一套 job/SSE/取消/失败/结果模型展示进度。
 - `translate_srt` 本轮通过 Go daemon 受控 Python CLI bridge 接入现有 `fast-sub translate`；`burn_in` 通过 Go daemon 内部受控 ffmpeg bridge 接入真实字幕烧录。两者都不向 renderer 暴露 Python、ffmpeg 或 raw command。
 - 配置读写真实落地，普通设置写入 Fast Sub 配置文件。
-- API key 和 provider secret 使用 Electron main process 管理的 secret storage；当前实现使用 Electron `safeStorage` + 本地加密 secret store，配置文件只保存 alias、masked 状态或环境变量名。完整一次性 transient `secret_ref` channel 保留为后续安全收口目标。
+- API key 和 provider secret 使用 Electron main process 管理的 secret storage；当前实现使用 Electron `safeStorage` + 本地加密 secret store，配置文件只保存 alias、masked 状态或环境变量名。API job 和 live Provider check 通过一次性 transient `secret_ref` 传递到 daemon，daemon 不在启动环境中注入全部 Provider secret。
 - mock 模式继续保留，用于无 daemon、无模型、无网络的 UI 开发和默认测试。
 
 ## Non-goals
@@ -51,7 +51,7 @@ Round 12 覆盖 UI、daemon API、配置和安全存储，建议一个主分支�
 - `GET /v1/config` 和 `PATCH /v1/config` 是桌面运行配置的 daemon 写入入口；Electron 自管 daemon 通过 `FAST_SUB_GO_CONFIG` 使用桌面配置文件。
 - Provider 设置按任务组织为转写 Provider 和翻译 Provider；API key、Base URL、模型名、上传确认、live/static check 均归属对应 Provider 卡片，`API 服务` 不再作为独立用户入口。
 - API key 和 provider secret 由 Electron main process 管理，当前实现使用 Electron `safeStorage` + 本地加密 secret store；renderer、配置文件、job metadata、events、logs 和测试 snapshot 只看到 alias、masked 状态或环境变量名。
-- 当前自管 daemon 的 secret 降级路径是 main process 受控环境变量注入；完整一次性 transient `secret_ref` channel 仍是后续安全收口项。
+- 自管 daemon 不再在启动环境中注入全部 Provider secret；Electron main 在创建 API job 或 live Provider check 前读取 safeStorage，向 daemon `/v1/secrets` 注册短 TTL 一次性 `secret_ref`，daemon 消费后只放入当前内存请求。
 - `translate_srt` 通过受控 Python CLI bridge 执行，支持 `.srt`、`.txt`、`.text`、`.md`、`.markdown`；纯文本翻译遵守“一行输入对应一行输出”，不在用户目录保留 raw progress/internal JSON。
 - 主路径 `transcribe` 在 `output_type` 为翻译字幕或双语字幕时，在同一个 daemon job 内串联“转写 -> 翻译”，UI 不暴露额外内部 job。
 - `burn_in` 通过 daemon 内部受控 ffmpeg bridge 执行，使用标准扩展临时文件和原子 rename，不向 renderer 暴露 ffmpeg 命令或 stderr 细节。
@@ -59,7 +59,7 @@ Round 12 覆盖 UI、daemon API、配置和安全存储，建议一个主分支�
 - Windows 取消和 repair 路径使用 Job Object / 进程树终止兜底，尽量清理 Python worker、ffmpeg、whisper.cpp 和 GPU 子进程。
 - 任务队列已针对批量文件、文件夹扫描、后台运行、历史列表和失败续跑收口；历史页默认只显示近期任务，文件夹递归扫描默认关闭并受最大数量限制。
 - 首次启动环境检查只作为 onboarding gate；后续打开应用直接进入主界面，后台运行环境检查并更新右上角状态。
-- 当前剩余收口：完整 `secret_ref` channel、OS keychain/keytar 打包验证、web 翻译大文件限制 smoke、daemon repair/401/disconnect 打包 smoke，以及完整 Round 12 回归命令。
+- 当前剩余收口已从 Round 12 核心功能中移出：Round 13 只继续 OS keychain/keytar 打包验证、web 翻译大文件限制 smoke、daemon repair/401/disconnect 打包 smoke、安装包 smoke 和发布级诊断 polish。
 
 ## Implementation Units
 
@@ -215,14 +215,14 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
 - secret 从 Electron 到 daemon 的传递策略：
   - daemon 启动时不注入全部 provider secret。
   - renderer 永远不读取 raw secret。
-  - 创建 API job 或 live provider test 时，Electron main 从 safeStorage/local secret store 读取 secret。当前自管 daemon 降级路径只按受控环境变量名注入子进程；完整 main-controlled transient secret channel 是后续安全收口目标。
+  - 创建 API job 或 live provider test 时，Electron main 从 safeStorage/local secret store 读取 secret，先调用 daemon `/v1/secrets` 换取一次性 `secret_ref`，再把该引用放入 job request 或 live check request。
   - transient secret 推荐使用一次性 secret reference / handle；默认单次使用、短 TTL，建议 5 分钟，使用后立即失效。
-  - raw secret 不得放入普通 persisted request、daemon persisted config、job metadata、events、logs、stdout、stderr 或 renderer state。
+  - raw secret 不得放入普通 persisted request、daemon persisted config、job metadata、events、logs、stdout、stderr 或 renderer state；daemon `request.json` 中的 `*_secret_ref` 也必须脱敏为占位。
   - `secret_ref` 本身也不得原样持久化到 job metadata、events、logs、stdout、stderr 或 renderer state；需要落盘时只能写入 `[REDACTED_SECRET_REF]` 或等效脱敏占位。
-  - 如果本轮未完成 `secret_ref` channel，API job 使用 `api_key_env` + Electron main process 受控 env injection；这只能作为临时降级路径，不能把 raw secret 写入配置、renderer、日志、事件或错误 payload。
+  - 如果未提供 saved secret，API job 可以继续不带 Authorization 调用兼容端点；是否需要认证由 live check 或真实请求的 401/403 决定。
 - renderer 只看到 key alias、masked credential、是否已配置。
 - 配置文件只保存 alias、masked 状态、环境变量名或 secret store reference。
-- `testProvider(providerId, "live")` 使用 safeStorage/local secret store 中的 secret 或配置中的 `api_key_env`，但不得将 raw secret 返回给 renderer。OpenAI-compatible live check 以实际 `/v1/models` 请求是否可连通为准；本地兼容 API 可以没有 key，401/403 才映射为缺 key 或认证失败。
+- `testProvider(providerId, "live")` 使用 Electron main 注册的 transient `secret_ref` 或无 key 请求，raw secret 不返回给 renderer。OpenAI-compatible live check 以实际 `/v1/models` 请求是否可连通为准；本地兼容 API 可以没有 key，401/403 才映射为缺 key 或认证失败。
 - 删除 provider secret 后，provider 状态应刷新为 `missing_api_key` 或对应用户文案。
 
 ## Workstream 5: Real Transcribe Job
@@ -359,7 +359,7 @@ go test ./...
 - 模型安装通过独立 `model_install` job 执行，UI 可查看进度、取消、失败、重试。
 - 翻译 SRT 和字幕烧录通过 daemon job type 接入真实功能。
 - 设置页写入真实配置，后续任务使用保存后的设置。
-- API key 使用 Electron main process 管理的 secret storage 保存；当前实现为 Electron `safeStorage` + 本地加密 secret store，且 Linux `basic_text` 不可静默视为安全存储。配置文件不保存 raw API key；完整一次性 `secret_ref` channel 和 OS keychain/keytar 打包验证作为后续安全收口项。
+- API key 使用 Electron main process 管理的 secret storage 保存；当前实现为 Electron `safeStorage` + 本地加密 secret store，且 Linux `basic_text` 不可静默视为安全存储。配置文件不保存 raw API key；一次性 `secret_ref` channel 已作为默认传递路径，OS keychain/keytar 打包验证保留到 Round 13。
 - daemon 断开、401、events_lost、job failed、job canceled 都有用户可理解恢复路径。
 - mock 模式保留，默认测试不依赖真实 daemon、模型、网络、ffmpeg、whisper.cpp、OpenAI 或 GPU。
 - Round 13 不再需要新增核心业务功能，只做发布和产品化收口。

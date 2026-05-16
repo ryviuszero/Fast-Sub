@@ -1,4 +1,4 @@
-import type { ConfigViewModel, EnvironmentStatus, JobDetail, JobLogEntry, JobSummary, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
+import type { ConfigViewModel, EnvironmentStatus, FFmpegPackageManager, JobDetail, JobLogEntry, JobSummary, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
 
 export type Screen =
   | "setup-check"
@@ -30,6 +30,8 @@ export type QueueFilter = "all" | "running" | "done" | "failed";
 export type RenderProps = {
   screen: Screen;
   setScreen: (screen: Screen) => void;
+  providerSettingsFocus: ProviderStatus["capability"] | null;
+  openProviderSettings: (focus?: ProviderStatus["capability"]) => void;
   environment: EnvironmentStatus | null;
   models: ModelStatus[];
   providers: ProviderStatus[];
@@ -72,6 +74,8 @@ export type RenderProps = {
   installModel: (id: string) => Promise<void>;
   removeModel: (id: string) => Promise<void>;
   repairDaemon: () => Promise<void>;
+  installFFmpegWithPackageManager: (manager: FFmpegPackageManager) => Promise<void>;
+  installProviderDependency: (id: string) => Promise<void>;
   testProvider: (id: string, mode: "static" | "live") => Promise<ProviderStatus>;
   updateConfig: (patch: Partial<ConfigViewModel>) => Promise<void>;
   saveProviderSecret: (providerId: string, alias: string, rawSecret: string) => Promise<void>;

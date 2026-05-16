@@ -106,6 +106,7 @@ func (r DefaultRunner) runTranscribeThenTranslate(ctx context.Context, job Job, 
 		TargetLanguage: req.TargetLanguage,
 		OutputFormat:   req.OutputFormat,
 		Options:        cloneOptions(req.Options),
+		Extra:          req.Extra,
 	}
 	translateReq.Options["overwrite"] = boolOption(req, "overwrite")
 	translateReq.Options["yes"] = req.TranslationUploadConfirmed || boolOption(req, "translation_upload_confirmed")

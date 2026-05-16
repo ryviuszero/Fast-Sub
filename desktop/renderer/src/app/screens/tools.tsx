@@ -3,7 +3,7 @@ import type { RenderProps } from "../types";
 import { Chrome, SettingRow, SettingsEntry } from "../components";
 import { useT } from "../i18n";
 
-export function ToolTranslate({ setScreen, startToolJob, translationReady, providers, config, updateConfig }: RenderProps) {
+export function ToolTranslate({ setScreen, openProviderSettings, startToolJob, translationReady, providers, config, updateConfig }: RenderProps) {
   const t = useT();
   const srtInputRef = useRef<HTMLInputElement | null>(null);
   const [srtName, setSrtName] = useState(t("No SRT selected"));
@@ -12,7 +12,7 @@ export function ToolTranslate({ setScreen, startToolJob, translationReady, provi
   const translationProviders = providers.filter((provider) => provider.capability === "translation");
   const translationProvider = translationProviders.find((provider) => provider.id === config.translationProvider);
   const usesWebTranslation = translationProvider?.id === "web-bing" || translationProvider?.id === "web-google";
-  const providerReady = Boolean(translationProvider?.enabled && translationProvider.state === "available");
+  const providerReady = Boolean(translationProvider && providerCanRun(translationProvider));
   const canTranslate = translationReady && providerReady;
   const readinessMessage = !providerReady
     ? t("Translation provider unavailable hint")
@@ -55,7 +55,7 @@ export function ToolTranslate({ setScreen, startToolJob, translationReady, provi
             <h2>{t("Translation environment not ready")}</h2>
             <p>{readinessMessage}</p>
             <div className="row gap-8">
-              <button className="btn primary" onClick={() => setScreen("settings-providers")}>{t("Configure translation Provider")}</button>
+              <button className="btn primary" onClick={() => openProviderSettings("translation")}>{t("Configure translation Provider")}</button>
               <button className="btn ghost" onClick={() => setScreen("settings-models")}>{t("View models")}</button>
             </div>
           </section>
@@ -85,6 +85,13 @@ function providerOptionLabel(provider: RenderProps["providers"][number], t: (key
   const prefix = provider.kind === "local" ? t("Local") : provider.kind === "web" ? t("Web") : provider.kind === "api" ? "API" : "Native";
   const state = provider.state === "available" ? "" : ` (${provider.kind === "api" && provider.state === "missing_api_key" ? t("Needs connection check") : providerStateLabel(provider.state, t)})`;
   return `${prefix} · ${providerDisplayName(provider.id, t)}${state}`;
+}
+
+function providerCanRun(provider: RenderProps["providers"][number]): boolean {
+  if (!provider.enabled || provider.state !== "available") {
+    return false;
+  }
+  return provider.kind !== "api" || provider.checkMode === "live";
 }
 
 function providerDisplayName(providerId: string, t: (key: string) => string): string {

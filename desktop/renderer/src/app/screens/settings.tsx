@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { ConfigViewModel, ModelStatus, ProviderState, ProviderStatus } from "../../../../shared/contracts/types";
 import type { RenderProps, Screen, UiFontStyle, UiLanguage } from "../types";
 import { Chip, Chrome, KV, Segment, SettingRow, Toggle } from "../components";
@@ -17,7 +17,7 @@ export function SettingsPage(props: RenderProps & { tab: "general" | "models" | 
             ["settings-providers", "◌", t("Provider")],
             ["settings-diagnostics", "⚙", t("Diagnostics")],
             ["settings-benchmark", "▣", t("Benchmark")]
-          ].map(([id, icon, label]) => <button key={id} className={props.screen === id ? "active" : ""} onClick={() => props.setScreen(id as Screen)}>{icon} {label}</button>)}
+          ].map(([id, icon, label]) => <button key={id} className={props.screen === id ? "active" : ""} onClick={() => id === "settings-providers" ? props.openProviderSettings() : props.setScreen(id as Screen)}>{icon} {label}</button>)}
           <span className="caption version">v0.11 mock</span>
         </aside>
         <section className="settings-content">
@@ -112,7 +112,7 @@ export function SettingsGeneral(props: RenderProps) {
       {translationOutputWarning && (
         <div className="blocking-note" role="status">
           <span>{t("Translation output not ready")}</span>
-          <button className="btn sm primary" onClick={() => props.setScreen("settings-providers")} type="button">{t("Configure translation Provider")}</button>
+          <button className="btn sm primary" onClick={() => props.openProviderSettings("translation")} type="button">{t("Configure translation Provider")}</button>
         </div>
       )}
       <SettingRow label={t("Subtitle language")}><select value={props.config.defaultLanguage} onChange={(event) => void props.updateConfig({ defaultLanguage: event.target.value })}><option value="auto">{t("Auto detect")}</option><option value="zh">{t("Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></SettingRow>
@@ -178,7 +178,14 @@ function outputTypeNeedsTranslation(outputType: ConfigViewModel["outputType"]): 
 
 function translationOutputReady(config: ConfigViewModel, providers: ProviderStatus[], translationReady: boolean): boolean {
   const provider = providers.find((item) => item.id === config.translationProvider);
-  return translationReady && Boolean(provider?.enabled && provider.state === "available");
+  return translationReady && Boolean(provider && providerCanRun(provider));
+}
+
+function providerCanRun(provider: ProviderStatus): boolean {
+  if (!provider.enabled || provider.state !== "available") {
+    return false;
+  }
+  return provider.kind !== "api" || provider.checkMode === "live";
 }
 
 export function SettingsModels({ models, modelInstallJobs, installModel, removeModel, config, updateConfig }: RenderProps) {
@@ -358,7 +365,9 @@ function modelRecommendation(model: ModelStatus, t: (key: string) => string): st
 
 export function SettingsProviders(props: RenderProps) {
   const t = useT();
-  const { providers, models, config, updateConfig, testProvider } = props;
+  const { providers, models, config, updateConfig, testProvider, installModel, modelInstallJobs } = props;
+  const transcriptionSectionRef = useRef<HTMLElement>(null);
+  const translationSectionRef = useRef<HTMLElement>(null);
   const [providerViews, setProviderViews] = useState(providers);
   const [refreshLabel, setRefreshLabel] = useState("Not refreshed");
   const [providerDrafts, setProviderDrafts] = useState<Record<string, ProviderDraft>>(() => providerDraftsFromConfig(providers, config));
@@ -366,6 +375,15 @@ export function SettingsProviders(props: RenderProps) {
 
   useEffect(() => {
     setProviderViews(providers);
+    setProviderChecks((current) => {
+      const next = { ...current };
+      for (const provider of providers) {
+        if (provider.kind === "api" && provider.checkMode === "live" && provider.state === "available") {
+          next[provider.id] = { status: "ok", message: "Connection check passed" };
+        }
+      }
+      return next;
+    });
   }, [providers]);
 
   useEffect(() => {
@@ -425,11 +443,19 @@ export function SettingsProviders(props: RenderProps) {
     }
   };
 
+  useEffect(() => {
+    const target = props.providerSettingsFocus === "translation" ? translationSectionRef.current
+      : props.providerSettingsFocus === "stt" ? transcriptionSectionRef.current
+        : null;
+    target?.scrollIntoView({ block: "start" });
+  }, [props.providerSettingsFocus]);
+
   return (
     <div className="settings-list">
       <div className="between"><h2>{t("Provider")}</h2><div className="row gap-8"><Chip tone={refreshLabel === "Refreshed" ? "ok" : "muted"}>{t(refreshLabel)}</Chip><button className="btn sm ghost" onClick={() => void refreshProviders()}>{t("Refresh status")}</button></div></div>
       <p className="caption">{t("Provider page description")}</p>
       <ProviderSection
+        sectionRef={transcriptionSectionRef}
         title={t("Transcription Provider")}
         description={t("Transcription Provider description")}
         providers={providerViews.filter((provider) => provider.capability === "stt")}
@@ -446,8 +472,12 @@ export function SettingsProviders(props: RenderProps) {
         runProviderCheck={runProviderCheck}
         providerDrafts={providerDrafts}
         updateProviderDraft={updateProviderDraft}
+        installProviderDependency={props.installProviderDependency}
+        installModel={installModel}
+        modelInstallJobs={modelInstallJobs}
       />
       <ProviderSection
+        sectionRef={translationSectionRef}
         title={t("Translation Provider")}
         description={t("Translation Provider description")}
         providers={providerViews.filter((provider) => provider.capability === "translation")}
@@ -464,6 +494,9 @@ export function SettingsProviders(props: RenderProps) {
         runProviderCheck={runProviderCheck}
         providerDrafts={providerDrafts}
         updateProviderDraft={updateProviderDraft}
+        installProviderDependency={props.installProviderDependency}
+        installModel={installModel}
+        modelInstallJobs={modelInstallJobs}
       />
     </div>
   );
@@ -502,6 +535,7 @@ function providerDraftsFromConfig(providers: ProviderStatus[], config: ConfigVie
 }
 
 function ProviderSection(props: {
+  sectionRef?: RefObject<HTMLElement | null>;
   title: string;
   description: string;
   providers: ProviderStatus[];
@@ -518,9 +552,12 @@ function ProviderSection(props: {
   runProviderCheck: (providerId: string) => Promise<void>;
   providerDrafts: Record<string, ProviderDraft>;
   updateProviderDraft: (providerId: string, patch: Partial<ProviderDraft>) => void;
+  installProviderDependency: RenderProps["installProviderDependency"];
+  installModel: RenderProps["installModel"];
+  modelInstallJobs: RenderProps["modelInstallJobs"];
 }) {
   return (
-    <section className="provider-section">
+    <section className="provider-section" ref={props.sectionRef}>
       <div>
         <h3>{props.title}</h3>
         <p className="caption no-margin">{props.description}</p>
@@ -544,6 +581,9 @@ function ProviderSection(props: {
             saveProviderSecret={props.saveProviderSecret}
             draft={props.providerDrafts[provider.id] ?? providerDraftFromConfig(props.config, provider.id)}
             onDraft={(patch) => props.updateProviderDraft(provider.id, patch)}
+            installProviderDependency={props.installProviderDependency}
+            installModel={props.installModel}
+            modelInstallJobs={props.modelInstallJobs}
           />
         );
       })}
@@ -565,13 +605,25 @@ function ProviderCard(props: {
   saveProviderSecret: RenderProps["saveProviderSecret"];
   draft: ProviderDraft;
   onDraft: (patch: Partial<ProviderDraft>) => void;
+  installProviderDependency: RenderProps["installProviderDependency"];
+  installModel: RenderProps["installModel"];
+  modelInstallJobs: RenderProps["modelInstallJobs"];
 }) {
   const t = useT();
   const { provider } = props;
   const [secretValue, setSecretValue] = useState("");
   const [showSecret, setShowSecret] = useState(false);
   const [secretStatus, setSecretStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [dependencyInstalling, setDependencyInstalling] = useState(false);
   const modelValue = providerControlValue(props.activeModel, props.draft.model, props.models);
+  const selectedModel = props.models.find((model) => model.id === modelValue);
+  const installableModel = provider.requiresModel && provider.kind !== "api"
+    ? selectedModel ?? props.models.find((model) => model.state === "missing" || model.state === "failed" || model.state === "installing") ?? props.models[0]
+    : undefined;
+  const installJob = installableModel ? props.modelInstallJobs[installableModel.id] : undefined;
+  const modelInstalling = installJob ? installJob.status === "queued" || installJob.status === "running" || installJob.status === "canceling" : installableModel?.state === "installing";
+  const modelInstallProgress = Math.max(0, Math.min(100, installJob?.progressPercent ?? installableModel?.progressPercent ?? 0));
+  const modelInstallNeeded = Boolean(installableModel && (provider.state === "missing_model" || installableModel.state === "missing" || installableModel.state === "failed"));
   const deviceValue = props.active ? props.config.device : props.draft.device;
   const wordTimestamps = props.active ? props.config.wordTimestamps : props.draft.wordTimestamps;
   const sourceLanguage = props.active ? props.config.defaultLanguage : props.draft.sourceLanguage;
@@ -625,11 +677,11 @@ function ProviderCard(props: {
     });
   };
   const checking = props.check?.status === "checking";
-  const liveCheckAvailable = provider.kind === "api" && props.check?.status === "ok";
-  const providerAvailable = provider.state === "available" || liveCheckAvailable;
+  const liveCheckAvailable = provider.kind === "api" && (props.check?.status === "ok" || provider.checkMode === "live" && provider.state === "available");
+  const providerAvailable = provider.kind === "api" ? liveCheckAvailable : provider.state === "available";
   const providerStateText = liveCheckAvailable
     ? t("Available")
-    : provider.kind === "api" && provider.state === "missing_api_key"
+    : provider.kind === "api" && (provider.state === "missing_api_key" || provider.state === "available")
       ? t("Needs connection check")
       : providerStateLabel(provider.state, t);
   const providerTone = providerAvailable ? "ok" : providerStateTone(provider);
@@ -648,6 +700,14 @@ function ProviderCard(props: {
       setSecretStatus("saved");
     } catch {
       setSecretStatus("failed");
+    }
+  };
+  const installDependency = async () => {
+    setDependencyInstalling(true);
+    try {
+      await props.installProviderDependency(provider.id);
+    } finally {
+      setDependencyInstalling(false);
     }
   };
   const canSetDefault = provider.enabled && providerAvailable;
@@ -755,6 +815,17 @@ function ProviderCard(props: {
       </div>
       <div className="row gap-8 wrap end">
         {!props.active && <button className="btn sm" disabled={!canSetDefault} title={defaultBlockReason} onClick={selectAsDefault}>{t("Set as default")}</button>}
+        {provider.state === "missing_dependency" && (
+          <button className="btn sm" disabled={dependencyInstalling} onClick={() => void installDependency()} type="button">
+            {dependencyInstalling ? t("Installing dependency") : t("Install dependency first")}
+          </button>
+        )}
+        {modelInstallNeeded && installableModel && (
+          <button className="btn sm" disabled={modelInstalling} onClick={() => void props.installModel(installableModel.id)}>
+            {modelInstalling ? t("Downloading") : installableModel.state === "failed" ? t("Retry download") : t("Install model first")}
+          </button>
+        )}
+        {modelInstalling && <Chip tone="accent">{t("Downloading")} {modelInstallProgress}%</Chip>}
         {!props.active && !canSetDefault && <Chip tone="warn">{defaultBlockReason}</Chip>}
         <button className="btn sm ghost" disabled={checking} onClick={props.onTest}>{checking ? t("Checking") : provider.kind === "api" ? t("Connection check") : t("Static check")}</button>
         {props.check && props.check.status !== "idle" && (
@@ -818,6 +889,9 @@ function defaultAPIModel(provider: ProviderStatus): string {
 }
 
 function providerDefaultBlockReason(provider: ProviderStatus, t: (key: string) => string): string {
+  if (provider.kind === "api" && provider.checkMode !== "live") {
+    return t("Run connection check first");
+  }
   switch (provider.state) {
     case "missing_api_key": return provider.kind === "api" ? t("Run connection check first") : t("Configure key first");
     case "missing_model": return t("Install model first");

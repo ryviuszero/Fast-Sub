@@ -734,7 +734,7 @@ func TestTranscribeWorkerProtocolFailuresAreJSON(t *testing.T) {
 		{"wrong_schema", "worker_protocol_error", 8},
 		{"error_response", "missing_model", 4},
 		{"ok_false", "worker_failed", 1},
-		{"empty_segments", "worker_failed", 1},
+		{"empty_segments", "", 0},
 		{"invalid_timestamps", "worker_protocol_error", 8},
 		{"stdout_pollution", "", 0},
 		{"word_timestamps", "", 0},

@@ -19,6 +19,7 @@ import (
 	fserrors "fast-sub/internal/errors"
 	"fast-sub/internal/events"
 	"fast-sub/internal/jobs"
+	"fast-sub/internal/providers"
 )
 
 type fakeRunner struct {
@@ -29,6 +30,19 @@ type fakeRunner struct {
 
 func (r fakeRunner) RunJob(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
 	return r.RunTranscribe(ctx, job, req, emit)
+}
+
+type captureRunner struct {
+	requests chan jobs.CreateRequest
+}
+
+func (r captureRunner) RunJob(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
+	return r.RunTranscribe(ctx, job, req, emit)
+}
+
+func (r captureRunner) RunTranscribe(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
+	r.requests <- req
+	return jobs.Result{InputPath: req.InputPath, OutputPath: req.OutputPath, Provider: req.Provider, Model: req.Model, Warnings: []string{}}, nil
 }
 
 func (r fakeRunner) RunTranscribe(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
@@ -382,6 +396,97 @@ func TestServer_JobsLifecycle(t *testing.T) {
 	}
 }
 
+func TestServer_TransientSecretRefFeedsRunnerWithoutPersistence(t *testing.T) {
+	t.Parallel()
+	requests := make(chan jobs.CreateRequest, 1)
+	srv, root := newTestHTTPServerWithRoot(t, captureRunner{requests: requests})
+	defer srv.Close()
+
+	resp, body := request(t, srv.URL, http.MethodPost, "/v1/secrets", "test-token", map[string]any{
+		"schema_version": 1,
+		"provider_id":    "api-openai-transcription",
+		"secret":         "sk-test-transient-secret",
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("create secret status=%d body=%s", resp.StatusCode, body)
+	}
+	var envelope struct {
+		Result struct {
+			SecretRef string `json:"secret_ref"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Result.SecretRef == "" {
+		t.Fatalf("missing secret ref in %s", body)
+	}
+
+	resp, body = request(t, srv.URL, http.MethodPost, "/v1/jobs", "test-token", jobs.CreateRequest{
+		SchemaVersion: 1,
+		Type:          "transcribe",
+		InputPath:     "input.mp4",
+		OutputPath:    "out.srt",
+		Provider:      "api-openai-transcription",
+		Model:         "gpt-4o-transcribe",
+		Options:       map[string]any{"api_key_secret_ref": envelope.Result.SecretRef},
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("create job status=%d body=%s", resp.StatusCode, body)
+	}
+	var req jobs.CreateRequest
+	select {
+	case req = <-requests:
+	case <-time.After(2 * time.Second):
+		t.Fatal("runner did not receive request")
+	}
+	if req.Extra["openai_transcription_api_key"] != "sk-test-transient-secret" {
+		t.Fatalf("runner did not receive transient secret: %#v", req.Extra)
+	}
+	raw, err := os.ReadFile(filepath.Join(root, firstJobID(t, root), "request.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte("sk-test-transient-secret")) || bytes.Contains(raw, []byte(envelope.Result.SecretRef)) {
+		t.Fatalf("request.json leaked secret/ref: %s", raw)
+	}
+
+	resp, body = request(t, srv.URL, http.MethodPost, "/v1/jobs", "test-token", jobs.CreateRequest{
+		SchemaVersion: 1,
+		Type:          "transcribe",
+		InputPath:     "input-2.mp4",
+		OutputPath:    "out-2.srt",
+		Provider:      "api-openai-transcription",
+		Model:         "gpt-4o-transcribe",
+		Options:       map[string]any{"api_key_secret_ref": envelope.Result.SecretRef},
+	}, "")
+	if resp.StatusCode != http.StatusInternalServerError || !bytes.Contains(body, []byte("secret_ref_consumed")) {
+		t.Fatalf("reused secret ref status=%d body=%s", resp.StatusCode, body)
+	}
+}
+
+func TestServer_ProviderSecretRuntimeEnvIsScoped(t *testing.T) {
+	t.Parallel()
+	cfg := withProviderSecret(providers.RuntimeConfig{
+		Env: func(key string) string {
+			return "outer-" + key
+		},
+	}, "api-openai-chat", "sk-chat-secret")
+
+	if got := cfg.Env("FAST_SUB_OPENAI_CHAT_API_KEY"); got != "sk-chat-secret" {
+		t.Fatalf("chat key env = %q", got)
+	}
+	if got := cfg.Env("OPENAI_API_KEY"); got != "sk-chat-secret" {
+		t.Fatalf("legacy openai key env = %q", got)
+	}
+	if got := cfg.Env("FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY"); got != "outer-FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY" {
+		t.Fatalf("transcription key env should not receive chat secret, got %q", got)
+	}
+	if got := cfg.Env("FAST_SUB_DAEMON_TOKEN"); got != "outer-FAST_SUB_DAEMON_TOKEN" {
+		t.Fatalf("unrelated token env should not receive provider secret, got %q", got)
+	}
+}
+
 func TestServer_MaxRunningJobsAndCancelQueued(t *testing.T) {
 	t.Parallel()
 	block := make(chan struct{})
@@ -565,7 +670,7 @@ func newTestHTTPServer(t *testing.T, runner fakeRunner) *httptest.Server {
 	return srv
 }
 
-func newTestHTTPServerWithRoot(t *testing.T, runner fakeRunner) (*httptest.Server, string) {
+func newTestHTTPServerWithRoot(t *testing.T, runner jobs.Runner) (*httptest.Server, string) {
 	t.Helper()
 	root := t.TempDir()
 	s, err := New(Config{
@@ -578,6 +683,21 @@ func newTestHTTPServerWithRoot(t *testing.T, runner fakeRunner) (*httptest.Serve
 		t.Fatal(err)
 	}
 	return httptest.NewServer(s), root
+}
+
+func firstJobID(t *testing.T, root string) string {
+	t.Helper()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			return entry.Name()
+		}
+	}
+	t.Fatal("no job directory")
+	return ""
 }
 
 func request(t *testing.T, baseURL, method, path, token string, payload any, lastEventID string) (*http.Response, []byte) {

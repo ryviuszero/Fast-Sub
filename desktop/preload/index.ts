@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { ConfigViewModel, CreateJobRequest, FolderScanOptions, JobEvent, JobEventHandlers } from "../shared/contracts/types";
+import type { ConfigViewModel, CreateJobRequest, FFmpegPackageManager, FolderScanOptions, JobEvent, JobEventHandlers } from "../shared/contracts/types";
 
 type SecuritySnapshot = {
   contextIsolation: boolean;
@@ -28,6 +28,8 @@ const clientApi = {
   version: () => ipcRenderer.invoke("fast-sub-client:version"),
   getEnvironmentStatus: () => ipcRenderer.invoke("fast-sub-client:get-environment-status"),
   repairDaemon: () => ipcRenderer.invoke("fast-sub-client:repair-daemon"),
+  installFFmpegWithPackageManager: (manager: FFmpegPackageManager) => ipcRenderer.invoke("fast-sub-client:install-ffmpeg-package-manager", manager),
+  installProviderDependency: (providerId: string) => ipcRenderer.invoke("fast-sub-client:install-provider-dependency", providerId),
   getConfig: () => ipcRenderer.invoke("fast-sub-client:get-config"),
   updateConfig: (patch: Partial<ConfigViewModel>) => ipcRenderer.invoke("fast-sub-client:update-config", patch),
   saveProviderSecret: (providerId: string, alias: string, rawSecret: string) => ipcRenderer.invoke("fast-sub-client:save-provider-secret", providerId, alias, rawSecret),

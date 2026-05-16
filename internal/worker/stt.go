@@ -280,6 +280,8 @@ func sttWorkerEnv(getenv func(string) string) []string {
 		"CUDA_VISIBLE_DEVICES",
 		"LD_LIBRARY_PATH",
 		"DYLD_LIBRARY_PATH",
+		"FAST_SUB_FAKE_WORKER_MODE",
+		"FAST_SUB_FAKE_WORKER_REQUEST_COPY",
 	}
 	env := make([]string, 0, len(allowlist))
 	seen := map[string]bool{}

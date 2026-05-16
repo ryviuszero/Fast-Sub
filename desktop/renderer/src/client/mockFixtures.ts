@@ -49,6 +49,9 @@ export const baseEnvironment: EnvironmentStatus = {
   localTranscriptionReady: true,
   localTranslationReady: true,
   ffmpegReady: true,
+  ffmpegInstalling: false,
+  ffmpegInstallProgressPercent: 100,
+  ffmpegInstallLogs: [],
   modelDirectoryReady: true,
   daemonReady: true,
   warnings: []
@@ -66,11 +69,11 @@ export const baseModels: ModelStatus[] = [
 export const baseProviders: ProviderStatus[] = [
   { id: "local-faster-whisper", name: "本地 Faster Whisper", kind: "local", capability: "stt", state: "available", enabled: true, privacyNote: "本地处理音频，不上传。", requiresUploadConfirmation: false, requiresModel: true, supportsBatch: true, supportsWordTimestamps: true, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["transcribe", "srt", "word_timestamps"], compatibleModelTypes: ["asr"] },
   { id: "local-whisper-cpp", name: "本地 whisper.cpp", kind: "native", capability: "stt", state: "available", enabled: true, privacyNote: "Native 本地转写，不上传音频。", requiresUploadConfirmation: false, requiresModel: true, supportsBatch: false, supportsWordTimestamps: false, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["transcribe", "native_binary"], compatibleModelTypes: ["asr"] },
-  { id: "api-openai-transcription", name: "OpenAI 音频转写 API", kind: "api", capability: "stt", state: "available", enabled: true, privacyNote: "会上传音频，可能产生费用。", requiresUploadConfirmation: true, requiresApiKey: false, requiresModel: true, supportsBatch: false, supportsWordTimestamps: false, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["transcribe", "remote_api"], compatibleModelTypes: ["api"], maskedCredential: "未配置" },
+  { id: "api-openai-transcription", name: "OpenAI 音频转写 API", kind: "api", capability: "stt", state: "available", checkMode: "static", enabled: true, privacyNote: "会上传音频，可能产生费用。", requiresUploadConfirmation: true, requiresApiKey: false, requiresModel: true, supportsBatch: false, supportsWordTimestamps: false, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["transcribe", "remote_api"], compatibleModelTypes: ["api"], maskedCredential: "未配置" },
   { id: "local-nllb-ct2", name: "本地 NLLB 翻译", kind: "local", capability: "translation", state: "available", enabled: true, privacyNote: "本地处理字幕文本。", requiresUploadConfirmation: false, requiresModel: true, supportsBatch: true, supportedLanguages: ["en", "zh", "ja", "ko"], capabilities: ["translate_srt", "offline"], compatibleModelTypes: ["translation"] },
   { id: "web-bing", name: "Bing 网页翻译", kind: "web", capability: "translation", state: "available", enabled: true, privacyNote: "会把字幕文本发送到第三方网页翻译服务。", requiresUploadConfirmation: true, supportsBatch: true, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["translate_srt", "web"] },
   { id: "web-google", name: "Google 网页翻译", kind: "web", capability: "translation", state: "available", enabled: true, privacyNote: "会把字幕文本发送到第三方网页翻译服务。", requiresUploadConfirmation: true, supportsBatch: true, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["translate_srt", "web"] },
-  { id: "api-openai-chat", name: "OpenAI 兼容翻译 API", kind: "api", capability: "translation", state: "available", enabled: true, privacyNote: "会上传字幕文本，可能产生费用。", requiresUploadConfirmation: true, requiresApiKey: false, supportsBatch: true, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["translate_srt", "remote_api"], maskedCredential: "未配置" }
+  { id: "api-openai-chat", name: "OpenAI 兼容翻译 API", kind: "api", capability: "translation", state: "available", checkMode: "static", enabled: true, privacyNote: "会上传字幕文本，可能产生费用。", requiresUploadConfirmation: true, requiresApiKey: false, supportsBatch: true, supportedLanguages: ["auto", "en", "zh", "ja", "ko"], capabilities: ["translate_srt", "remote_api"], maskedCredential: "未配置" }
 ];
 
 export const redactedLogs: JobLogEntry[] = [

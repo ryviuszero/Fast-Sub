@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import type { JobLogEntry, JobSummary } from "../../../../shared/contracts/types";
 import type { QueueFilter, RenderProps } from "../types";
 import { Chip, Chrome, Divider, KV, Tabs } from "../components";
@@ -11,33 +11,43 @@ export function QueueList({ jobs, queueInitialFilter, setScreen, openJob, cancel
   const rt = useRuntimeText();
   const [queueFilter, setQueueFilter] = useState<QueueFilter>(queueInitialFilter);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const selectionAnchorId = useRef<string | null>(null);
   useEffect(() => {
     setQueueFilter(queueInitialFilter);
   }, [queueInitialFilter]);
-  const displayJobs = useMemo(() => recentQueueJobs(jobs, RECENT_HISTORY_LIMIT), [jobs]);
-  const hiddenCount = Math.max(0, jobs.length - displayJobs.length);
-  const runningJobs = useMemo(() => displayJobs.filter((job) => job.status === "running" || job.status === "canceling"), [displayJobs]);
-  const queuedJobs = useMemo(() => displayJobs.filter((job) => job.status === "queued"), [displayJobs]);
+  const orderedJobs = useMemo(() => orderedQueueJobs(jobs), [jobs]);
+  const runningJobs = useMemo(() => orderedJobs.filter((job) => job.status === "running" || job.status === "canceling"), [orderedJobs]);
+  const queuedJobs = useMemo(() => orderedJobs.filter((job) => job.status === "queued"), [orderedJobs]);
   const activeJobs = useMemo(() => [...runningJobs, ...queuedJobs], [queuedJobs, runningJobs]);
-  const completedJobs = useMemo(() => displayJobs.filter((job) => job.status === "succeeded"), [displayJobs]);
-  const failedJobs = useMemo(() => displayJobs.filter((job) => job.status === "failed"), [displayJobs]);
-  const totalCount = displayJobs.length;
+  const completedJobs = useMemo(() => orderedJobs.filter((job) => job.status === "succeeded"), [orderedJobs]);
+  const failedJobs = useMemo(() => orderedJobs.filter((job) => job.status === "failed"), [orderedJobs]);
+  const totalCount = orderedJobs.length;
   const showRunning = queueFilter === "all" || queueFilter === "running";
   const showDone = queueFilter === "all" || queueFilter === "done";
   const showFailed = queueFilter === "all" || queueFilter === "failed";
   const tabIndex = queueFilter === "all" ? 0 : queueFilter === "running" ? 1 : queueFilter === "done" ? 2 : 3;
-  const visibleJobs = useMemo(() => [
+  const filteredJobs = useMemo(() => [
     ...(showRunning ? activeJobs : []),
     ...(showDone ? completedJobs : []),
     ...(showFailed ? failedJobs : [])
   ], [activeJobs, completedJobs, failedJobs, showDone, showFailed, showRunning]);
+  const visibleJobs = useMemo(() => filteredJobs.slice(0, RECENT_HISTORY_LIMIT), [filteredJobs]);
+  const visibleRunningJobs = useMemo(() => visibleJobs.filter((job) => job.status === "running" || job.status === "canceling"), [visibleJobs]);
+  const visibleQueuedJobs = useMemo(() => visibleJobs.filter((job) => job.status === "queued"), [visibleJobs]);
+  const visibleCompletedJobs = useMemo(() => visibleJobs.filter((job) => job.status === "succeeded"), [visibleJobs]);
+  const visibleFailedJobs = useMemo(() => visibleJobs.filter((job) => job.status === "failed"), [visibleJobs]);
+  const hiddenCount = Math.max(0, filteredJobs.length - visibleJobs.length);
   useEffect(() => {
-    setSelectedIds((current) => new Set([...current].filter((id) => displayJobs.some((job) => job.id === id))));
-  }, [displayJobs]);
-  const selectedJobs = useMemo(() => visibleJobs.filter((job) => selectedIds.has(job.id)), [selectedIds, visibleJobs]);
+    const validIds = new Set(orderedJobs.map((job) => job.id));
+    setSelectedIds((current) => new Set([...current].filter((id) => validIds.has(id))));
+    if (selectionAnchorId.current && !validIds.has(selectionAnchorId.current)) {
+      selectionAnchorId.current = null;
+    }
+  }, [orderedJobs]);
+  const selectedJobs = useMemo(() => filteredJobs.filter((job) => selectedIds.has(job.id)), [filteredJobs, selectedIds]);
   const selectedActive = selectedJobs.filter((job) => isActiveJobStatus(job.status));
   const selectedDeletable = selectedJobs.filter((job) => isTerminalJobStatus(job.status));
-  const allVisibleSelected = visibleJobs.length > 0 && visibleJobs.every((job) => selectedIds.has(job.id));
+  const allFilteredSelected = filteredJobs.length > 0 && filteredJobs.every((job) => selectedIds.has(job.id));
   const toggleJob = (jobId: string, checked: boolean) => {
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -48,11 +58,12 @@ export function QueueList({ jobs, queueInitialFilter, setScreen, openJob, cancel
       }
       return next;
     });
+    selectionAnchorId.current = jobId;
   };
-  const toggleVisible = (checked: boolean) => {
+  const toggleFiltered = (checked: boolean) => {
     setSelectedIds((current) => {
       const next = new Set(current);
-      for (const job of visibleJobs) {
+      for (const job of filteredJobs) {
         if (checked) {
           next.add(job.id);
         } else {
@@ -60,6 +71,35 @@ export function QueueList({ jobs, queueInitialFilter, setScreen, openJob, cancel
         }
       }
       return next;
+    });
+    selectionAnchorId.current = checked ? filteredJobs[0]?.id ?? null : null;
+  };
+  const selectJob = (jobId: string, event: MouseEvent<HTMLElement>) => {
+    setSelectedIds((current) => {
+      if (event.shiftKey && selectionAnchorId.current) {
+        const anchorIndex = filteredJobs.findIndex((job) => job.id === selectionAnchorId.current);
+        const targetIndex = filteredJobs.findIndex((job) => job.id === jobId);
+        if (anchorIndex >= 0 && targetIndex >= 0) {
+          const [start, end] = anchorIndex < targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
+          const next = new Set(event.ctrlKey || event.metaKey ? current : []);
+          for (const job of filteredJobs.slice(start, end + 1)) {
+            next.add(job.id);
+          }
+          return next;
+        }
+      }
+      if (event.ctrlKey || event.metaKey) {
+        const next = new Set(current);
+        if (next.has(jobId)) {
+          next.delete(jobId);
+        } else {
+          next.add(jobId);
+        }
+        selectionAnchorId.current = jobId;
+        return next;
+      }
+      selectionAnchorId.current = jobId;
+      return new Set([jobId]);
     });
   };
   const cancelSelected = async () => {
@@ -71,7 +111,18 @@ export function QueueList({ jobs, queueInitialFilter, setScreen, openJob, cancel
     setSelectedIds(new Set());
   };
   const renderJobCard = (job: JobSummary, className: string, chip: ReactNode, extra?: ReactNode) => (
-    <article className={className} key={job.id} onClick={() => void openJob(job.id, job.status === "failed" ? "queue-failed" : "queue-detail")}>
+    <article
+      aria-selected={selectedIds.has(job.id)}
+      className={`${className}${selectedIds.has(job.id) ? " selected-card" : ""}`}
+      key={job.id}
+      onClick={(event) => selectJob(job.id, event)}
+      onDoubleClick={() => void openJob(job.id, job.status === "failed" ? "queue-failed" : "queue-detail")}
+      onMouseDown={(event) => {
+        if (event.shiftKey) {
+          event.preventDefault();
+        }
+      }}
+    >
       <div className="job-card-select" onClick={(event) => event.stopPropagation()}>
         <input
           aria-label={t("Select job", { title: job.title })}
@@ -88,14 +139,14 @@ export function QueueList({ jobs, queueInitialFilter, setScreen, openJob, cancel
   return (
     <div className="wf">
       <Chrome title={t("Task queue")} back onBack={() => setScreen("main-empty")} />
-      <Tabs items={[`${t("All jobs")} ${totalCount}${hiddenCount ? ` / ${jobs.length}` : ""}`, `${t("Running jobs")} ${activeJobs.length}`, `${t("Completed jobs")} ${completedJobs.length}`, `${t("Failed jobs")} ${failedJobs.length}`]} active={tabIndex} onSelect={(index) => setQueueFilter(["all", "running", "done", "failed"][index] as QueueFilter)} />
+      <Tabs items={[`${t("All jobs")} ${visibleJobs.length}${queueFilter === "all" && hiddenCount ? ` / ${totalCount}` : ""}`, `${t("Running jobs")} ${activeJobs.length}`, `${t("Completed jobs")} ${completedJobs.length}`, `${t("Failed jobs")} ${failedJobs.length}`]} active={tabIndex} onSelect={(index) => setQueueFilter(["all", "running", "done", "failed"][index] as QueueFilter)} />
       <main className="content-flow queue-flow">
-        {hiddenCount > 0 && <p className="queue-note">{t("Recent jobs note", { shown: displayJobs.length, hidden: hiddenCount })}</p>}
+        {hiddenCount > 0 && <p className="queue-note">{t("Recent jobs note", { shown: visibleJobs.length, hidden: hiddenCount })}</p>}
         {visibleJobs.length > 0 && (
           <div className="queue-bulk-bar">
             <label className="inline-check">
-              <input checked={allVisibleSelected} type="checkbox" onChange={(event) => toggleVisible(event.currentTarget.checked)} />
-              {t("Select all visible")}
+              <input checked={allFilteredSelected} type="checkbox" onChange={(event) => toggleFiltered(event.currentTarget.checked)} />
+              {t("Select all jobs")}
             </label>
             <span>{t("Selected jobs count", { count: selectedJobs.length })}</span>
             <button className="btn sm ghost" disabled={selectedJobs.length === 0} onClick={() => setSelectedIds(new Set())} type="button">{t("Clear selection")}</button>
@@ -105,19 +156,19 @@ export function QueueList({ jobs, queueInitialFilter, setScreen, openJob, cancel
         )}
         {showRunning && (
           <>
-            {runningJobs.map((job) => (
+            {visibleRunningJobs.map((job) => (
               renderJobCard(job, "job-card running", <Chip tone="accent">{rt(job.statusLabel)}</Chip>, <><QueueMetaChips job={job} t={t} rt={rt} extra={[`${rt(job.stageLabel)} ${job.progressPercent}%`]} /><div className="progress accent"><i style={{ width: `${job.progressPercent}%` }} /></div></>)
             ))}
-            {queuedJobs.map((job) => (
+            {visibleQueuedJobs.map((job) => (
               renderJobCard(job, "job-card", <Chip>{rt(job.statusLabel)}</Chip>, <QueueMetaChips job={job} t={t} rt={rt} />)
             ))}
           </>
         )}
-        {queueFilter === "all" && <Divider />}
-        {showDone && completedJobs.map((job) => (
+        {queueFilter === "all" && (visibleCompletedJobs.length > 0 || visibleFailedJobs.length > 0) && <Divider />}
+        {showDone && visibleCompletedJobs.map((job) => (
           renderJobCard(job, "job-card done", <Chip tone="ok">{rt(job.statusLabel)}</Chip>, <QueueMetaChips job={job} t={t} rt={rt} extra={[t("Completed at", { time: completedTimeLabel(job.completedAt || job.createdAt, t) })]} />)
         ))}
-        {showFailed && failedJobs.map((job) => (
+        {showFailed && visibleFailedJobs.map((job) => (
           renderJobCard(job, "job-card failed", <Chip tone="warn">{rt(job.statusLabel)}</Chip>, <QueueMetaChips job={job} t={t} rt={rt} extra={[rt(job.stageLabel)]} />)
         ))}
       </main>
@@ -260,14 +311,14 @@ export function LogPanel({ activeJob, getJobLogs }: Pick<RenderProps, "activeJob
   );
 }
 
-function recentQueueJobs(jobs: JobSummary[], limit: number): JobSummary[] {
+function orderedQueueJobs(jobs: JobSummary[]): JobSummary[] {
   const active = jobs.filter((job) => job.status === "running" || job.status === "queued" || job.status === "canceling");
   const activeIds = new Set(active.map((job) => job.id));
   const history = jobs
     .filter((job) => !activeIds.has(job.id))
     .slice()
     .sort((a, b) => jobTimeValue(b) - jobTimeValue(a));
-  return [...active, ...history.slice(0, Math.max(0, limit - active.length))];
+  return [...active, ...history];
 }
 
 function jobTimeValue(job: JobSummary): number {

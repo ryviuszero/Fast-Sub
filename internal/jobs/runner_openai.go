@@ -42,7 +42,10 @@ func (r DefaultRunner) runOpenAI(
 		)
 	}
 	apiKeyEnv := r.openAIKeyEnv(req, loaded)
-	apiKey := r.env(apiKeyEnv)
+	apiKey := req.Extra["openai_transcription_api_key"]
+	if apiKey == "" {
+		apiKey = r.env(apiKeyEnv)
+	}
 	baseURL := stringDefault(stringOption(req, "base_url"), openAIProviderConfig(loaded, "api-openai-transcription").BaseURL)
 	format := apiUploadFormat(req)
 	output := outputPath(req)

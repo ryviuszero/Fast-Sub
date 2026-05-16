@@ -2,13 +2,17 @@ import type { RenderProps } from "../types";
 import { CheckItem, Chrome, Divider } from "../components";
 import { useRuntimeText, useT } from "../i18n";
 
-export function SetupCheck({ environment, models, setScreen, installModel, repairDaemon }: RenderProps) {
+export function SetupCheck({ environment, models, setScreen, installModel, repairDaemon, installFFmpegWithPackageManager }: RenderProps) {
   const t = useT();
   const rt = useRuntimeText();
   const disconnected = environment?.health === "disconnected";
+  const ffmpegInstalling = Boolean(environment?.ffmpegInstalling);
+  const ffmpegMissing = environment ? !environment.ffmpegReady && !ffmpegInstalling : false;
   const asr = models.find((model) => model.id === "whisper-small");
   const memory = environment?.memory ? rt(environment.memory) : t("16 GB available");
   const disk = environment?.disk ? rt(environment.disk) : t("240 GB available");
+  const ffmpegProgress = Math.max(0, Math.min(100, environment?.ffmpegInstallProgressPercent ?? 0));
+  const ffmpegLogs = environment?.ffmpegInstallLogs ?? [];
   return (
     <div className="wf">
       <main className="content-flow setup-flow">
@@ -19,7 +23,7 @@ export function SetupCheck({ environment, models, setScreen, installModel, repai
         <section className="panel paper-muted">
           <CheckItem label={t("Local environment")} detail={`${environment?.os ?? "Windows"} · ${environment?.arch ?? "x64"} · ${memory} · ${disk}`} status="ready" />
           <Divider />
-          <CheckItem label="FFmpeg / FFprobe" detail={t("Used to extract audio tracks")} status={environment?.ffmpegReady ? "ready" : "checking"} />
+          <CheckItem label="FFmpeg / FFprobe" detail={environment?.ffmpegReady ? t("Used to extract audio tracks") : ffmpegInstalling ? t("FFmpeg installing detail") : t("FFmpeg auto install failed hint")} status={environment ? environment.ffmpegReady ? "ready" : ffmpegInstalling ? "checking" : "missing" : "checking"} />
           <Divider />
           <CheckItem label={t("Fast Sub service")} status={disconnected ? "failed" : "ready"} />
           <Divider />
@@ -36,6 +40,28 @@ export function SetupCheck({ environment, models, setScreen, installModel, repai
             <button className="btn primary" onClick={() => void repairDaemon()}>{t("Repair")}</button>
           </section>
         )}
+        {ffmpegMissing && (
+          <section className="panel warn-panel">
+            <h2>{t("FFmpeg not ready")}</h2>
+            <p>{t("FFmpeg auto install failed hint")}</p>
+            <div className="row gap-8 wrap">
+              <button className="btn primary" onClick={() => void repairDaemon()}>{t("Retry environment repair")}</button>
+              <button className="btn" onClick={() => void installFFmpegWithPackageManager("scoop")}>{t("Install with Scoop")}</button>
+              <button className="btn" onClick={() => void installFFmpegWithPackageManager("winget")}>{t("Install with Winget")}</button>
+              <button className="btn" onClick={() => void installFFmpegWithPackageManager("choco")}>{t("Install with Chocolatey")}</button>
+            </div>
+          </section>
+        )}
+        {ffmpegInstalling && (
+          <section className="panel paper-muted">
+            <h2>{t("Installing FFmpeg")}</h2>
+            <p>{t("FFmpeg installing detail")}</p>
+            <div className="progress accent"><i style={{ width: `${Math.max(8, ffmpegProgress)}%` }} /></div>
+            <div className="diag-log" role="status" aria-label={t("FFmpeg install log")}>
+              {(ffmpegLogs.length > 0 ? ffmpegLogs : [t("FFmpeg install starting")]).map((line) => <span key={line}>{line}</span>)}
+            </div>
+          </section>
+        )}
         {asr?.state !== "ready" && (
           <section className="panel warn-panel">
             <h2>{t("Default ASR model not ready")}</h2>
@@ -43,9 +69,9 @@ export function SetupCheck({ environment, models, setScreen, installModel, repai
             <button className="btn primary" onClick={() => void installModel("whisper-small")}>{t("Download default model")}</button>
           </section>
         )}
-        <div className="progress accent"><i style={{ width: disconnected ? "45%" : "100%" }} /></div>
-        <p className="center-text caption">{disconnected ? t("Waiting for service repair") : t("Check complete 6 of 6")}</p>
-        <button className="btn primary setup-next" disabled={disconnected || asr?.state !== "ready"} onClick={() => setScreen("setup-done")}>{t("Enter app")}</button>
+        <div className="progress accent"><i style={{ width: disconnected || ffmpegMissing || ffmpegInstalling ? "45%" : "100%" }} /></div>
+        <p className="center-text caption">{disconnected || ffmpegMissing || ffmpegInstalling ? t("Waiting for service repair") : t("Check complete 6 of 6")}</p>
+        <button className="btn primary setup-next" disabled={disconnected || ffmpegMissing || ffmpegInstalling || asr?.state !== "ready"} onClick={() => setScreen("setup-done")}>{t("Enter app")}</button>
       </main>
     </div>
   );

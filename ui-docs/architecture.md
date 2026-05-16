@@ -16,7 +16,7 @@
 | Daemon client | `DaemonFastSubClient` | 通过 REST + SSE 访问本机 Go daemon | 真实 HTTP/SSE、bearer token、401、断线、SSE reconnect、events_lost 只能在 main/preload controlled client 中处理 |
 | 本地服务边界 | Go daemon on `127.0.0.1` | 提供 health/version/models/providers/jobs API 和 SSE events | Electron 只依赖公开 API，不调用 daemon 内部包 |
 | 本机持久设置 | Daemon config API / Electron store | 保存非敏感运行设置、默认选项、最近路径、折叠状态 | 运行配置通过 `GET/PATCH /v1/config` 写入 daemon config；不保存 API key、daemon token 或 raw secret |
-| 安全存储 | Electron `safeStorage` + 本地加密 secret store | 保存 API key 和 provider secret | renderer 只看到 masked 状态或 key alias；后续可评估 OS keychain/keytar |
+| 安全存储 | Electron `safeStorage` + 本地加密 secret store + daemon transient secret store | 保存 API key 和 provider secret；创建 API job/live check 时换取一次性 `secret_ref` | renderer 只看到 masked 状态或 key alias；daemon 启动环境不注入全部 secret；后续可评估 OS keychain/keytar |
 | 文件入口 | Electron dialog / drag-and-drop | 添加媒体文件、文件夹、SRT、输出目录 | 路径传给 client 前需要基础校验和用户确认 |
 | 事件流 | SSE via main/preload controlled client | 推送任务进度、日志摘要、完成、失败、取消、中断 | UI 依赖 progress/status schema，不依赖 raw log 文本 |
 | 日志展示 | UI diagnostics panels | 显示 redacted logs、结构化错误、最近事件 | 默认折叠，普通主流程不展示内部细节 |
@@ -90,6 +90,7 @@ Electron 应用第一版不引入数据库。
 | 存储 | 内容 | 规则 |
 | --- | --- | --- |
 | Electron `safeStorage` + 本地加密 secret store | API key、provider secret | renderer 不读取 raw value；只通过 main process 保存、替换、删除和查询 masked status |
+| Daemon transient secret store | API job/live check 的一次性 `secret_ref` | 只保存在 daemon 内存；短 TTL、单次消费；不写 request/job/events/log |
 | Electron main memory | daemon ready token、base URL、进程句柄 | token 不写入磁盘，不暴露给任意 renderer |
 | 配置文件 | 用户设置、默认模型、provider 默认值、API key 环境变量名、key alias、masked 状态、provider API base URL/model | 不保存 raw API key |
 
@@ -127,7 +128,7 @@ Fast Sub Electron 应用是单用户本地桌面应用，不实现账号、团�
 | REST 请求 | main/preload controlled client 添加 bearer token |
 | SSE 订阅 | 通过 main/preload controlled client 订阅，处理 EventSource header 限制或使用 fetch-based SSE |
 | Health/version | 可无 token 调用，但仍通过 client 边界 |
-| API key 管理 | renderer 提交 key alias 或用户输入给 main process；main process 写入 `safeStorage` + 本地加密 secret store，配置文件只保存 alias/env 名称 |
+| API key 管理 | renderer 提交 key alias 或用户输入给 main process；main process 写入 `safeStorage` + 本地加密 secret store，配置文件只保存 alias/env 名称；创建 API job/live check 前由 main 调用 `/v1/secrets` 换取一次性 `secret_ref` |
 | 远程 provider 使用 | UI 必须展示上传内容、provider 名称、费用/隐私提示，并要求确认 |
 | 文件访问 | 用户通过 file dialog 或 drag-and-drop 授权路径；UI 不扫描未选择目录 |
 
@@ -148,7 +149,7 @@ Electron 应用不运行 AI 推理。它只创建任务、展示进度、展示�
 | 分类 | 示例 | UI 文案重点 |
 | --- | --- | --- |
 | 本地 ASR | `local-faster-whisper` | 本地处理，不上传音频；需要本地模型 |
-| Native ASR | `local-whisper-cpp` | 本地处理，依赖本机 binary 和模型 |
+| Native ASR | `local-whisper-cpp` | 本地处理，依赖本机 binary 和模型；Windows 缺 binary 时由 Electron main 受控下载安装到 app 私有 native-binaries 目录 |
 | API ASR | `api-openai-transcription` | 会上传音频；需要 API key、base URL 和模型 |
 | 本地翻译 | `local-nllb-ct2` | 本地处理字幕文本；需要翻译模型 |
 | 网页翻译 | `web-bing`、`web-google` | 会把字幕文本发送到第三方网页翻译服务 |
@@ -277,7 +278,7 @@ FastSubClient
 
 - 设置页的用户设置直接映射到 Fast Sub 配置文件。
 - renderer 只编辑配置 view model；真实读写由 main/preload controlled client 完成。
-- API key 和 provider secret 不写入配置文件，只保存 key alias、环境变量名、masked 状态或 secret store reference。
+- API key 和 provider secret 不写入配置文件，只保存 key alias、环境变量名、masked 状态或 secret store reference；API job/live check 只向 daemon 传一次性 `secret_ref`。
 - mock 阶段也要模拟配置读写，保证 UI 行为和真实集成一致。
 
 ## 当前实现选择和后续待确认

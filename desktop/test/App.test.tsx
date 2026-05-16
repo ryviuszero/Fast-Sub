@@ -66,6 +66,32 @@ describe("Fast Sub renderer flow", () => {
     expect(document.body.textContent).not.toContain("Authorization");
   });
 
+  it("automatically creates a burn-in job after transcription when burn-in is enabled", async () => {
+    const requests: CreateJobRequest[] = [];
+    class BurnInEnabledClient extends MockFastSubClient {
+      async getConfig(): Promise<ConfigViewModel> {
+        return { ...(await super.getConfig()), burnInVideo: true };
+      }
+
+      async createJob(request: CreateJobRequest): Promise<JobDetail> {
+        requests.push(request);
+        return super.createJob(request);
+      }
+    }
+    render(<App client={new BurnInEnabledClient("setupReady")} />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
+    await chooseVideo("burn-me.mp4");
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+
+    await waitFor(() => expect(requests.map((request) => request.type)).toEqual(["transcribe", "burn_in"]));
+    expect(requests[1]?.inputPaths[0]).toBe("burn-me.mp4");
+    expect(requests[1]?.inputPaths[1]).toMatch(/burn-me\.srt$/);
+    expect(requests[1]?.outputType).toBe("burned_video");
+    expect(await screen.findByRole("heading", { name: "字幕生成完成" })).toBeInTheDocument();
+    expect(screen.getByText("burn-me.burned.mp4")).toBeInTheDocument();
+  });
+
   it("skips the setup gate after onboarding and refreshes the main screen in the background", async () => {
     window.localStorage.setItem("fast-sub:onboarding-complete", "1");
     render(<App />);
@@ -107,6 +133,9 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.queryByText(/输出 C:\\Users\\Example\\Videos/)).not.toBeInTheDocument();
     expect(screen.queryByText("sample-meeting.mp4")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("a b.mp4"));
+    expect(screen.getByText("已选择 1 项")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "a b.mp4" })).not.toBeInTheDocument();
+    fireEvent.doubleClick(screen.getByText("a b.mp4"));
     expect(await screen.findByRole("heading", { name: "a b.mp4" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "详情" }));
     expect(screen.getByText("语言")).toBeInTheDocument();
@@ -119,6 +148,47 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.getByRole("heading", { name: "通用" })).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "诊断" }).at(-1) as HTMLElement);
     expect(screen.getByText(/credential=\[REDACTED\]/)).toBeInTheDocument();
+  });
+
+  it("selects all filtered queue jobs including hidden rows", async () => {
+    const deleted: string[] = [];
+    const manyJobs = Array.from({ length: 45 }, (_, index) => createSeedJob({
+      id: `done-${index}`,
+      title: `CALLBOX_${index}.mp3`,
+      status: "succeeded",
+      statusLabel: "已完成",
+      completedAt: `2026-05-10T17:${String(index).padStart(2, "0")}:00.000Z`
+    }));
+    class ManyJobsClient extends MockFastSubClient {
+      async listJobs(): Promise<JobSummary[]> {
+        return manyJobs.filter((job) => !deleted.includes(job.id));
+      }
+
+      async getJob(jobId: string): Promise<JobDetail> {
+        return manyJobs.find((job) => job.id === jobId) ?? super.getJob(jobId);
+      }
+
+      async deleteJob(jobId: string): Promise<void> {
+        deleted.push(jobId);
+      }
+    }
+    render(<App client={new ManyJobsClient("setupReady")} />);
+    await enterMainScreen();
+    fireEvent.click(screen.getByRole("button", { name: /历史记录|查看进行中/ }));
+    expect(await screen.findByText("全部 40 / 45")).toBeInTheDocument();
+    expect(screen.getByText("仅显示最近 40 条任务，已隐藏更早的 5 条记录。")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("CALLBOX_44.mp3"));
+    expect(screen.getByText("已选择 1 项")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("CALLBOX_43.mp3"), { ctrlKey: true });
+    expect(screen.getByText("已选择 2 项")).toBeInTheDocument();
+    expect(fireEvent.mouseDown(screen.getByText("CALLBOX_40.mp3").closest("article") as HTMLElement, { shiftKey: true })).toBe(false);
+    fireEvent.click(screen.getByText("CALLBOX_40.mp3"), { ctrlKey: true, shiftKey: true });
+    expect(screen.getByText("已选择 5 项")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "清除选择" }));
+    fireEvent.click(screen.getByLabelText("全选所有项"));
+    expect(screen.getByText("已选择 45 项")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "删除选中记录" }));
+    await waitFor(() => expect(deleted).toHaveLength(45));
   });
 
   it("updates general settings options", async () => {
@@ -174,8 +244,8 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.getAllByText("可用").length).toBeGreaterThan(0);
     expect(screen.queryByText("missing_api_key")).not.toBeInTheDocument();
     const openAiCard = screen.getByText("OpenAI 音频转写 API").closest("article") as HTMLElement;
-    expect(within(openAiCard).getByRole("button", { name: "设为默认" })).not.toBeDisabled();
-    expect(within(openAiCard).queryByText("先做连接检查")).not.toBeInTheDocument();
+    expect(within(openAiCard).getByRole("button", { name: "设为默认" })).toBeDisabled();
+    expect(within(openAiCard).getByText("先做连接检查")).toBeInTheDocument();
     fireEvent.change(within(openAiCard).getByLabelText("OpenAI 音频转写 API API Key"), { target: { value: "sk-test-secret" } });
     fireEvent.click(within(openAiCard).getByRole("button", { name: "保存密钥" }));
     await waitFor(() => expect(within(openAiCard).getByText(/已保存到 FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY/)).toBeInTheDocument());
@@ -187,8 +257,8 @@ describe("Fast Sub renderer flow", () => {
     expect(within(openAiCard).getByLabelText("模型")).toHaveValue("custom-transcribe-model");
     expect(within(openAiCard).queryByText("NLLB-200 Distilled 600M CTranslate2 INT8")).not.toBeInTheDocument();
     const openAiTranslateCard = screen.getByText("OpenAI 兼容翻译 API").closest("article") as HTMLElement;
-    expect(within(openAiTranslateCard).getByRole("button", { name: "设为默认" })).not.toBeDisabled();
-    expect(within(openAiTranslateCard).queryByText("先做连接检查")).not.toBeInTheDocument();
+    expect(within(openAiTranslateCard).getByRole("button", { name: "设为默认" })).toBeDisabled();
+    expect(within(openAiTranslateCard).getByText("先做连接检查")).toBeInTheDocument();
     expect(within(openAiTranslateCard).queryByText("快速填充提供方")).not.toBeInTheDocument();
     expect(within(openAiTranslateCard).getByLabelText("模型")).toHaveValue("gpt-4o-mini");
     expect(within(openAiTranslateCard).queryByText("NLLB-200 Distilled 600M CTranslate2 INT8")).not.toBeInTheDocument();
@@ -243,7 +313,7 @@ describe("Fast Sub renderer flow", () => {
     render(<App />);
     await enterMainScreen();
     fireEvent.click(screen.getByRole("button", { name: /历史记录|查看进行中/ }));
-    fireEvent.click(screen.getByText("sample-meeting.mp4"));
+    fireEvent.doubleClick(screen.getByText("sample-meeting.mp4"));
     expect(screen.getByRole("heading", { name: "sample-meeting.mp4" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "日志" }));
     expect(screen.getByText("任务：sample-meeting.mp4", { exact: false })).toBeInTheDocument();
@@ -257,7 +327,7 @@ describe("Fast Sub renderer flow", () => {
     render(<App />);
     await enterMainScreen();
     fireEvent.click(screen.getByRole("button", { name: /历史记录|查看进行中/ }));
-    fireEvent.click(screen.getByText("sample-meeting.mp4"));
+    fireEvent.doubleClick(screen.getByText("sample-meeting.mp4"));
     expect(screen.getByRole("heading", { name: "sample-meeting.mp4" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
     expect(await screen.findByRole("heading", { name: "拖拽视频到这里" })).toBeInTheDocument();
@@ -546,10 +616,47 @@ describe("Fast Sub renderer flow", () => {
     await enterMainScreen();
     fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
     expect(await screen.findByText("input.mp4")).toBeInTheDocument();
+    fireEvent.click((await screen.findAllByRole("button", { name: "详细设置" })).at(0) as HTMLElement);
+    const providerSelect = screen.getByLabelText("转写方式") as HTMLSelectElement;
+    const optionValues = Array.from(providerSelect.options).map((option) => option.value);
+    expect(optionValues).not.toContain("local-whisper-cpp");
+    expect(optionValues).not.toContain("api-openai-transcription");
+    expect(providerSelect.value).toBe("local-faster-whisper");
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
 
     await waitFor(() => expect(requests[0]?.providerId).toBe("local-faster-whisper"));
     expect(requests[0]?.modelId).toBe("whisper-small");
+  });
+
+  it("installs a missing whisper.cpp provider dependency from the provider card", async () => {
+    const installed: string[] = [];
+    class MissingWhisperCPPDependencyClient extends MockFastSubClient {
+      private providerList: ProviderStatus[] = baseProviders.map((provider) => provider.id === "local-whisper-cpp" ? { ...provider, enabled: false, state: "missing_dependency" } : provider);
+
+      async listProviders(): Promise<ProviderStatus[]> {
+        return this.providerList.map((provider) => ({ ...provider }));
+      }
+
+      async installProviderDependency(providerId: string): Promise<ProviderStatus> {
+        installed.push(providerId);
+        const next = this.providerList.find((provider) => provider.id === providerId);
+        if (!next) {
+          throw new Error("unknown provider");
+        }
+        const updated = { ...next, enabled: true, state: "available" as const };
+        this.providerList = this.providerList.map((provider) => provider.id === providerId ? updated : provider);
+        return updated;
+      }
+    }
+    render(<App client={new MissingWhisperCPPDependencyClient("setupReady")} />);
+    await enterMainScreen();
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: /服务商/ }));
+    const card = (await screen.findByText("本地 whisper.cpp")).closest("article") as HTMLElement;
+    fireEvent.click(within(card).getByRole("button", { name: "先安装依赖" }));
+
+    await waitFor(() => expect(installed).toEqual(["local-whisper-cpp"]));
+    await waitFor(() => expect(within(card).getByText("可用")).toBeInTheDocument());
   });
 
   it("creates one daemon job per media file in a folder batch", async () => {
@@ -762,7 +869,7 @@ describe("Fast Sub renderer flow", () => {
     render(<App client={new RetryClient("jobSuccess")} />);
     expect(await screen.findByRole("heading", { name: "拖拽视频到这里" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: /历史记录|查看进行中/ }));
-    fireEvent.click(await screen.findByText("folder-b.mp4"));
+    fireEvent.doubleClick(await screen.findByText("folder-b.mp4"));
     expect(await screen.findByRole("heading", { name: "folder-b.mp4" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "重试任务" }));
@@ -810,6 +917,34 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "字幕生成" }));
     expect(await screen.findByText("正在进行 5 个任务")).toBeInTheDocument();
     expect(screen.queryByText("无进行中的任务")).not.toBeInTheDocument();
+  });
+
+  it("keeps running task detail progress synchronized with generation events", async () => {
+    const handlers = new Map<string, JobEventHandlers>();
+    class DetailProgressClient extends MockFastSubClient {
+      subscribeJobEvents(jobId: string, eventHandlers: JobEventHandlers): () => void {
+        handlers.set(jobId, eventHandlers);
+        return () => undefined;
+      }
+    }
+    render(<App client={new DetailProgressClient("jobSuccess")} />);
+    await enterMainScreen();
+    fireEvent.click(screen.getByRole("button", { name: "添加视频" }));
+    await chooseVideo("detail-progress.mp4");
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    expect(await screen.findByRole("heading", { name: "正在生成字幕..." })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "后台运行" }));
+    fireEvent.doubleClick(await screen.findByText("detail-progress.mp4"));
+    expect(await screen.findByRole("heading", { name: "detail-progress.mp4" })).toBeInTheDocument();
+
+    const jobId = Array.from(handlers.keys()).at(-1) as string;
+    await act(async () => {
+      await handlers.get(jobId)?.onEvent({ type: "progress", progress: { status: "running", progressPercent: 57, stageLabel: "正在转写音频", currentFile: "detail-progress.mp4", estimatedRemaining: "约 1 分钟" } });
+    });
+
+    expect(screen.getByRole("heading", { name: "detail-progress.mp4" })).toBeInTheDocument();
+    await waitFor(() => expect(document.body.textContent).toContain("57%"));
+    expect(screen.queryByRole("heading", { name: "正在生成字幕..." })).not.toBeInTheDocument();
   });
 
   it("keeps a background job visible when it fails after opening the running queue", async () => {
@@ -985,7 +1120,7 @@ describe("Fast Sub renderer flow", () => {
     render(<App />);
     await enterMainScreen();
     fireEvent.click(screen.getByRole("button", { name: /历史记录|查看进行中/ }));
-    fireEvent.click(screen.getByText("raw-cam.mov"));
+    fireEvent.doubleClick(screen.getByText("raw-cam.mov"));
     expect(await screen.findByRole("heading", { name: "raw-cam.mov" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "删除记录" }));
     expect(await screen.findByText("失败 0")).toBeInTheDocument();
@@ -1078,6 +1213,10 @@ describe("Fast Sub renderer flow", () => {
   });
 
   it("blocks translate tool jobs when the translation environment is not ready", async () => {
+    const scrolledSections: string[] = [];
+    Element.prototype.scrollIntoView = vi.fn(function scrollIntoView(this: Element) {
+      scrolledSections.push(this.textContent ?? "");
+    });
     render(<App />);
     fireEvent.click(await screen.findByLabelText("打开调试面板"));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "nllbInstallFailed" } });
@@ -1089,9 +1228,14 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.getByRole("button", { name: "开始翻译" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "配置翻译 Provider" }));
     expect(await screen.findByRole("heading", { name: "服务商" })).toBeInTheDocument();
+    await waitFor(() => expect(scrolledSections.some((text) => text.includes("翻译 Provider"))).toBe(true));
   });
 
   it("blocks translated subtitle output selection until the translation model is configured", async () => {
+    const scrolledSections: string[] = [];
+    Element.prototype.scrollIntoView = vi.fn(function scrollIntoView(this: Element) {
+      scrolledSections.push(this.textContent ?? "");
+    });
     render(<App />);
     fireEvent.click(await screen.findByLabelText("打开调试面板"));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "nllbInstallFailed" } });
@@ -1105,6 +1249,119 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.getByRole("button", { name: "双语字幕" })).not.toHaveClass("on");
     fireEvent.click(screen.getByRole("button", { name: "配置翻译 Provider" }));
     expect(await screen.findByRole("heading", { name: "服务商" })).toBeInTheDocument();
+    await waitFor(() => expect(scrolledSections.some((text) => text.includes("翻译 Provider"))).toBe(true));
+
+    const openAiTranslateCard = screen.getByText("OpenAI 兼容翻译 API").closest("article") as HTMLElement;
+    fireEvent.click(within(openAiTranslateCard).getByRole("button", { name: "连接检查" }));
+    await waitFor(() => expect(within(openAiTranslateCard).getByText("连接检查通过")).toBeInTheDocument());
+    fireEvent.click(within(openAiTranslateCard).getByRole("button", { name: "设为默认" }));
+    await waitFor(() => expect(screen.queryByText("当前翻译 Provider 或翻译模型未配置好，请先完成翻译配置。")).not.toBeInTheDocument());
+  });
+
+  it("allows API translation provider after live check without requiring a local translation model", async () => {
+    const requests: CreateJobRequest[] = [];
+    class APITranslationReadyClient extends MockFastSubClient {
+      async getConfig(): Promise<ConfigViewModel> {
+        return {
+          ...(await super.getConfig()),
+          outputType: "bilingual_srt",
+          translationProvider: "api-openai-chat",
+          translationModel: "qwen/qwen3-4b-2507",
+          apiProviderConfigs: {
+            "api-openai-chat": {
+              apiKeyAlias: "FAST_SUB_OPENAI_CHAT_API_KEY",
+              apiKeyStatus: "configured",
+              openAIBaseUrl: "http://127.0.0.1:1234/v1",
+              openAIModel: "qwen/qwen3-4b-2507"
+            }
+          }
+        };
+      }
+
+      async listProviders(): Promise<ProviderStatus[]> {
+        return (await super.listProviders()).map((provider) => provider.id === "api-openai-chat" ? {
+          ...provider,
+          enabled: true,
+          state: "available",
+          checkMode: "live"
+        } : provider);
+      }
+
+      async listModels(): Promise<ModelStatus[]> {
+        return (await super.listModels()).map((model) => model.kind === "translation" ? { ...model, state: "missing" } : model);
+      }
+
+      async createJob(request: CreateJobRequest): Promise<JobDetail> {
+        requests.push(request);
+        return super.createJob(request);
+      }
+    }
+    render(<App client={new APITranslationReadyClient("setupReady")} />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
+    await chooseVideo("api-translate.mp4");
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    expect(await screen.findByRole("heading", { name: "确认使用 API 服务" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "确认并继续" }));
+
+    await waitFor(() => expect(requests[0]?.translationProviderId).toBe("api-openai-chat"));
+    expect(document.body.textContent).not.toContain("当前翻译 Provider 或翻译模型未配置好");
+  });
+
+  it("runs the default API translation provider live check on startup", async () => {
+    const checks: Array<{ providerId: string; mode: "static" | "live" }> = [];
+    class AutoCheckedTranslationClient extends MockFastSubClient {
+      async getConfig(): Promise<ConfigViewModel> {
+        return {
+          ...(await super.getConfig()),
+          translationProvider: "api-openai-chat",
+          translationModel: "qwen/qwen3-4b-2507",
+          apiProviderConfigs: {
+            "api-openai-chat": {
+              apiKeyAlias: "FAST_SUB_OPENAI_CHAT_API_KEY",
+              apiKeyStatus: "configured",
+              openAIBaseUrl: "http://127.0.0.1:1234/v1",
+              openAIModel: "qwen/qwen3-4b-2507"
+            }
+          }
+        };
+      }
+
+      async testProvider(providerId: string, mode: "static" | "live"): Promise<ProviderStatus> {
+        checks.push({ providerId, mode });
+        return super.testProvider(providerId, mode);
+      }
+    }
+
+    render(<App client={new AutoCheckedTranslationClient("setupReady")} />);
+    await enterMainScreen();
+    await waitFor(() => expect(checks).toEqual([{ providerId: "api-openai-chat", mode: "live" }]));
+
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: /服务商/ }));
+    const openAiTranslateCard = screen.getByText("OpenAI 兼容翻译 API").closest("article") as HTMLElement;
+    expect(within(openAiTranslateCard).getByText("连接检查通过")).toBeInTheDocument();
+    expect(checks).toEqual([{ providerId: "api-openai-chat", mode: "live" }]);
+  });
+
+  it("runs the API translation provider live check after it becomes the default", async () => {
+    const checks: Array<{ providerId: string; mode: "static" | "live" }> = [];
+    class AutoCheckedAfterDefaultClient extends MockFastSubClient {
+      async testProvider(providerId: string, mode: "static" | "live"): Promise<ProviderStatus> {
+        checks.push({ providerId, mode });
+        return super.testProvider(providerId, mode);
+      }
+    }
+
+    render(<App client={new AutoCheckedAfterDefaultClient("setupReady")} />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    chooseProviderDropdownOption("默认翻译 Provider", /OpenAI 兼容翻译 API/);
+    await waitFor(() => expect(checks).toEqual([{ providerId: "api-openai-chat", mode: "live" }]));
+
+    fireEvent.click(screen.getByRole("button", { name: /服务商/ }));
+    const openAiTranslateCard = screen.getByText("OpenAI 兼容翻译 API").closest("article") as HTMLElement;
+    expect(within(openAiTranslateCard).getByText("连接检查通过")).toBeInTheDocument();
   });
 
   it("blocks translated subtitle output selection when the selected translation provider is not configured", async () => {
@@ -1210,7 +1467,7 @@ describe("Fast Sub renderer flow", () => {
     await waitFor(() => expect(requests[0]?.outputPath).toBe("F:\\game\\others\\input-copy.srt"));
   });
 
-  it("requires upload confirmation after resolving an output conflict for remote providers", async () => {
+  it("keeps unverified remote providers out of the output conflict flow", async () => {
     render(<App />);
     fireEvent.click(await screen.findByLabelText("打开调试面板"));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "outputConflict" } });
@@ -1218,17 +1475,16 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
     await chooseVideo();
     fireEvent.click((await screen.findAllByRole("button", { name: "详细设置" })).at(0) as HTMLElement);
-    fireEvent.change(screen.getByLabelText("转写方式"), { target: { value: "api-openai-transcription" } });
+    const providerSelect = screen.getByLabelText("转写方式") as HTMLSelectElement;
+    expect(Array.from(providerSelect.options).map((option) => option.value)).not.toContain("api-openai-transcription");
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
     expect(await screen.findByText("字幕文件已存在")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "覆盖" }));
-    expect(await screen.findByText("确认使用 API 服务")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "确认并继续" }));
-    await waitFor(() => expect(screen.queryByText("确认使用 API 服务")).not.toBeInTheDocument());
     expect(await screen.findByRole("heading", { name: "正在生成字幕..." })).toBeInTheDocument();
+    expect(screen.queryByText("确认使用 API 服务")).not.toBeInTheDocument();
   });
 
-  it("starts remote provider jobs only after upload confirmation", async () => {
+  it("does not expose unverified remote providers in the main ASR selector", async () => {
     render(<App />);
     fireEvent.click(await screen.findByLabelText("打开调试面板"));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "remoteProviderConfirmRequired" } });
@@ -1240,13 +1496,11 @@ describe("Fast Sub renderer flow", () => {
     await chooseVideo();
     fireEvent.click((await screen.findAllByRole("button", { name: "详细设置" })).at(0) as HTMLElement);
     const providerSelect = screen.getByLabelText("转写方式") as HTMLSelectElement;
-    fireEvent.change(providerSelect, { target: { value: "api-openai-transcription" } });
-    await waitFor(() => expect(providerSelect.value).toBe("api-openai-transcription"));
+    expect(Array.from(providerSelect.options).map((option) => option.value)).not.toContain("api-openai-transcription");
+    expect(providerSelect.value).toBe("local-faster-whisper");
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
-    expect(await screen.findByText("确认使用 API 服务")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "确认并继续" }));
-    await waitFor(() => expect(screen.queryByText("确认使用 API 服务")).not.toBeInTheDocument());
     expect(await screen.findByRole("heading", { name: "正在生成字幕..." })).toBeInTheDocument();
+    expect(screen.queryByText("确认使用 API 服务")).not.toBeInTheDocument();
   });
 
   it("exposes model install progress and failed install scenarios in debug", async () => {
@@ -1285,6 +1539,35 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.queryByRole("heading", { name: "正在生成字幕..." })).not.toBeInTheDocument();
     expect((await screen.findByLabelText(/下载进度/)).textContent).toContain("33%");
     expect(screen.getByLabelText(/下载进度/)).toBeInTheDocument();
+  });
+
+  it("installs a missing local translation model from the provider card", async () => {
+    const installed: string[] = [];
+    class MissingNLLBProviderClient extends MockFastSubClient {
+      async listModels(): Promise<ModelStatus[]> {
+        return (await super.listModels()).map((model) => model.id === "nllb-200-distilled-600m-ct2-int8" ? { ...model, state: "missing" } : model);
+      }
+
+      async listProviders(): Promise<ProviderStatus[]> {
+        return (await super.listProviders()).map((provider) => provider.id === "local-nllb-ct2" ? { ...provider, state: "missing_model" } : provider);
+      }
+
+      async createModelInstallJob(modelId: string): Promise<JobDetail> {
+        installed.push(modelId);
+        return super.createModelInstallJob(modelId);
+      }
+    }
+
+    render(<App client={new MissingNLLBProviderClient("setupReady")} />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: /服务商/ }));
+
+    const nllbCard = (await screen.findByText("本地 NLLB 翻译")).closest("article") as HTMLElement;
+    fireEvent.click(within(nllbCard).getByRole("button", { name: "先安装模型" }));
+
+    await waitFor(() => expect(installed).toEqual(["nllb-200-distilled-600m-ct2-int8"]));
+    expect(screen.queryByRole("heading", { name: "正在生成字幕..." })).not.toBeInTheDocument();
   });
 
   it("removes models from the model management tab", async () => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { ConfigViewModel, CreateJobRequest, EnvironmentStatus, FastSubClient, JobDetail, JobEvent, JobStatus, JobSummary, MockScenario, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
+import type { ConfigViewModel, CreateJobRequest, EnvironmentStatus, FastSubClient, FFmpegPackageManager, JobDetail, JobEvent, JobStatus, JobSummary, MockScenario, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
 import { containsSecret } from "../../../shared/privacy/redaction";
 import { defaultConfig, mockPaths } from "../client/mockFixtures";
 import { AppMenu, DebugPanel, RemoteConfirmDialog } from "./components";
@@ -11,6 +11,7 @@ import type { MediaFile, QueueFilter, Screen, UiFontStyle, UiLanguage } from "./
 const ONBOARDING_DONE_KEY = "fast-sub:onboarding-complete";
 const FILE_IMPORT_FEEDBACK_DELAY_MS = 32;
 const SYNC_MEDIA_IMPORT_LIMIT = 20;
+const TRANSLATION_CONFIG_NOTICE = "当前翻译 Provider 或翻译模型未配置好，请先完成翻译配置。";
 
 type PendingRemoteConfirmation = {
   provider?: ProviderStatus;
@@ -22,6 +23,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const [scenario, setScenario] = useState<MockScenario>("setupReady");
   const client = useMemo(() => providedClient ?? createClient(scenario), [providedClient, scenario]);
   const [screen, setScreen] = useState<Screen>(() => onboardingComplete() ? "main-empty" : "setup-check");
+  const [providerSettingsFocus, setProviderSettingsFocus] = useState<ProviderStatus["capability"] | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
   const [environment, setEnvironment] = useState<EnvironmentStatus | null>(null);
   const [models, setModels] = useState<ModelStatus[]>([]);
@@ -53,6 +55,8 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const activeBatchJobIdsRef = useRef<string[]>([]);
   const completedBatchJobsRef = useRef<JobDetail[]>([]);
   const backgroundQueueOpenRef = useRef(false);
+  const autoTranslationProviderChecksRef = useRef<Set<string>>(new Set());
+  const autoTranslationProviderChecksInFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     activeJobRef.current = activeJob;
@@ -77,8 +81,16 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     if ((screen === "setup-done" || screen === "setup-check") && target !== "setup-check" && target !== "setup-done") {
       markOnboardingComplete();
     }
+    if (target !== "settings-providers") {
+      setProviderSettingsFocus(null);
+    }
     navigateScreen(target);
   }, [navigateScreen, screen]);
+
+  const openProviderSettings = useCallback((focus?: ProviderStatus["capability"]) => {
+    setProviderSettingsFocus(focus ?? null);
+    navigateFromScreen("settings-providers");
+  }, [navigateFromScreen]);
 
   const goBack = useCallback(() => {
     const previous = backStackRef.current.at(-1);
@@ -100,6 +112,27 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     setScreen(next);
   }, [screen]);
 
+  const autoCheckDefaultTranslationProvider = useCallback(async (cfg: ConfigViewModel, providerList: ProviderStatus[]) => {
+    const provider = providerList.find((item) => item.id === cfg.translationProvider && item.capability === "translation");
+    if (!shouldAutoCheckTranslationProvider(provider)) {
+      return;
+    }
+    const checkKey = translationProviderCheckKey(cfg, provider.id);
+    if (autoTranslationProviderChecksRef.current.has(checkKey) || autoTranslationProviderChecksInFlightRef.current.has(checkKey)) {
+      return;
+    }
+    autoTranslationProviderChecksInFlightRef.current.add(checkKey);
+    try {
+      const checked = await client.testProvider(provider.id, "live");
+      setProviders((current) => current.map((item) => item.id === checked.id ? checked : item));
+    } catch {
+      // Startup checks must not block the main UI. Manual provider check still exposes the failure.
+    } finally {
+      autoTranslationProviderChecksInFlightRef.current.delete(checkKey);
+      autoTranslationProviderChecksRef.current.add(checkKey);
+    }
+  }, [client]);
+
   const loadBaseData = useCallback(async () => {
     const [envResult, cfgResult, modelsResult, providersResult, jobsResult] = await Promise.allSettled([
       client.getEnvironmentStatus(),
@@ -117,6 +150,9 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       localTranscriptionReady: false,
       localTranslationReady: false,
       ffmpegReady: false,
+      ffmpegInstalling: false,
+      ffmpegInstallProgressPercent: 0,
+      ffmpegInstallLogs: [],
       modelDirectoryReady: false,
       daemonReady: false,
       warnings: ["本地服务暂时不可用"],
@@ -139,7 +175,8 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     setModels(modelList);
     setProviders(providerList);
     setJobs(jobList);
-  }, [client]);
+    void autoCheckDefaultTranslationProvider(cfg, providerList);
+  }, [autoCheckDefaultTranslationProvider, client]);
 
   useEffect(() => {
     void loadBaseData();
@@ -159,6 +196,20 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       modelInstallUnsubscribeRef.current.clear();
     };
   }, [loadBaseData]);
+
+  useEffect(() => {
+    if (screen !== "setup-check" || !environment?.ffmpegInstalling) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void loadBaseData();
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [environment?.ffmpegInstalling, loadBaseData, screen]);
+
+  useEffect(() => {
+    void autoCheckDefaultTranslationProvider(config, providers);
+  }, [autoCheckDefaultTranslationProvider, config, providers]);
 
   const refreshJobs = useCallback(async () => {
     setJobs(await client.listJobs());
@@ -194,6 +245,35 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   }, []);
 
   const updateFromEvent = useCallback(async (event: JobEvent) => {
+    const createBurnInJobFromTranscribe = async (sourceJob: JobDetail): Promise<JobDetail | null> => {
+      if (!config.burnInVideo || sourceJob.type !== "transcribe") {
+        return null;
+      }
+      const videoPath = sourceJob.inputPaths[0] || sourceJob.currentFile;
+      const subtitlePath = sourceJob.result?.subtitlePath ?? "";
+      if (!videoPath || !subtitlePath) {
+        return null;
+      }
+      const request: CreateJobRequest = {
+        type: "burn_in",
+        inputPaths: [videoPath, subtitlePath],
+        outputDirectory: sourceJob.outputDirectory || effectiveOutputDirectory([videoPath], config, outputDirectoryPath),
+        outputType: "burned_video",
+        outputFormat: config.outputFormat,
+        outputConflict: config.outputConflict,
+        language: sourceJob.language || config.defaultLanguage,
+        targetLanguage: config.targetLanguage,
+        providerId: config.asrProvider,
+        modelId: config.asrModel,
+        remoteUploadConfirmed: false
+      };
+      const burnJob = repairJobPathFromRequest(await client.createJob(request), request);
+      activeBatchJobIdsRef.current = [...activeBatchJobIdsRef.current, burnJob.id];
+      setActiveBatchJobIds(activeBatchJobIdsRef.current);
+      setJobs((currentJobs) => mergeCreatedJobs(currentJobs, [burnJob]));
+      return burnJob;
+    };
+
     const continueBatchAfterTerminal = async (terminalJob: JobDetail): Promise<boolean> => {
       const batchIds = activeBatchJobIdsRef.current;
       if (batchIds.length <= 1) {
@@ -221,7 +301,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
         }
         return true;
       }
-      if (!backgroundQueueOpenRef.current) {
+      if (!backgroundQueueOpenRef.current && screen === "main-generating") {
         setScreen("main-generating");
       }
       return true;
@@ -229,14 +309,22 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
 
     if (event.type === "snapshot" && event.job) {
       const snapshot = event.job;
-      setActiveJob((job) => mergeJobSnapshot(job, snapshot));
-      if (!backgroundQueueOpenRef.current) {
+      const merged = mergeJobSnapshot(activeJobRef.current, snapshot);
+      activeJobRef.current = merged;
+      setActiveJob(merged);
+      setJobs((currentJobs) => mergeJobSummaries(currentJobs, [merged]));
+      if (!backgroundQueueOpenRef.current && screen === "main-generating") {
         setScreen("main-generating");
       }
     }
     if (event.type === "progress" && event.progress) {
-      setActiveJob((job) => job ? { ...job, ...event.progress, statusLabel: "正在生成" } : job);
-      if (!backgroundQueueOpenRef.current) {
+      const updated = activeJobRef.current ? { ...activeJobRef.current, ...event.progress, statusLabel: "正在生成" } : null;
+      if (updated) {
+        activeJobRef.current = updated;
+        setActiveJob(updated);
+        setJobs((currentJobs) => mergeJobSummaries(currentJobs, [updated]));
+      }
+      if (!backgroundQueueOpenRef.current && screen === "main-generating") {
         setScreen("main-generating");
       }
     }
@@ -254,6 +342,31 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       }
       unsubscribeRef.current?.();
       unsubscribeRef.current = null;
+      const burnJob = completedJob ? await createBurnInJobFromTranscribe(completedJob) : null;
+      if (burnJob) {
+        activeJobRef.current = burnJob;
+        setActiveJob(burnJob);
+        if (burnJob.status === "succeeded") {
+          const nextCompletedJobs = mergeJobDetails(completedBatchJobsRef.current, [burnJob]);
+          completedBatchJobsRef.current = nextCompletedJobs;
+          setCompletedBatchJobs(nextCompletedJobs);
+        } else if (burnJob.status === "failed") {
+          if (!backgroundQueueOpenRef.current) {
+            setScreen("queue-failed");
+          } else {
+            setQueueInitialFilter("failed");
+          }
+          await refreshJobs();
+          return;
+        } else {
+          if (!backgroundQueueOpenRef.current) {
+            setScreen("main-generating");
+          }
+          unsubscribeRef.current = client.subscribeJobEvents(burnJob.id, { onEvent: updateFromEvent });
+          await refreshJobs();
+          return;
+        }
+      }
       const batchIds = activeBatchJobIdsRef.current;
       if (batchIds.length <= 1) {
         if (!backgroundQueueOpenRef.current) {
@@ -355,7 +468,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       }
     }
     await refreshJobs();
-  }, [client, config.outputConflict, refreshJobs]);
+  }, [client, config, outputDirectoryPath, refreshJobs, screen]);
 
   const updateModelInstallFromEvent = useCallback(async (modelId: string, event: JobEvent) => {
     if (event.type === "snapshot" && event.job) {
@@ -484,8 +597,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
 
   const resolvedASRSelection = resolveReadyProviderModel("stt", config.asrProvider, config.asrModel, providers, models);
   const asrReady = Boolean(resolvedASRSelection);
-  const resolvedTranslationSelection = resolveConfiguredProviderModel("translation", config.translationProvider, config.translationModel, providers, models);
-  const translationReady = Boolean(resolvedTranslationSelection);
+  const translationReady = translationProviderReady(config, providers, models);
 
   const requestRemoteConfirmation = (provider: ProviderStatus | undefined, inputPaths: string[], onConfirm: () => void) => {
     setRemoteConfirmRequest({
@@ -514,8 +626,8 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       }
     }
     if (outputTypeNeedsTranslation(config.outputType) && !translationOutputReady(config, providers, translationReady)) {
-      setOpenNotice({ message: "当前翻译 Provider 或翻译模型未配置好，请先完成翻译配置。", tone: "warn" });
-      setScreen("settings-providers");
+      setOpenNotice({ message: TRANSLATION_CONFIG_NOTICE, tone: "warn" });
+      openProviderSettings("translation");
       return;
     }
     if (scenario === "outputConflict" && outputConflict === "ask" && !conflictResolved) {
@@ -527,7 +639,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       setScreen("main-empty");
       return;
     }
-    const asrRemoteProvider = providers.find((provider) => provider.id === config.asrProvider && provider.requiresUploadConfirmation);
+    const asrRemoteProvider = providers.find((provider) => provider.id === asrSelection.providerId && provider.requiresUploadConfirmation);
     const translationRemoteProvider = outputTypeNeedsTranslation(config.outputType)
       ? providers.find((provider) => provider.id === config.translationProvider && provider.requiresUploadConfirmation)
       : undefined;
@@ -668,6 +780,8 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
 
   const openJob = async (jobId: string, target: Screen) => {
     backgroundQueueOpenRef.current = false;
+    unsubscribeRef.current?.();
+    unsubscribeRef.current = null;
     const summary = jobs.find((job) => job.id === jobId);
     if (summary) {
       setActiveJob({
@@ -681,7 +795,12 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       });
     }
     navigateScreen(target);
-    setActiveJob(await client.getJob(jobId));
+    const detail = await client.getJob(jobId);
+    activeJobRef.current = detail;
+    setActiveJob(detail);
+    if (isActiveJobStatus(detail.status)) {
+      unsubscribeRef.current = client.subscribeJobEvents(detail.id, { onEvent: updateFromEvent });
+    }
   };
 
   const getJobLogs = async (jobId: string) => {
@@ -738,6 +857,12 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     setOpenNotice(opened ? null : { message: "无法打开该路径", tone: "warn" });
   };
 
+  useEffect(() => {
+    if (openNotice?.message === TRANSLATION_CONFIG_NOTICE && translationOutputReady(config, providers, translationReady)) {
+      setOpenNotice(null);
+    }
+  }, [config, openNotice?.message, providers, translationReady]);
+
   return (
     <I18nProvider language={uiLanguage}>
       <AppContent
@@ -778,6 +903,8 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
         {renderScreen({
           screen,
           setScreen: navigateFromScreen,
+          providerSettingsFocus,
+          openProviderSettings,
           environment,
           models,
           providers,
@@ -847,6 +974,21 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
           repairDaemon: async () => {
             setEnvironment(await client.repairDaemon());
             setScreen("setup-check");
+          },
+          installFFmpegWithPackageManager: async (manager: FFmpegPackageManager) => {
+            setEnvironment((current) => current ? {
+              ...current,
+              ffmpegInstalling: true,
+              ffmpegInstallProgressPercent: 5,
+              ffmpegInstallLogs: [`正在通过 ${manager} 安装 FFmpeg。`]
+            } : current);
+            setEnvironment(await client.installFFmpegWithPackageManager(manager));
+            setScreen("setup-check");
+          },
+          installProviderDependency: async (id) => {
+            const installed = await client.installProviderDependency(id);
+            setProviders((current) => current.map((provider) => provider.id === id ? installed : provider));
+            await loadBaseData();
           },
           testProvider: async (id, mode) => {
             const checked = await client.testProvider(id, mode);
@@ -1038,6 +1180,39 @@ function apiProviderModel(config: ConfigViewModel, providerId: string): string {
   return config.apiProviderConfigs?.[providerId]?.openAIModel || config.openAIModel || "";
 }
 
+function apiProviderBaseUrl(config: ConfigViewModel, providerId: string): string {
+  return config.apiProviderConfigs?.[providerId]?.openAIBaseUrl || config.openAIBaseUrl || "";
+}
+
+function apiProviderKeyAlias(config: ConfigViewModel, providerId: string): string {
+  return config.apiProviderConfigs?.[providerId]?.apiKeyAlias || "";
+}
+
+function apiProviderKeyStatus(config: ConfigViewModel, providerId: string): string {
+  return config.apiProviderConfigs?.[providerId]?.apiKeyStatus || "";
+}
+
+function shouldAutoCheckTranslationProvider(provider: ProviderStatus | undefined): provider is ProviderStatus {
+  return Boolean(
+    provider
+    && provider.enabled
+    && provider.capability === "translation"
+    && provider.kind === "api"
+    && provider.checkMode !== "live"
+    && (provider.state === "available" || provider.state === "missing_api_key" || provider.state === "invalid_config")
+  );
+}
+
+function translationProviderCheckKey(config: ConfigViewModel, providerId: string): string {
+  return [
+    providerId,
+    apiProviderBaseUrl(config, providerId),
+    apiProviderModel(config, providerId),
+    apiProviderKeyAlias(config, providerId),
+    apiProviderKeyStatus(config, providerId)
+  ].join("|");
+}
+
 function normalizeConfigPatch(patch: Partial<ConfigViewModel>, current: ConfigViewModel, providers: ProviderStatus[], models: ModelStatus[]): Partial<ConfigViewModel> {
   const next = { ...current, ...patch };
   const normalized = { ...patch };
@@ -1081,7 +1256,7 @@ function resolveReadyProviderModel(capability: ProviderStatus["capability"], pro
   ];
   for (const id of uniqueStrings(preferredProviders)) {
     const provider = providers.find((item) => item.id === id && item.capability === capability);
-    if (!provider || !provider.enabled || provider.state !== "available") {
+    if (!provider || !providerCanRun(provider)) {
       continue;
     }
     if ((provider.kind === "api" || provider.kind === "web") && id !== providerId) {
@@ -1096,19 +1271,6 @@ function resolveReadyProviderModel(capability: ProviderStatus["capability"], pro
     }
   }
   return null;
-}
-
-function resolveConfiguredProviderModel(capability: ProviderStatus["capability"], providerId: string, modelId: string, providers: ProviderStatus[], models: ModelStatus[]): { providerId: string; modelId: string } | null {
-  const kind = capability === "translation" ? "translation" : "asr";
-  const provider = providers.find((item) => item.id === providerId && item.capability === capability);
-  if (!provider || !provider.enabled || provider.state !== "available") {
-    return null;
-  }
-  if (provider.kind === "api" || provider.kind === "web" || !provider.requiresModel) {
-    return { providerId, modelId };
-  }
-  const model = selectReadyCompatibleModel(providerId, kind, modelId, models);
-  return model ? { providerId, modelId: model.id } : null;
 }
 
 function selectReadyCompatibleModel(providerId: string, kind: ModelStatus["kind"], preferredModelId: string, models: ModelStatus[]): ModelStatus | null {
@@ -1138,8 +1300,30 @@ function uniqueStrings(values: string[]): string[] {
 }
 
 function translationOutputReady(config: ConfigViewModel, providers: ProviderStatus[], translationReady: boolean): boolean {
-  const provider = providers.find((item) => item.id === config.translationProvider);
-  return translationReady && Boolean(provider?.enabled && provider.state === "available");
+  return translationReady && translationProviderRunnable(config, providers);
+}
+
+function translationProviderReady(config: ConfigViewModel, providers: ProviderStatus[], models: ModelStatus[]): boolean {
+  const provider = providers.find((item) => item.id === config.translationProvider && item.capability === "translation");
+  if (!provider || !providerCanRun(provider)) {
+    return false;
+  }
+  if (provider.kind === "api" || provider.kind === "web" || !provider.requiresModel) {
+    return true;
+  }
+  return Boolean(selectReadyCompatibleModel(provider.id, "translation", config.translationModel, models));
+}
+
+function translationProviderRunnable(config: ConfigViewModel, providers: ProviderStatus[]): boolean {
+  const provider = providers.find((item) => item.id === config.translationProvider && item.capability === "translation");
+  return Boolean(provider && providerCanRun(provider));
+}
+
+function providerCanRun(provider: ProviderStatus): boolean {
+  if (!provider.enabled || provider.state !== "available") {
+    return false;
+  }
+  return provider.kind !== "api" || provider.checkMode === "live";
 }
 
 function sourceDirectory(path: string): string | null {
@@ -1264,6 +1448,10 @@ function normalizeTerminalProgress<T extends JobSummary>(job: T): T {
 
 function isTerminalJobStatus(status: JobStatus): boolean {
   return status === "succeeded" || status === "failed" || status === "canceled" || status === "interrupted";
+}
+
+function isActiveJobStatus(status: JobStatus): boolean {
+  return status === "queued" || status === "running" || status === "canceling";
 }
 
 async function loadBatchJobDetails(client: FastSubClient, batchIds: string[], latestJob: JobDetail | null): Promise<JobDetail[]> {

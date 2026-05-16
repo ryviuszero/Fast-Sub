@@ -107,7 +107,7 @@ func (r DefaultRunner) runTranslateSRTBridge(ctx context.Context, req CreateRequ
 	}
 	defer cancelExec()
 	cmd := exec.CommandContext(execCtx, command, append(baseArgs, args...)...)
-	cmd.Env = translateEnvForRunner(provider, r)
+	cmd.Env = translateEnvForRunner(provider, req, r)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -448,10 +448,13 @@ func translateEnv(provider string, getenv func(string) string) []string {
 	return env
 }
 
-func translateEnvForRunner(provider string, r DefaultRunner) []string {
+func translateEnvForRunner(provider string, req CreateRequest, r DefaultRunner) []string {
 	env := translateEnv(provider, r.env)
 	if provider != "api-openai-chat" {
 		return env
+	}
+	if value := strings.TrimSpace(req.Extra["openai_chat_api_key"]); value != "" {
+		return upsertEnv(env, "OPENAI_API_KEY", value)
 	}
 	providerConfig := openAIProviderConfigFromRunner(r, "api-openai-chat")
 	keyEnv := normalizeOpenAIKeyEnv(providerConfig.APIKeyEnv)

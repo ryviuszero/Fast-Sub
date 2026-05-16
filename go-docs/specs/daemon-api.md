@@ -784,41 +784,41 @@ OpenAI-compatible provider 的可用性以实际端点请求为准：`api-openai
 
 Round 12 的 provider secret 由 Electron main process 管理的 secret storage 保存。当前实现使用 Electron `safeStorage` + 本地加密 secret store 保存 provider alias；renderer、配置文件、job metadata、logs、events 和测试 snapshot 只看到 alias/masked/status。长期目标仍可评估 keytar/OS keychain，但不能因为 keytar 兼容性问题阻塞当前 Round 12 自管 daemon 路径。Linux safeStorage 的 `basic_text` backend 不可静默宣称为安全存储。
 
-当前实现状态（2026-05-14）：
+当前实现状态（2026-05-16）：
 
 - API provider 配置按 provider id 隔离，`api-openai-transcription` 和 `api-openai-chat` 拥有独立 base URL、model、alias 和 live check 状态。
-- 自管 daemon 启动或 repair 时，Electron main process 可以按受控 alias 解密 secret，并只通过受控环境变量注入给 daemon 子进程。
+- 自管 daemon 启动或 repair 时不注入全部 Provider secret。
 - OpenAI-compatible live check 以实际 `/v1/models` 请求是否连通为准；本地兼容 API 如果无需 key 也可被视为可用，401/403 才映射为缺 key 或认证失败。
-- 完整一次性 transient `secret_ref` channel 尚未作为默认路径落地；下面的 `secret_ref` contract 保留为后续安全收口目标。
+- 一次性 transient `secret_ref` channel 已作为 Electron main 到 daemon 的默认 secret 传递路径：Electron main 读取 safeStorage 后调用 daemon `/v1/secrets` 注册短 TTL secret，API job 和 live Provider check 只携带 opaque ref。
 
 daemon 规则：
 
 - renderer 永远不读取 raw secret。
 - 配置文件只保存 `api_key_env` / alias，不得保存 raw key。默认 alias 按 Provider 隔离：`api-openai-transcription` 使用 `FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY`，`api-openai-chat` 使用 `FAST_SUB_OPENAI_CHAT_API_KEY`；旧版 `FAST_SUB_OPENAI_API_KEY` / `OPENAI_API_KEY` 只作为兼容 fallback。
-- Electron main process 自管 daemon 时，可以在启动或 repair daemon 前从 safeStorage 读取已保存 key，并只按受控环境变量名注入给子进程；这些 env value 不得写入日志、事件或错误 payload。
-- 外部已启动 daemon 不由 Electron 注入 secret；此时必须由外部环境自行提供 `api_key_env` 对应变量，或后续切到 transient secret channel。
-- 创建 API job 或 live provider test 时，Electron main 可以读取 secret，并通过 main-controlled transient secret channel 传给 daemon 或 job runner。
+- Electron main process 自管 daemon 时不得在启动或 repair daemon 前注入全部 Provider secret。
+- 外部已启动 daemon 不由 Electron 注入 secret；此时必须由外部环境自行提供 `api_key_env` 对应变量，或由对应外部客户端调用 daemon transient secret endpoint。
+- 创建 API job 或 live provider test 时，Electron main 读取 secret，并通过 `/v1/secrets` 换取一次性 `secret_ref` 后传给 daemon。
 - 推荐 transient secret 使用一次性 secret reference / handle；默认单次使用、短 TTL，建议 5 分钟，使用后立即失效。
 - raw secret 不得写入 daemon persisted config、job metadata、events、logs、stdout、stderr、errors report 或 renderer state。
 - `secret_ref` 本身也不得原样持久化到 job metadata、events、logs、stdout、stderr 或 renderer state；需要落盘时只能写入 `[REDACTED_SECRET_REF]` 或等效脱敏占位。
-- 当前 Round 12 自管 daemon 降级路径使用 `api_key_env` + Electron main process 受控 env injection；这不是完整 `secret_ref` 目标路径，但仍必须满足 raw secret 不进配置、renderer、日志、事件和错误 payload。
+- 如果未保存 key，API job 可以不带 Authorization 调用 OpenAI-compatible 本地端点；是否需要认证由 live check 或真实请求的 401/403 决定。
 
-Round 12 推荐由 Electron main process 生成和持有 `secret_ref`，daemon 只接收 opaque reference。daemon 不应提供可列出或读取 secret 的 API。实现方式：
+Round 12 使用 daemon 内存 transient secret store。daemon 不提供可列出或读取 secret 的 API。实现方式：
 
 1. Electron main 从 secret storage 读取 raw provider secret。
-2. Electron main 创建一次性 `secret_ref`，例如 `secretref_<random>`。
-3. Electron main 将 `secret_ref -> raw secret` 保存到 main process 内存 map，设置短 TTL，建议 5 分钟。
+2. Electron main 调用 `POST /v1/secrets`，请求体只在 loopback + bearer token 通道中携带 raw secret。
+3. daemon 生成一次性 `secret_ref`，例如 `secretref_<random>`，保存到 daemon 内存 map，TTL 为 5 分钟。
 4. Electron main 创建 job 或 live provider test 时，只把 `secret_ref` 放入 daemon request。
-5. daemon job runner 需要 secret 时，通过 main-controlled transient secret channel 按 `secret_ref` 请求 secret。
-6. Electron main 验证 `secret_ref` 未过期、未消费、调用来源属于当前 daemon session，然后返回 raw secret 给 main-controlled adapter 或 job runner。
-7. `secret_ref` 成功消费后立即失效；job 取消、失败、完成、daemon repair 或 app 退出时也必须清理。
+5. daemon 在 create job 或 live provider test 前消费 `secret_ref`，验证 provider 匹配、未过期、未消费。
+6. daemon 将 raw secret 只写入当前内存 request extra 或临时 provider runtime config。
+7. `secret_ref` 成功消费后立即失效；daemon repair、app 退出或 TTL 过期后不可复用。
 
 失败规则：
 
 - `secret_ref` 过期：返回 `secret_ref_expired`。
 - `secret_ref` 重复使用：返回 `secret_ref_consumed`。
 - `secret_ref` 不存在：返回 `secret_ref_not_found`。
-- daemon session 不匹配：返回 `secret_ref_invalid_session`。
+- Provider 不匹配：返回 `secret_ref_invalid_provider`。
 - secret storage 读取失败：返回 `secret_unavailable`。
 
 请求中只允许传 secret reference：
@@ -826,12 +826,42 @@ Round 12 推荐由 Electron main process 生成和持有 `secret_ref`，daemon �
 ```json
 {
   "options": {
-    "secret_ref": "secretref_opaque_once"
+    "api_key_secret_ref": "secretref_opaque_once",
+    "translation_api_key_secret_ref": "secretref_opaque_once"
   }
 }
 ```
 
 `secret_ref` 是不透明、短期、一次性引用，不得可逆推出 provider secret。
+
+#### `POST /v1/secrets`
+
+受保护接口，仅供 Electron main 或等效受信本机客户端调用。它把 raw provider secret 注册到 daemon 内存 transient store，并返回短 TTL 一次性引用。
+
+请求：
+
+```json
+{
+  "schema_version": 1,
+  "provider_id": "api-openai-chat",
+  "secret": "raw-secret-from-secure-storage"
+}
+```
+
+响应：
+
+```json
+{
+  "schema_version": 1,
+  "ok": true,
+  "result": {
+    "secret_ref": "secretref_opaque_once",
+    "expires_at": "2026-05-16T12:00:00Z"
+  }
+}
+```
+
+该接口不得支持 list/get/delete；daemon 日志、transport log 和 persisted request 不能记录 raw `secret`。
 
 ### Desktop Client Contract Updates
 
@@ -869,7 +899,7 @@ fixtures 至少覆盖：
 - daemon disconnected。
 - config read/write success、validation failure、atomic write failure、corrupt config recovery。
 - secret configured/missing/deleted/masked 状态。
-- secret_ref success、expired、consumed、not_found、invalid_session、secret_unavailable。
+- secret_ref success、expired、consumed、not_found、invalid_provider、secret_unavailable。
 - redaction：API key、Authorization、daemon token、signed URL、proxy credential 不出现在 JSON、logs、events 或测试快照。
 
 Round 12 实现顺序规则：
@@ -897,5 +927,4 @@ Deferred：
 - Go-native translation provider runtime；当前通过受控 Python CLI bridge。
 - warm worker pool。
 - 多 running job resource scheduler。
-- 完整一次性 transient `secret_ref` channel；当前自管 daemon 使用 safeStorage alias + 受控 env 注入。
 - OS keychain/keytar 路径的 ABI、打包和跨平台兼容验证。

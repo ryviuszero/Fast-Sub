@@ -1,5 +1,5 @@
 import { app, ipcMain, type WebContents } from "electron";
-import type { CreateJobRequest, JobEventHandlers } from "../../shared/contracts/types";
+import type { CreateJobRequest, FFmpegPackageManager, JobEventHandlers } from "../../shared/contracts/types";
 import { DaemonProcessManager } from "./daemonProcess";
 import { MainDaemonFastSubClient } from "./daemonClient";
 import { defaultSecretStorePath, SafeStorageSecretStore } from "./secretStore";
@@ -17,6 +17,8 @@ export function registerFastSubClientIpc(): void {
   handle("fast-sub-client:version", () => client.version());
   handle("fast-sub-client:get-environment-status", () => client.getEnvironmentStatus());
   handle("fast-sub-client:repair-daemon", () => client.repairDaemon());
+  handle("fast-sub-client:install-ffmpeg-package-manager", (_event, manager: unknown) => client.installFFmpegWithPackageManager(normalizeFFmpegPackageManager(manager)));
+  handle("fast-sub-client:install-provider-dependency", (_event, providerId: unknown) => client.installProviderDependency(String(providerId)));
   handle("fast-sub-client:get-config", () => client.getConfig());
   handle("fast-sub-client:update-config", (_event, patch: unknown) => client.updateConfig(patch as Parameters<typeof client.updateConfig>[0]));
   handle("fast-sub-client:save-provider-secret", async (_event, providerId: unknown, alias: unknown, rawSecret: unknown) => {
@@ -108,4 +110,11 @@ function normalizeSecretAlias(providerId: string, alias: unknown): string {
     return providerId === "api-openai-chat" ? "FAST_SUB_OPENAI_CHAT_API_KEY" : "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY";
   }
   return `FAST_SUB_${providerId.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_API_KEY`;
+}
+
+function normalizeFFmpegPackageManager(value: unknown): FFmpegPackageManager {
+  if (value === "winget" || value === "choco") {
+    return value;
+  }
+  return "scoop";
 }

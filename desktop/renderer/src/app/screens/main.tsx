@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { DragEvent } from "react";
-import type { ConfigViewModel, JobDetail, JobStatus } from "../../../../shared/contracts/types";
+import type { ConfigViewModel, JobDetail, JobStatus, ProviderStatus } from "../../../../shared/contracts/types";
 import type { RenderProps } from "../types";
 import { CheckItem, Chip, Chrome, Divider, Footer, Segment, SettingsEntry, Toggle } from "../components";
 import { useRuntimeText, useT } from "../i18n";
@@ -26,7 +26,7 @@ function outputTypeLabel(type: ConfigViewModel["outputType"], t: (key: string) =
   return t(labels[type]);
 }
 
-export function MainEmpty({ setScreen, addFiles, addFolder, addDroppedFiles, asrReady, translationReady, config, providers, jobs, activeJob, updateConfig }: RenderProps) {
+export function MainEmpty({ setScreen, openProviderSettings, addFiles, addFolder, addDroppedFiles, asrReady, translationReady, config, providers, jobs, activeJob, updateConfig }: RenderProps) {
   const t = useT();
   const [translationOutputWarning, setTranslationOutputWarning] = useState(false);
   const [openQuickSelect, setOpenQuickSelect] = useState<"source" | "target" | "output" | null>(null);
@@ -87,7 +87,7 @@ export function MainEmpty({ setScreen, addFiles, addFolder, addDroppedFiles, asr
         {translationOutputWarning && (
           <div className="blocking-note" role="status">
             <span>{t("Translation output not ready")}</span>
-            <button className="btn sm primary" onClick={() => setScreen("settings-providers")} type="button">{t("Configure translation Provider")}</button>
+            <button className="btn sm primary" onClick={() => openProviderSettings("translation")} type="button">{t("Configure translation Provider")}</button>
           </div>
         )}
       </main>
@@ -226,6 +226,10 @@ export function AdvancedSettings(props: RenderProps) {
   const outputFormatIndex = Math.max(0, outputFormats.findIndex((item) => item.value === props.config.outputFormat));
   const conflictIndex = Math.max(0, conflictModes.findIndex((item) => item.value === props.config.outputConflict));
   const canUseTranslationOutput = translationOutputReady(props.config, props.providers, props.translationReady);
+  const availableASRProviders = availableProviderOptions(props.providers, "stt");
+  const selectedASRProvider = availableASRProviders.some((provider) => provider.id === props.config.asrProvider)
+    ? props.config.asrProvider
+    : availableASRProviders[0]?.id ?? "";
   const selectOutputType = (outputType: ConfigViewModel["outputType"]) => {
     if (outputTypeNeedsTranslation(outputType) && !canUseTranslationOutput) {
       setTranslationOutputWarning(true);
@@ -240,14 +244,14 @@ export function AdvancedSettings(props: RenderProps) {
       <div className="settings-grid">
         <label>{t("Subtitle language")}<select value={props.config.defaultLanguage} onChange={(event) => void props.updateConfig({ defaultLanguage: event.target.value })}><option value="auto">{t("Auto detect")}</option><option value="zh">{t("Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></label>
         <label>{t("Target language")}<select value={props.config.targetLanguage} onChange={(event) => void props.updateConfig({ targetLanguage: event.target.value })}><option value="zh">{t("Simplified Chinese")}</option><option value="en">{t("English")}</option><option value="ja">{t("Japanese")}</option><option value="ko">{t("Korean")}</option></select></label>
-        <label>{t("Transcription Provider")}<select value={props.config.asrProvider} onChange={(event) => void props.updateConfig({ asrProvider: event.target.value })}>{props.providers.filter((provider) => provider.capability === "stt").map((provider) => <option disabled={!provider.enabled || provider.state !== "available"} key={provider.id} value={provider.id}>{providerDisplayName(provider.id, provider.name, t)}</option>)}</select></label>
+        <label>{t("Transcription Provider")}<select disabled={availableASRProviders.length === 0} value={selectedASRProvider} onChange={(event) => void props.updateConfig({ asrProvider: event.target.value })}>{availableASRProviders.length > 0 ? availableASRProviders.map((provider) => <option key={provider.id} value={provider.id}>{providerDisplayName(provider.id, provider.name, t)}</option>) : <option value="">{t("No available Provider")}</option>}</select></label>
         <label>{t("Device")}<select value={props.config.device} onChange={(event) => void props.updateConfig({ device: event.target.value as ConfigViewModel["device"] })}><option value="auto">{t("Auto")}</option><option value="cpu">CPU</option><option value="gpu">GPU</option></select></label>
       </div>
       <div className="between"><span>{t("Output content")}</span><Segment items={outputTypes.map((item) => item.label)} active={outputTypeIndex} onSelect={(index) => selectOutputType(outputTypes[index].value)} /></div>
       {translationOutputWarning && (
         <div className="blocking-note" role="status">
           <span>{t("Translation output not ready")}</span>
-          <button className="btn sm primary" onClick={() => props.setScreen("settings-providers")} type="button">{t("Configure translation Provider")}</button>
+          <button className="btn sm primary" onClick={() => props.openProviderSettings("translation")} type="button">{t("Configure translation Provider")}</button>
         </div>
       )}
       <div className="between"><span>{t("Output format")}</span><Segment items={outputFormats.map((item) => item.label)} active={outputFormatIndex} onSelect={(index) => void props.updateConfig({ outputFormat: outputFormats[index].value })} /></div>
@@ -276,9 +280,20 @@ function providerDisplayName(providerId: string, fallback: string, t: (key: stri
   return t(labels[providerId] ?? fallback);
 }
 
+export function availableProviderOptions(providers: ProviderStatus[], capability: ProviderStatus["capability"]): ProviderStatus[] {
+  return providers.filter((provider) => provider.capability === capability && providerCanRun(provider));
+}
+
 function translationOutputReady(config: ConfigViewModel, providers: RenderProps["providers"], translationReady: boolean): boolean {
   const provider = providers.find((item) => item.id === config.translationProvider);
-  return translationReady && Boolean(provider?.enabled && provider.state === "available");
+  return translationReady && Boolean(provider && providerCanRun(provider));
+}
+
+function providerCanRun(provider: ProviderStatus): boolean {
+  if (!provider.enabled || provider.state !== "available") {
+    return false;
+  }
+  return provider.kind !== "api" || provider.checkMode === "live";
 }
 
 export function MainMissing({ setScreen, installModel, translationReady }: RenderProps) {

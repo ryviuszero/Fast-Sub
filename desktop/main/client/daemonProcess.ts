@@ -1,12 +1,12 @@
 import { app } from "electron";
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { redactSecretText } from "../../shared/privacy/redaction";
-import { defaultSecretStorePath, SafeStorageSecretStore } from "./secretStore";
 import { daemonTransportLog } from "./transportLog";
+import { prependNativeDependencyPath } from "./nativeDependencies";
 import { uiError } from "./uiError";
 
 export type DaemonSession = {
@@ -64,8 +64,12 @@ export class DaemonProcessManager {
   }
 
   async stop(): Promise<void> {
+    const session = this.session;
     if (this.child && !this.child.killed) {
       this.child.kill();
+    }
+    if (session?.owned && session.pid > 0 && process.platform === "win32") {
+      await killWindowsProcessTree(session.pid).catch(() => undefined);
     }
     this.child = null;
     this.session = null;
@@ -147,6 +151,12 @@ export class DaemonProcessManager {
   }
 }
 
+async function killWindowsProcessTree(pid: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    execFile("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { windowsHide: true, timeout: 10000 }, () => resolve());
+  });
+}
+
 function resolveDaemonCommand(): DaemonCommand | null {
   const explicit = process.env.FAST_SUB_GO;
   if (explicit && existsSync(explicit)) {
@@ -182,31 +192,5 @@ async function scrubbedEnv(): Promise<NodeJS.ProcessEnv> {
     }
   }
   env.FAST_SUB_GO_CONFIG = env.FAST_SUB_GO_CONFIG ?? join(app.getPath("userData"), "fast-sub-go.toml");
-  const store = new SafeStorageSecretStore(defaultSecretStorePath());
-  const secrets = await store.listEnvSecrets();
-  for (const [key, value] of Object.entries(secrets)) {
-    env[key] = value;
-  }
-  const legacyOpenAISecret = secrets.FAST_SUB_OPENAI_API_KEY ?? secrets["openai-default"];
-  if (legacyOpenAISecret && !env.FAST_SUB_OPENAI_API_KEY) {
-    env.FAST_SUB_OPENAI_API_KEY = legacyOpenAISecret;
-  }
-  if (legacyOpenAISecret && !env.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY) {
-    env.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY = legacyOpenAISecret;
-  }
-  if (legacyOpenAISecret && !env.FAST_SUB_OPENAI_CHAT_API_KEY) {
-    env.FAST_SUB_OPENAI_CHAT_API_KEY = legacyOpenAISecret;
-  }
-  if (secrets.FAST_SUB_OPENAI_CHAT_API_KEY && !env.OPENAI_API_KEY) {
-    env.OPENAI_API_KEY = secrets.FAST_SUB_OPENAI_CHAT_API_KEY;
-  } else if (legacyOpenAISecret && !env.OPENAI_API_KEY) {
-    env.OPENAI_API_KEY = legacyOpenAISecret;
-  }
-  if (secrets.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY && !env.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY) {
-    env.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY = secrets.FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY;
-  }
-  if (secrets.FAST_SUB_OPENAI_CHAT_API_KEY && !env.FAST_SUB_OPENAI_CHAT_API_KEY) {
-    env.FAST_SUB_OPENAI_CHAT_API_KEY = secrets.FAST_SUB_OPENAI_CHAT_API_KEY;
-  }
-  return env;
+  return prependNativeDependencyPath(env);
 }

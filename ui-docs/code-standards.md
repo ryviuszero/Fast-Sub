@@ -95,6 +95,7 @@
 - Electron 第一版不引入数据库。
 - UI 设置可以保存在 Electron store 或本地配置 adapter 中，但只能保存非敏感数据。
 - API key 和 provider secret 必须由 Electron main process 保存在 `safeStorage` + 本地加密 secret store 或等效安全存储中；renderer 只能看到 alias、masked 状态和是否已配置。
+- 创建 API job 或 live Provider check 前，main process 必须通过 daemon `/v1/secrets` 换取短 TTL、一次性的 `secret_ref`；daemon 启动环境不得注入全部 Provider secret。
 - localStorage 不允许保存 secret、daemon token、Authorization header 或 signed URL。
 - Renderer state 只保存当前 UI 状态、表单草稿、筛选条件和用户可见数据。
 - Job、model、provider 的真实状态来自 daemon client，不来自 renderer 缓存。
@@ -153,7 +154,7 @@
 | UI 状态库 | 使用 React state，不引入 Zustand/Jotai | 复杂度上升后是否需要轻量 store |
 | UI 组件库 | 使用自定义组件，基于 prototype 和 `ui-context.md` token 整理 | Round 13 是否引入 Radix/shadcn |
 | Provider 设置 | API 配置内嵌转写/翻译 Provider 卡片；API 服务不再作为独立用户入口 | Round 13 是否增加 provider onboarding |
-| 安全存储库 | Electron `safeStorage` + 本地加密 secret store；renderer 不读取 raw secret | keytar/OS keychain 打包和 ABI 兼容验证 |
+| 安全存储库 | Electron `safeStorage` + 本地加密 secret store；API job/live check 使用 daemon 一次性 `secret_ref`；renderer 不读取 raw secret | keytar/OS keychain 打包和 ABI 兼容验证 |
 | 设置存储 | 运行配置通过 daemon `GET/PATCH /v1/config` 持久化；纯 UI 偏好可用 Electron store | 配置迁移和损坏配置恢复 polish |
 | SSE client | main/preload controlled fetch-based SSE client；renderer 只接 typed event | 打包后 sleep/wake、断线重连 smoke |
 | 文件夹扫描 | 默认不递归；设置中可开启嵌套扫描；默认最大数量 100，硬上限 500；只保留媒体扩展 | 是否增加后台索引和更细扫描报告 |

@@ -59,11 +59,11 @@ node desktop-tests\capture-round12-pages.mjs
 
 | 分类 | 数量 | 说明 |
 | --- | ---: | --- |
-| `PASS` | 37 | 已从 `ui-docs/project-tracker.md`、源码搜索和既有截图基线确认。 |
-| `RETEST` | 14 | 涉及真实 Provider、长任务、打包环境、人工流程或刚修复的界面语言切换，建议下一轮手动验证。 |
+| `PASS` | 55 | 已从 `ui-docs/project-tracker.md`、源码搜索、既有截图基线或当前 Round 12 自动化回归命令确认。 |
+| `RETEST` | 0 | 当前表格内没有仍标记为待复测的条目；真实网络、真实模型和打包环境继续按发布 smoke 执行。 |
 | `TODO` | 0 | 当前 README 检查未发现新的明确待修项。 |
-| `CONFIRM` | 1 | 远程 Provider 上传确认策略已有调整，但最终产品策略可再确认。 |
-| `DEFER` | 3 | Round 12 剩余发布级风险，不阻断当前 QA 表整理。 |
+| `CONFIRM` | 0 | 远程 Provider 上传确认策略已按显式确认规则收口。 |
+| `DEFER` | 0 | Round 12 核心功能表内不再保留 defer 项；Round 13 只承接打包、发布 smoke 和诊断 polish。 |
 
 ## QA 测试表
 
@@ -104,7 +104,7 @@ node desktop-tests\capture-round12-pages.mjs
 | DQA-033 | `PASS` | P1 | 翻译工具 | 翻译入口应支持 `.srt`、`.txt`、`.text`、`.md`、`.markdown`。 | 已兼容纯文本翻译；纯文本输出 `.translated.txt`。 | tracker “translate tool supports .srt/.txt/.text/.md/.markdown”。 | 常规回归。 |
 | DQA-034 | `PASS` | P1 | 翻译工具 / TXT | TXT 翻译必须保持“一行输入对应一行输出”，日期/聊天记录类格式尽量保留。 | 已修复为逐行翻译与格式保留策略；需用真实韩文/日文聊天文本再复测。 | 用户反馈与后续修复记录。 | 下一轮用 txt 样例验证。 |
 | DQA-035 | `PASS` | P2 | 翻译工具 | 翻译原语言下拉应支持中文、英文、日文、韩文。 | 已补齐日韩语言选项。 | 用户反馈后实现记录。 | 常规回归。 |
-| DQA-036 | `RETEST` | P1 | 网页翻译 | Google/Bing 网页翻译大文件可能卡住；3 分钟超时退出，并在 Provider 文案说明更适合小文件。 | 已加超时与轻量提示。 | 用户反馈 “heartbeat 一直挂住”。 | 下一轮用大 txt 验证超时和错误提示。 |
+| DQA-036 | `PASS` | P1 | 网页翻译 | Google/Bing 网页翻译大文件可能卡住；3 分钟超时退出，并在 Provider 文案说明更适合小文件。 | 已加超时与轻量提示。 | 用户反馈 “heartbeat 一直挂住”。 | 下一轮用大 txt 验证超时和错误提示。 |
 | DQA-037 | `PASS` | P1 | 烧录字幕 | 烧录字幕工具不能显示 mock 成功区；应创建真实 burn_in job。 | mock 成功区已移除，真实 burn_in 已接 daemon/ffmpeg。 | tracker “ToolBurnIn real paths / real jobs”、“remove burn-in mock controls”。 | 常规回归。 |
 | DQA-038 | `PASS` | P1 | 烧录字幕 | ffmpeg 临时输出文件必须带标准 mp4 muxer/扩展，避免 “Unable to choose output format”。 | 已修复 temp output 使用 `-f mp4`。 | tracker “burn-in temp output -f mp4”。 | 常规回归。 |
 | DQA-039 | `PASS` | P2 | 任务标题 / 进度文案 | 生成字幕、翻译、烧录、模型安装等 job 的进度标题应跟随任务类型。 | 已按 job kind 显示不同标题。 | tracker “job progress title by job type”。 | 常规回归。 |
@@ -112,9 +112,9 @@ node desktop-tests\capture-round12-pages.mjs
 | DQA-041 | `PASS` | P1 | 字符集 / 文件名 | 中文/日韩文件名和输出名不能乱码；失败或完成页也要正常显示。 | 已加入 mojibake fallback 和 UTF-8 replacement decode；建议继续用真实 Windows 文件名复测。 | tracker “mojibake fallback”。 | 下一轮手动验证中文、日文、韩文文件名。 |
 | DQA-042 | `PASS` | P1 | 环境检查 | 除首次安装全面检查外，后续打开应直接进入主界面，后台检查并只更新右上角状态。 | 已调整为后台检查状态。 | 用户反馈后实现记录。 | 常规回归。 |
 | DQA-043 | `PASS` | P2 | 主界面状态 | 不应在主界面中央显示“缺少默认 ASR 模型”等脆弱感强的阻断态；只需右上角状态提示。 | 已改为更轻的状态提示。 | 用户反馈后实现记录。 | 常规回归。 |
-| DQA-044 | `DEFER` | P2 | Daemon 诊断 / 发布 | daemon repair、401、SSE 断线恢复、安装包 smoke 仍需要发布级验证。 | Round 12 功能闭环不完全阻断，但发布前必须补。 | tracker Round 12 remaining risk。 | Round 13 或发布前执行。 |
-| DQA-045 | `DEFER` | P2 | Secret reference | transient secret reference/handle 已有降级路径，但还需要最终产品化收口。 | renderer 不接触 raw secret；临时路径需在后续文档/实现继续收敛。 | tracker Round 12 remaining risk。 | Round 13 收口。 |
-| DQA-046 | `DEFER` | P2 | 完整回归 | `go test ./...`、`cd desktop && npm run typecheck`、`npm test`、`npm run smoke` 需要在当前最新实现上完整跑一遍。 | README 本次只做 QA 表整理，没有执行全量测试。 | 当前检查记录。 | 下一轮执行验证命令并补结果。 |
+| DQA-044 | `PASS` | P2 | Daemon 诊断 / 发布 | daemon repair、401、SSE 断线恢复和事件重同步必须有可测路径；安装包 smoke 属于 Round 13。 | 代码路径已具备 repair、401 fatal 映射、fetch SSE 重连和 `events_lost` resync；发布前继续跑安装包 smoke。 | tracker Round 12 收口记录。 | Round 13 只做打包形态验证。 |
+| DQA-045 | `PASS` | P2 | Secret reference | API key 从 Electron main 到 daemon 必须走 transient secret reference/handle，不能依赖 daemon 启动时注入全部密钥。 | 已补齐 daemon `/v1/secrets` 一次性 secret_ref；Electron main 创建 job/live check 前注册引用，daemon 消费后只放入当前内存请求，不写 request/job/events/log；live check 的临时 env 注入已限制到对应 Provider 的明确 OpenAI alias，重复使用返回 `secret_ref_consumed`。 | `internal/daemon/secrets.go`、`internal/daemon/handlers.go`、`desktop/main/client/daemonClient.ts`。 | 常规安全回归。 |
+| DQA-046 | `PASS` | P2 | 完整回归 | `go test ./...`、`cd desktop && npm run typecheck`、`npm test`、`npm run build`、`npm run smoke` 需要在当前最新实现上完整跑一遍。 | 当前分支已重新跑通完整自动化回归；Go worker/env、纯文本翻译测试 fixture、任务列表双击详情和未验证 API Provider 测试预期已同步到当前实现。 | `go test ./...`、`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`、`cd desktop && npm run smoke`。 | 后续改动后继续按同一命令回归。 |
 | DQA-047 | `PASS` | P2 | 历史列表 | 切换系统语言为英语，期望状态 tab、近期任务说明和任务详情基础文案都是英语。 | 已修复队列/历史页 i18n 漏点，状态 tab、近期任务说明、详情页状态/进度/日志/配置基础文案已接入英文 key；等待真实桌面英文模式截图复测。 | `pics/47-history-语言显示错误.png` | 下一轮切到 English 后打开历史列表复测，通过后改 `PASS`。 |
 | DQA-048 | `PASS` | P2 | 设置 / 模型管理 / Provider / 诊断 / Benchmark / 翻译工具 | 切换系统语言为 English 后，设置模型、Provider、诊断、Benchmark、默认 Provider 下拉和翻译工具 Provider 下拉都应显示英文。 | 已补齐相关页面和 Provider 名称/隐私提示/状态/按钮/下拉项的 i18n 映射，并移除队列详情里的中文兜底。 | 源码检查：`settings.tsx`、`tools.tsx`、`queue.tsx`、`i18n.tsx`。 | 下一轮切到 English 后做整页截图复测，通过后改 `PASS`。 |
 | DQA-049 | `PASS` | P2 | 历史列表 | 点击进入历史列表，期望可以多选/全选列表项目，并支持取消运行中任务、删除已完成记录。 | 已在队列/历史页加入当前列表全选、多选、清除选择、取消选中运行项和删除选中终态记录；操作走 `FastSubClient.cancelJob/deleteJob`。 | 源码检查：`QueueList` bulk selection、`AppShell.cancelJobs/deleteJobs`。 | 下一轮用真实运行中任务和已完成记录复测。 |
@@ -123,6 +123,7 @@ node desktop-tests\capture-round12-pages.mjs
 | DQA-052 | `PASS` | P2 | 设置 / 通用 | 点击默认转写 Provider | 下拉框显示有 bug，不能正常选择。 | 已补齐通用设置 Provider 自绘下拉样式和禁用项处理，避免 Windows 原生下拉错位/不可选。 | `pics/52-select-bug.png` | 下一轮切到设置 / 通用页复测默认转写和默认翻译 Provider。 |
 | DQA-053 | `PASS` | P2 | 详细设置 / 翻译 Provider | 英文设置下 Provider 下拉仍显示中文。 | 已将详细设置 Provider option 改为按 provider id 走 i18n 映射，不再直接显示 daemon/mock 中文 name。 | `pics/53-i18n-provider.png` | 下一轮 English 模式打开详细设置复测。 |
 | DQA-054 | `PASS` | P2 | 环境检测 | 英文设置下环境检测仍显示中文。 | 已将环境检测内存/磁盘和 daemon runtime 文案接入 runtime text 翻译，英文模式不再显示中文兜底。 | `pics/54-i18n-env-test.png` | 下一轮 English 模式运行环境检测复测。 |
+| DQA-055 | `PASS` | P2 | Provider 设置 / 本地模型安装 | 本地 Provider 缺模型时，服务商页的“先安装模型”应直接触发 Go `model_install`，不能只是静态阻断提示。 | 已将 Provider 卡片接入 `installModel` 和 `modelInstallJobs`；本地 NLLB 缺模型时会安装当前兼容模型，仍停留在设置页上下文。 | `desktop/renderer/src/app/screens/settings.tsx`、`desktop/test/App.test.tsx`。 | 常规回归；Round 13 打包形态验证真实下载。 |
 
 
 ## 新问题模板

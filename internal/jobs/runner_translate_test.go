@@ -26,7 +26,19 @@ func TestRunTranslateSRTUsesPythonCLIBridge(t *testing.T) {
 		"TEMP":                     os.Getenv("TEMP"),
 		"TMP":                      os.Getenv("TMP"),
 	}
-	runner := DefaultRunner{Env: func(key string) string { return env[key] }}
+	modelDir := filepath.Join(dir, "nllb-model")
+	if err := os.MkdirAll(modelDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runner := DefaultRunner{
+		Env: func(key string) string { return env[key] },
+		ModelLookup: func(modelID, providerID string) (string, error) {
+			if modelID != "nllb-200-distilled-600m-ct2-int8" || providerID != "local-nllb-ct2" {
+				t.Fatalf("unexpected lookup %q %q", modelID, providerID)
+			}
+			return modelDir, nil
+		},
+	}
 	result, appErr := runner.runTranslateSRT(context.Background(), CreateRequest{
 		Type:           "translate_srt",
 		InputPath:      input,
@@ -64,7 +76,19 @@ func TestRunTranslateSRTAcceptsPlainTextInput(t *testing.T) {
 		"TEMP":                     os.Getenv("TEMP"),
 		"TMP":                      os.Getenv("TMP"),
 	}
-	runner := DefaultRunner{Env: func(key string) string { return env[key] }}
+	modelDir := filepath.Join(dir, "nllb-model")
+	if err := os.MkdirAll(modelDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runner := DefaultRunner{
+		Env: func(key string) string { return env[key] },
+		ModelLookup: func(modelID, providerID string) (string, error) {
+			if modelID != "nllb-200-distilled-600m-ct2-int8" || providerID != "local-nllb-ct2" {
+				t.Fatalf("unexpected lookup %q %q", modelID, providerID)
+			}
+			return modelDir, nil
+		},
+	}
 	result, appErr := runner.runTranslateSRT(context.Background(), CreateRequest{
 		Type:           "translate_srt",
 		InputPath:      input,
@@ -108,7 +132,19 @@ func TestRunTranslateSRTPlainTextPreservesLineLayout(t *testing.T) {
 		"TEMP":                     os.Getenv("TEMP"),
 		"TMP":                      os.Getenv("TMP"),
 	}
-	runner := DefaultRunner{Env: func(key string) string { return env[key] }}
+	modelDir := filepath.Join(dir, "nllb-model")
+	if err := os.MkdirAll(modelDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runner := DefaultRunner{
+		Env: func(key string) string { return env[key] },
+		ModelLookup: func(modelID, providerID string) (string, error) {
+			if modelID != "nllb-200-distilled-600m-ct2-int8" || providerID != "local-nllb-ct2" {
+				t.Fatalf("unexpected lookup %q %q", modelID, providerID)
+			}
+			return modelDir, nil
+		},
+	}
 	_, appErr := runner.runTranslateSRT(context.Background(), CreateRequest{
 		Type:           "translate_srt",
 		InputPath:      input,

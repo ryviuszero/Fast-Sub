@@ -3,6 +3,7 @@ import type {
   CreateJobRequest,
   EnvironmentStatus,
   FastSubClient,
+  FFmpegPackageManager,
   HealthStatus,
   JobDetail,
   JobEvent,
@@ -21,6 +22,8 @@ export interface FastSubClientBridge {
   version(): Promise<string>;
   getEnvironmentStatus(): Promise<EnvironmentStatus>;
   repairDaemon(): Promise<EnvironmentStatus>;
+  installFFmpegWithPackageManager(manager: FFmpegPackageManager): Promise<EnvironmentStatus>;
+  installProviderDependency(providerId: string): Promise<ProviderStatus>;
   getConfig(): Promise<ConfigViewModel>;
   updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel>;
   saveProviderSecret(providerId: string, alias: string, rawSecret: string): Promise<ConfigViewModel>;
@@ -49,6 +52,8 @@ export class DaemonFastSubClient implements FastSubClient {
   version(): Promise<string> { return this.bridge.version(); }
   getEnvironmentStatus(): Promise<EnvironmentStatus> { return this.bridge.getEnvironmentStatus(); }
   repairDaemon(): Promise<EnvironmentStatus> { return this.bridge.repairDaemon(); }
+  installFFmpegWithPackageManager(manager: FFmpegPackageManager): Promise<EnvironmentStatus> { return this.bridge.installFFmpegWithPackageManager(manager); }
+  installProviderDependency(providerId: string): Promise<ProviderStatus> { return this.bridge.installProviderDependency(providerId); }
   getConfig(): Promise<ConfigViewModel> { return this.bridge.getConfig(); }
   updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel> { return this.bridge.updateConfig(patch); }
   saveProviderSecret(providerId: string, alias: string, rawSecret: string): Promise<ConfigViewModel> { return this.bridge.saveProviderSecret(providerId, alias, rawSecret); }

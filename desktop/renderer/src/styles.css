@@ -626,7 +626,10 @@ label { display: grid; gap: 4px; color: var(--ink-2); font-size: 11px; font-weig
 .prototype-window.font-system {
   font-family: var(--sans);
 }
-.job-card { cursor: pointer; }
+.job-card {
+  cursor: pointer;
+  user-select: none;
+}
 .job-card-select {
   align-self: stretch;
   display: grid;
@@ -1013,6 +1016,21 @@ button.toggle { cursor: pointer; }
   bottom: 0;
   background: var(--paper);
   padding-top: 2px;
+}
+
+.diag-log {
+  display: grid;
+  gap: 4px;
+  max-height: 132px;
+  overflow: auto;
+  padding: 10px;
+  border: 1.2px solid var(--ink);
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
 }
 
 .debug-peek {

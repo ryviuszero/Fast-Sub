@@ -3,6 +3,7 @@ import type {
   CreateJobRequest,
   EnvironmentStatus,
   FastSubClient,
+  FFmpegPackageManager,
   HealthStatus,
   JobDetail,
   JobEvent,
@@ -212,6 +213,20 @@ export class MockFastSubClient implements FastSubClient {
     return this.getEnvironmentStatus();
   }
 
+  async installFFmpegWithPackageManager(_manager: FFmpegPackageManager): Promise<EnvironmentStatus> {
+    return this.getEnvironmentStatus();
+  }
+
+  async installProviderDependency(providerId: string): Promise<ProviderStatus> {
+    const provider = this.providers.find((item) => item.id === providerId);
+    if (!provider) {
+      throw new Error("unknown provider");
+    }
+    const next = { ...provider, state: "available" as const, enabled: true };
+    this.providers = this.providers.map((item) => item.id === providerId ? next : item);
+    return clone(next);
+  }
+
   async getConfig(): Promise<ConfigViewModel> {
     return clone(this.config);
   }
@@ -230,6 +245,7 @@ export class MockFastSubClient implements FastSubClient {
       ...provider,
       state: "available",
       enabled: true,
+      checkMode: provider.kind === "api" ? "static" : provider.checkMode,
       maskedCredential: `${alias} (已保存)`
     } : provider);
     return clone(this.config);
@@ -326,9 +342,9 @@ export class MockFastSubClient implements FastSubClient {
       return clone({ ...provider, state: "disabled", privacyNote: `${provider.privacyNote} Live 测试需要单独确认上传。` });
     }
     if (mode === "live" && provider.kind === "api") {
-      return clone({ ...provider, state: "available" });
+      return clone({ ...provider, state: "available", enabled: true, checkMode: "live" });
     }
-    return clone(provider);
+    return clone({ ...provider, checkMode: mode });
   }
 
   async createJob(request: CreateJobRequest): Promise<JobDetail> {
