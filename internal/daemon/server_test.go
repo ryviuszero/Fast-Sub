@@ -19,12 +19,30 @@ import (
 	fserrors "fast-sub/internal/errors"
 	"fast-sub/internal/events"
 	"fast-sub/internal/jobs"
+	"fast-sub/internal/providers"
 )
 
 type fakeRunner struct {
 	block   chan struct{}
 	started chan string
 	secret  string
+}
+
+func (r fakeRunner) RunJob(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
+	return r.RunTranscribe(ctx, job, req, emit)
+}
+
+type captureRunner struct {
+	requests chan jobs.CreateRequest
+}
+
+func (r captureRunner) RunJob(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
+	return r.RunTranscribe(ctx, job, req, emit)
+}
+
+func (r captureRunner) RunTranscribe(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
+	r.requests <- req
+	return jobs.Result{InputPath: req.InputPath, OutputPath: req.OutputPath, Provider: req.Provider, Model: req.Model, Warnings: []string{}}, nil
 }
 
 func (r fakeRunner) RunTranscribe(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
@@ -56,6 +74,10 @@ func (r fakeRunner) RunTranscribe(ctx context.Context, job jobs.Job, req jobs.Cr
 type shutdownRunner struct {
 	started  chan struct{}
 	canceled chan struct{}
+}
+
+func (r shutdownRunner) RunJob(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
+	return r.RunTranscribe(ctx, job, req, emit)
 }
 
 func (r shutdownRunner) RunTranscribe(ctx context.Context, job jobs.Job, req jobs.CreateRequest, emit func(jobs.Update)) (jobs.Result, *fserrors.AppError) {
@@ -95,6 +117,157 @@ func TestServer_AuthAndCORS(t *testing.T) {
 	}
 	if decoded.Error == nil || decoded.Error.Code != "unauthorized" {
 		t.Fatalf("error = %#v", decoded.Error)
+	}
+}
+
+func TestServer_DeleteModelRemovesManagedModel(t *testing.T) {
+	t.Setenv("FAST_SUB_MODEL_STORE_DIR", t.TempDir())
+	srv := newTestHTTPServer(t, fakeRunner{})
+	defer srv.Close()
+
+	resp, body := request(t, srv.URL, http.MethodDelete, "/v1/models/whisper-base", "test-token", nil, "")
+	if resp.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`"removed":true`)) || !bytes.Contains(body, []byte(`"status":"missing"`)) {
+		t.Fatalf("delete model status=%d body=%s", resp.StatusCode, body)
+	}
+}
+
+func TestServer_ConfigPatchPreservesPreviousValues(t *testing.T) {
+	t.Parallel()
+	srv := newTestHTTPServer(t, fakeRunner{})
+	defer srv.Close()
+
+	resp, body := request(t, srv.URL, http.MethodPatch, "/v1/config", "test-token", map[string]any{
+		"schema_version": 1,
+		"patch": map[string]any{
+			"output_type": "bilingual_srt",
+		},
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch output_type status=%d body=%s", resp.StatusCode, body)
+	}
+	resp, body = request(t, srv.URL, http.MethodPatch, "/v1/config", "test-token", map[string]any{
+		"schema_version": 1,
+		"patch": map[string]any{
+			"output_format": "vtt",
+		},
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch output_format status=%d body=%s", resp.StatusCode, body)
+	}
+	if !bytes.Contains(body, []byte(`"output_type":"bilingual_srt"`)) || !bytes.Contains(body, []byte(`"output_format":"vtt"`)) {
+		t.Fatalf("config patch did not preserve previous values: %s", body)
+	}
+	resp, body = request(t, srv.URL, http.MethodGet, "/v1/config", "test-token", nil, "")
+	if resp.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`"output_type":"bilingual_srt"`)) || !bytes.Contains(body, []byte(`"output_format":"vtt"`)) {
+		t.Fatalf("get config did not preserve patches status=%d body=%s", resp.StatusCode, body)
+	}
+}
+
+func TestServer_ConfigPatchPersistsToFile(t *testing.T) {
+	t.Parallel()
+	configPath := filepath.Join(t.TempDir(), "fast-sub-go.toml")
+	server, err := New(Config{
+		Token:      "test-token",
+		JobRoot:    t.TempDir(),
+		ConfigPath: configPath,
+		Runner:     fakeRunner{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(server)
+	defer srv.Close()
+
+	resp, body := request(t, srv.URL, http.MethodPatch, "/v1/config", "test-token", map[string]any{
+		"schema_version": 1,
+		"patch": map[string]any{
+			"language":                       "en",
+			"target_language":                "zh",
+			"output_type":                    "bilingual_srt",
+			"output_format":                  "vtt",
+			"folder_scan_include_subfolders": true,
+			"folder_scan_max_files":          200,
+		},
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch config status=%d body=%s", resp.StatusCode, body)
+	}
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`output_type = "bilingual_srt"`)) || !bytes.Contains(raw, []byte(`output_format = "vtt"`)) || !bytes.Contains(raw, []byte(`folder_scan_include_subfolders = true`)) || !bytes.Contains(raw, []byte(`folder_scan_max_files = 200`)) {
+		t.Fatalf("config file did not persist patch: %s", raw)
+	}
+
+	restarted, err := New(Config{
+		Token:      "test-token",
+		JobRoot:    t.TempDir(),
+		ConfigPath: configPath,
+		Runner:     fakeRunner{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restarted.runtimeConfig.OutputType != "bilingual_srt" || restarted.runtimeConfig.OutputFormat != "vtt" || restarted.runtimeConfig.Language != "en" || !restarted.runtimeConfig.FolderScanIncludeSubfolders || restarted.runtimeConfig.FolderScanMaxFiles != 200 {
+		t.Fatalf("restarted config = %#v", restarted.runtimeConfig)
+	}
+}
+
+func TestServer_ConfigPatchKeepsAPIProvidersIndependent(t *testing.T) {
+	t.Parallel()
+	configPath := filepath.Join(t.TempDir(), "fast-sub-go.toml")
+	server, err := New(Config{
+		Token:      "test-token",
+		JobRoot:    t.TempDir(),
+		ConfigPath: configPath,
+		Runner:     fakeRunner{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(server)
+	defer srv.Close()
+
+	resp, body := request(t, srv.URL, http.MethodPatch, "/v1/config", "test-token", map[string]any{
+		"schema_version": 1,
+		"patch": map[string]any{
+			"api_providers": map[string]any{
+				"api-openai-transcription": map[string]any{
+					"base_url":      "https://api.openai.com/v1",
+					"model":         "gpt-4o-transcribe",
+					"api_key_alias": "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY",
+				},
+				"api-openai-chat": map[string]any{
+					"base_url":      "http://127.0.0.1:1234/v1",
+					"model":         "qwen/qwen3-4b-2507",
+					"api_key_alias": "FAST_SUB_OPENAI_CHAT_API_KEY",
+				},
+			},
+		},
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch config status=%d body=%s", resp.StatusCode, body)
+	}
+	if !bytes.Contains(body, []byte(`"api-openai-transcription":{"api_key_alias":"FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY","api_key_status":"missing","base_url":"https://api.openai.com/v1","model":"gpt-4o-transcribe"`)) {
+		t.Fatalf("transcription provider config missing from response: %s", body)
+	}
+	if !bytes.Contains(body, []byte(`"api-openai-chat":{"api_key_alias":"FAST_SUB_OPENAI_CHAT_API_KEY","api_key_status":"missing","base_url":"http://127.0.0.1:1234/v1","model":"qwen/qwen3-4b-2507"`)) {
+		t.Fatalf("chat provider config missing from response: %s", body)
+	}
+
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`[providers.api-openai-transcription]`)) || !bytes.Contains(raw, []byte(`[providers.api-openai-chat]`)) {
+		t.Fatalf("provider sections were not persisted independently: %s", raw)
+	}
+	if !bytes.Contains(raw, []byte(`api_key_env = "FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY"`)) || !bytes.Contains(raw, []byte(`api_key_env = "FAST_SUB_OPENAI_CHAT_API_KEY"`)) {
+		t.Fatalf("provider key aliases were not persisted independently: %s", raw)
+	}
+	if !bytes.Contains(raw, []byte(`model = "gpt-4o-transcribe"`)) || !bytes.Contains(raw, []byte(`model = "qwen/qwen3-4b-2507"`)) {
+		t.Fatalf("provider models were not persisted independently: %s", raw)
 	}
 }
 
@@ -220,6 +393,97 @@ func TestServer_JobsLifecycle(t *testing.T) {
 	resp, body = request(t, srv.URL, http.MethodDelete, "/v1/jobs/"+jobID, "test-token", nil, "")
 	if resp.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`"deleted":true`)) {
 		t.Fatalf("delete status=%d body=%s", resp.StatusCode, body)
+	}
+}
+
+func TestServer_TransientSecretRefFeedsRunnerWithoutPersistence(t *testing.T) {
+	t.Parallel()
+	requests := make(chan jobs.CreateRequest, 1)
+	srv, root := newTestHTTPServerWithRoot(t, captureRunner{requests: requests})
+	defer srv.Close()
+
+	resp, body := request(t, srv.URL, http.MethodPost, "/v1/secrets", "test-token", map[string]any{
+		"schema_version": 1,
+		"provider_id":    "api-openai-transcription",
+		"secret":         "sk-test-transient-secret",
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("create secret status=%d body=%s", resp.StatusCode, body)
+	}
+	var envelope struct {
+		Result struct {
+			SecretRef string `json:"secret_ref"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Result.SecretRef == "" {
+		t.Fatalf("missing secret ref in %s", body)
+	}
+
+	resp, body = request(t, srv.URL, http.MethodPost, "/v1/jobs", "test-token", jobs.CreateRequest{
+		SchemaVersion: 1,
+		Type:          "transcribe",
+		InputPath:     "input.mp4",
+		OutputPath:    "out.srt",
+		Provider:      "api-openai-transcription",
+		Model:         "gpt-4o-transcribe",
+		Options:       map[string]any{"api_key_secret_ref": envelope.Result.SecretRef},
+	}, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("create job status=%d body=%s", resp.StatusCode, body)
+	}
+	var req jobs.CreateRequest
+	select {
+	case req = <-requests:
+	case <-time.After(2 * time.Second):
+		t.Fatal("runner did not receive request")
+	}
+	if req.Extra["openai_transcription_api_key"] != "sk-test-transient-secret" {
+		t.Fatalf("runner did not receive transient secret: %#v", req.Extra)
+	}
+	raw, err := os.ReadFile(filepath.Join(root, firstJobID(t, root), "request.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte("sk-test-transient-secret")) || bytes.Contains(raw, []byte(envelope.Result.SecretRef)) {
+		t.Fatalf("request.json leaked secret/ref: %s", raw)
+	}
+
+	resp, body = request(t, srv.URL, http.MethodPost, "/v1/jobs", "test-token", jobs.CreateRequest{
+		SchemaVersion: 1,
+		Type:          "transcribe",
+		InputPath:     "input-2.mp4",
+		OutputPath:    "out-2.srt",
+		Provider:      "api-openai-transcription",
+		Model:         "gpt-4o-transcribe",
+		Options:       map[string]any{"api_key_secret_ref": envelope.Result.SecretRef},
+	}, "")
+	if resp.StatusCode != http.StatusInternalServerError || !bytes.Contains(body, []byte("secret_ref_consumed")) {
+		t.Fatalf("reused secret ref status=%d body=%s", resp.StatusCode, body)
+	}
+}
+
+func TestServer_ProviderSecretRuntimeEnvIsScoped(t *testing.T) {
+	t.Parallel()
+	cfg := withProviderSecret(providers.RuntimeConfig{
+		Env: func(key string) string {
+			return "outer-" + key
+		},
+	}, "api-openai-chat", "sk-chat-secret")
+
+	if got := cfg.Env("FAST_SUB_OPENAI_CHAT_API_KEY"); got != "sk-chat-secret" {
+		t.Fatalf("chat key env = %q", got)
+	}
+	if got := cfg.Env("OPENAI_API_KEY"); got != "sk-chat-secret" {
+		t.Fatalf("legacy openai key env = %q", got)
+	}
+	if got := cfg.Env("FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY"); got != "outer-FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY" {
+		t.Fatalf("transcription key env should not receive chat secret, got %q", got)
+	}
+	if got := cfg.Env("FAST_SUB_DAEMON_TOKEN"); got != "outer-FAST_SUB_DAEMON_TOKEN" {
+		t.Fatalf("unrelated token env should not receive provider secret, got %q", got)
 	}
 }
 
@@ -406,7 +670,7 @@ func newTestHTTPServer(t *testing.T, runner fakeRunner) *httptest.Server {
 	return srv
 }
 
-func newTestHTTPServerWithRoot(t *testing.T, runner fakeRunner) (*httptest.Server, string) {
+func newTestHTTPServerWithRoot(t *testing.T, runner jobs.Runner) (*httptest.Server, string) {
 	t.Helper()
 	root := t.TempDir()
 	s, err := New(Config{
@@ -419,6 +683,21 @@ func newTestHTTPServerWithRoot(t *testing.T, runner fakeRunner) (*httptest.Serve
 		t.Fatal(err)
 	}
 	return httptest.NewServer(s), root
+}
+
+func firstJobID(t *testing.T, root string) string {
+	t.Helper()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			return entry.Name()
+		}
+	}
+	t.Fatal("no job directory")
+	return ""
 }
 
 func request(t *testing.T, baseURL, method, path, token string, payload any, lastEventID string) (*http.Response, []byte) {

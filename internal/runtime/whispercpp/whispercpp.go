@@ -2,7 +2,6 @@
 package whispercpp
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	fserrors "fast-sub/internal/errors"
+	"fast-sub/internal/procutil"
 	"fast-sub/internal/subtitle"
 )
 
@@ -457,32 +457,10 @@ func nonEmptyLines(block string) []string {
 }
 
 func runCommand(ctx context.Context, name string, args []string, tailLimit int) completedProcess {
-	cmd := exec.CommandContext(ctx, name, args...)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	exitCode := 0
-	if err != nil {
-		exitCode = 1
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			exitCode = exitErr.ExitCode()
-		}
-	}
-	if ctx.Err() != nil {
-		err = ctx.Err()
-	}
-	return completedProcess{Stdout: tail(stdout.String(), tailLimit), Stderr: tail(stderr.String(), tailLimit), ExitCode: exitCode, Err: err}
+	return procutil.Run(ctx, name, args, nil, tailLimit)
 }
 
-type completedProcess struct {
-	Stdout   string
-	Stderr   string
-	ExitCode int
-	Err      error
-}
+type completedProcess = procutil.CompletedProcess
 
 func processMessage(completed completedProcess) string {
 	message := strings.TrimSpace(completed.Stderr)

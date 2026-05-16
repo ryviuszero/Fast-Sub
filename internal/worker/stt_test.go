@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -94,6 +95,102 @@ func main() {
 	}
 	if request["word_timestamps"] != true {
 		t.Fatalf("word_timestamps = %#v", request["word_timestamps"])
+	}
+}
+
+func TestRunSTTForcesPythonUTF8Env(t *testing.T) {
+	command := fakeWorkerBinary(t, `package main
+import (
+  "encoding/json"
+  "os"
+)
+func main() {
+  if os.Getenv("PYTHONUTF8") != "1" || os.Getenv("PYTHONIOENCODING") != "utf-8:replace" {
+    os.Exit(7)
+  }
+  var responsePath string
+  for i := 1; i < len(os.Args); i++ {
+    if os.Args[i] == "--response" && i+1 < len(os.Args) { responsePath = os.Args[i+1]; i++ }
+  }
+  raw, _ := json.Marshal(map[string]any{"schema_version": 1, "language": "zh", "segments": []map[string]any{{"start_sec": 0, "end_sec": 1, "text": "中文 ok"}}})
+  _ = os.WriteFile(responsePath, raw, 0600)
+}
+`)
+	dir := t.TempDir()
+	_, appErr := Runner{Command: command}.RunSTT(context.Background(), filepath.Join(dir, "request.json"), filepath.Join(dir, "response.json"), STTRequest{
+		JobID:       "job_utf8",
+		AudioPath:   filepath.Join(dir, "audio.wav"),
+		ModelPath:   filepath.Join(dir, "model"),
+		Language:    "zh",
+		Device:      "auto",
+		ComputeType: "auto",
+		BatchSize:   1,
+	})
+	if appErr != nil {
+		t.Fatal(appErr)
+	}
+}
+
+func TestSTTWorkerEnvScrubsSecrets(t *testing.T) {
+	values := map[string]string{
+		"PATH":                    "C:\\safe-bin",
+		"TEMP":                    "C:\\Temp",
+		"OPENAI_API_KEY":          "sk-secret",
+		"FAST_SUB_OPENAI_API_KEY": "sk-fast-sub-secret",
+		"FAST_SUB_DAEMON_TOKEN":   "ready-token",
+		"AUTHORIZATION":           "Bearer token",
+	}
+	env := appendPythonUTF8Env(sttWorkerEnv(func(key string) string {
+		return values[key]
+	}))
+	joined := strings.Join(env, "\n")
+	for _, secret := range []string{"sk-secret", "sk-fast-sub-secret", "ready-token", "Bearer token"} {
+		if strings.Contains(joined, secret) {
+			t.Fatalf("worker env leaked secret %q in %q", secret, joined)
+		}
+	}
+	if !strings.Contains(joined, "PATH=C:\\safe-bin") {
+		t.Fatalf("expected PATH to be preserved in %q", joined)
+	}
+	if !strings.Contains(joined, "PYTHONIOENCODING=utf-8:replace") {
+		t.Fatalf("expected Python UTF-8 env in %q", joined)
+	}
+}
+
+func TestRunSTTTreatsEmptySegmentsAsEmptySubtitle(t *testing.T) {
+	command := fakeWorkerBinary(t, `package main
+import (
+  "encoding/json"
+  "os"
+)
+func main() {
+  var responsePath string
+  for i := 1; i < len(os.Args); i++ {
+    if os.Args[i] == "--response" && i+1 < len(os.Args) { responsePath = os.Args[i+1]; i++ }
+  }
+  raw, _ := json.Marshal(map[string]any{"schema_version": 1, "error": map[string]any{"code": "EMPTY_SEGMENTS", "message": "faster-whisper returned no segments.", "retryable": false, "details": map[string]any{}}})
+  _ = os.WriteFile(responsePath, raw, 0600)
+  os.Exit(1)
+}
+`)
+	dir := t.TempDir()
+	response, appErr := Runner{Command: command}.RunSTT(context.Background(), filepath.Join(dir, "request.json"), filepath.Join(dir, "response.json"), STTRequest{
+		JobID:       "job_empty",
+		AudioPath:   filepath.Join(dir, "audio.wav"),
+		ModelPath:   filepath.Join(dir, "model"),
+		Language:    "auto",
+		Device:      "auto",
+		ComputeType: "auto",
+		BatchSize:   1,
+	})
+	if appErr != nil {
+		t.Fatal(appErr)
+	}
+	if len(response.Segments) != 0 {
+		t.Fatalf("segments = %#v", response.Segments)
+	}
+	if len(response.Warnings) == 0 {
+		t.Fatal("expected empty subtitle warning")
 	}
 }
 

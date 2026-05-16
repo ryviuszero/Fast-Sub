@@ -62,9 +62,6 @@ type Result struct {
 // Transcribe uploads one prepared audio file and normalizes the response.
 func (c Client) Transcribe(ctx context.Context, opts TranscribeOptions) (Result, *fserrors.AppError) {
 	var empty Result
-	if strings.TrimSpace(opts.APIKey) == "" {
-		return empty, fserrors.New(fserrors.CodeMissingAPIKey, "api_openai_transcription", "OpenAI transcription API key is required.", "Pass --api-key-env with an environment variable that contains the key.", nil)
-	}
 	if strings.TrimSpace(opts.Model) == "" {
 		return empty, fserrors.New(fserrors.CodeInvalidInput, "api_openai_transcription", "--model is required for api-openai-transcription.", "Pass an explicit OpenAI-compatible transcription model.", nil)
 	}
@@ -95,7 +92,9 @@ func (c Client) Transcribe(ctx context.Context, opts TranscribeOptions) (Result,
 	if err != nil {
 		return empty, fserrors.New(fserrors.CodeAPIFailed, "api_openai_transcription", redactSecret(err.Error(), opts.APIKey), "Check the OpenAI-compatible endpoint configuration.", nil)
 	}
-	req.Header.Set("Authorization", "Bearer "+opts.APIKey)
+	if strings.TrimSpace(opts.APIKey) != "" {
+		req.Header.Set("Authorization", "Bearer "+opts.APIKey)
+	}
 	req.Header.Set("Content-Type", contentType)
 
 	httpClient := c.HTTPClient
@@ -249,6 +248,15 @@ func apiStatusError(status int, raw []byte, secret string) *fserrors.AppError {
 	}
 	if err := json.Unmarshal(raw, &decoded); err == nil && decoded.Error.Message != "" {
 		message = fmt.Sprintf("OpenAI transcription API returned HTTP %d: %s", status, decoded.Error.Message)
+	}
+	if strings.TrimSpace(secret) == "" && (status == http.StatusUnauthorized || status == http.StatusForbidden) {
+		return fserrors.New(
+			fserrors.CodeMissingAPIKey,
+			"api_openai_transcription",
+			redactSecret(message, secret),
+			"This endpoint requires an API key. Save a key, or choose an OpenAI-compatible endpoint that accepts no-key requests.",
+			map[string]any{"http_status": status},
+		)
 	}
 	hint := "Check the provider configuration and retry."
 	if status == http.StatusUnauthorized {

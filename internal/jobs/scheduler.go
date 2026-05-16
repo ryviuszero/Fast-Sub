@@ -34,6 +34,7 @@ func (m *Manager) schedule() {
 		ctx, cancel := context.WithCancel(m.ctx)
 		m.running[id] = cancel
 		m.markRunningLocked(job)
+		m.runningWG.Add(1)
 		m.mu.Unlock()
 		m.appendEvent(id, events.TypeStarted, map[string]any{"status": StatusRunning})
 		_ = m.saveJob(id)
@@ -42,8 +43,9 @@ func (m *Manager) schedule() {
 }
 
 func (m *Manager) run(ctx context.Context, id string, req CreateRequest) {
+	defer m.runningWG.Done()
 	job, _ := m.Get(id)
-	result, appErr := m.runner.RunTranscribe(ctx, *job, req, func(update Update) {
+	result, appErr := m.runner.RunJob(ctx, *job, req, func(update Update) {
 		m.appendEvent(id, update.Event.Type, update.Event.Data)
 		if update.Stage != "" {
 			m.setStage(id, update.Stage)

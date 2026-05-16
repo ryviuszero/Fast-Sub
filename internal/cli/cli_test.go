@@ -283,7 +283,7 @@ func TestProvidersListJSONSuccess(t *testing.T) {
 	payload := mustJSON(t, stdout.String())
 	result := payload["result"].(map[string]any)
 	list := result["providers"].([]any)
-	if len(list) != 3 {
+	if len(list) != 7 {
 		t.Fatalf("providers len = %d", len(list))
 	}
 }
@@ -340,16 +340,16 @@ func TestProvidersTestJSONFailureAndSecretRedaction(t *testing.T) {
 		Stderr:    &stderr,
 		Providers: providerRuntimeForCLI(nil, false),
 	})
-	if code == 0 {
-		t.Fatalf("missing API key should fail")
+	if code != 0 {
+		t.Fatalf("static provider test should not require an API key, exit code = %d, stdout=%s", code, stdout.String())
 	}
 	if stderr.String() != "" {
 		t.Fatalf("stderr should be empty in JSON mode, got %q", stderr.String())
 	}
 	payload := mustJSON(t, stdout.String())
-	errorPayload := payload["error"].(map[string]any)
-	if errorPayload["code"] != "missing_api_key" {
-		t.Fatalf("error code = %#v", errorPayload["code"])
+	result := payload["result"].(map[string]any)
+	if result["status"] != "available" {
+		t.Fatalf("status = %#v", result["status"])
 	}
 
 	stdout.Reset()
@@ -370,7 +370,7 @@ func TestProvidersTestJSONFailureAndSecretRedaction(t *testing.T) {
 		t.Fatalf("stderr should be empty in JSON mode, got %q", stderr.String())
 	}
 	payload = mustJSON(t, stdout.String())
-	errorPayload = payload["error"].(map[string]any)
+	errorPayload := payload["error"].(map[string]any)
 	if errorPayload["code"] != "invalid_input" {
 		t.Fatalf("error code = %#v", errorPayload["code"])
 	}
@@ -404,6 +404,9 @@ func providerRuntimeForCLI(env map[string]string, lookPathOK bool) providers.Run
 			return "", os.ErrNotExist
 		},
 		Stat: os.Stat,
+		RunCommand: func(context.Context, string, []string) error {
+			return nil
+		},
 	}
 }
 

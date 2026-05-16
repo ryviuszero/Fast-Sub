@@ -10,6 +10,20 @@ import (
 	"testing"
 )
 
+func TestDefaultHTTPClientDoesNotSetWholeDownloadTimeout(t *testing.T) {
+	client := defaultHTTPClient()
+	if client.Timeout != 0 {
+		t.Fatalf("default client should not cap whole model downloads, got %s", client.Timeout)
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("default transport = %T", client.Transport)
+	}
+	if transport.ResponseHeaderTimeout <= 0 {
+		t.Fatal("default client should still bound response header waits")
+	}
+}
+
 func TestHTTPBackendResumeWithRange(t *testing.T) {
 	payload := []byte("hello world")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

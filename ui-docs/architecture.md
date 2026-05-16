@@ -15,8 +15,8 @@
 | Mock client | `MockFastSubClient` | 支撑 mock-first 开发，模拟完整用户流程和失败状态 | 必须覆盖缺模型、安装失败、取消、远程确认、daemon disconnected 等场景 |
 | Daemon client | `DaemonFastSubClient` | 通过 REST + SSE 访问本机 Go daemon | 真实 HTTP/SSE、bearer token、401、断线、SSE reconnect、events_lost 只能在 main/preload controlled client 中处理 |
 | 本地服务边界 | Go daemon on `127.0.0.1` | 提供 health/version/models/providers/jobs API 和 SSE events | Electron 只依赖公开 API，不调用 daemon 内部包 |
-| 本机持久设置 | Electron store / 配置 adapter | 保存非敏感 UI 设置、默认选项、最近路径、折叠状态 | 不保存 API key、daemon token 或 raw secret |
-| 安全存储 | OS keychain 或等效库 | 保存 API key 和 provider secret | renderer 只看到 masked 状态或 key alias |
+| 本机持久设置 | Daemon config API / Electron store | 保存非敏感运行设置、默认选项、最近路径、折叠状态 | 运行配置通过 `GET/PATCH /v1/config` 写入 daemon config；不保存 API key、daemon token 或 raw secret |
+| 安全存储 | Electron `safeStorage` + 本地加密 secret store + daemon transient secret store | 保存 API key 和 provider secret；创建 API job/live check 时换取一次性 `secret_ref` | renderer 只看到 masked 状态或 key alias；daemon 启动环境不注入全部 secret；后续可评估 OS keychain/keytar |
 | 文件入口 | Electron dialog / drag-and-drop | 添加媒体文件、文件夹、SRT、输出目录 | 路径传给 client 前需要基础校验和用户确认 |
 | 事件流 | SSE via main/preload controlled client | 推送任务进度、日志摘要、完成、失败、取消、中断 | UI 依赖 progress/status schema，不依赖 raw log 文本 |
 | 日志展示 | UI diagnostics panels | 显示 redacted logs、结构化错误、最近事件 | 默认折叠，普通主流程不展示内部细节 |
@@ -33,8 +33,8 @@ Electron 应用的页面结构参考 `ui-docs/prototype/v2/app.jsx` 中的 artbo
 | 任务队列 | `QueueList`、`QueueDetail`、`QueueFailedDetail` | 展示等待中、正在生成、已完成、已失败、已取消；支持取消、重试、查看日志、打开结果 | 不让普通用户必须理解 `created/running/canceling/interrupted` 等内部状态 |
 | 设置 / 通用 | `SettGeneral` | 默认语言、输出位置、输出冲突策略、设备、输出类型等 | 不显示配置文件格式 |
 | 设置 / 模型管理 | `SettModels`、`SettModelMaintenance` | 模型状态、安装、校验、重试、占用空间 | 不展示下载器内部锁、`.part`、staging directory |
-| 设置 / API 服务 | `SettAPI`、`SettAPIUploadConfirm` | base URL、API key alias、模型、上传格式、live/static test、上传确认 | 不在 renderer 保存 raw API key |
-| 设置 / Provider 管理 | `SettProviders` | 展示 STT/translation provider、local/api/web/native 分类、状态、隐私说明 | 不默认联网或上传数据测试 provider |
+| 设置 / API 服务（历史原型） | `SettAPI`、`SettAPIUploadConfirm` | 当前不作为独立用户入口；base URL、API key alias、模型、上传确认已并入对应 Provider 卡片 | 不在 renderer 保存 raw API key |
+| 设置 / Provider 管理 | `SettProviders` | 单页按 `转写 Provider` / `翻译 Provider` 分组；展示 local/api/web/native 分类、状态、隐私说明、默认 provider、配置、live/static test | 不默认联网或上传数据测试 provider |
 | 设置 / 诊断 | `SettDiag`、`SettDaemonRecovery`、`SettDiagStructured` | daemon 状态、一键修复、redacted logs、结构化错误、最近事件 | 不展示完整 token、Authorization、API key、signed URL |
 | 设置 / Benchmark | `SettBenchmarkPlan` | 作为诊断/规划入口展示 benchmark 能力 | 第一版不把 benchmark 放到主流程 |
 
@@ -54,7 +54,7 @@ Electron 应用的页面结构参考 `ui-docs/prototype/v2/app.jsx` 中的 artbo
 | `desktop/renderer/pages/main/` | 拖拽添加文件、一键生成、详细设置、结果状态 | 不承载任务执行逻辑 |
 | `desktop/renderer/pages/jobs/` | 任务列表、任务详情、失败详情、日志摘要 | 不直接解析 job 文件夹 |
 | `desktop/renderer/pages/tools/` | 翻译 SRT、字幕烧录等独立工具 | 不把次级工具塞进主路径 |
-| `desktop/renderer/pages/settings/` | 通用、模型、API、Provider、诊断、Benchmark 设置页 | 不保存 raw secret |
+| `desktop/renderer/pages/settings/` | 通用、模型、Provider、诊断、Benchmark 设置页；API 配置内嵌对应 Provider 卡片 | 不保存 raw secret |
 | `desktop/renderer/components/` | 通用 UI 组件，如按钮、状态标签、进度条、文件卡片、确认弹窗 | 不发起后端请求 |
 | `desktop/renderer/client/` | `FastSubClient` 类型、mock client、daemon client 的 renderer-facing facade / hooks / view-model adapter | 不实现真实 HTTP/SSE，不持有 token，不绕过 preload 安全边界 |
 | `desktop/main/client/` | `DaemonFastSubClient` 的真实 daemon adapter、daemon lifecycle、auth、REST/SSE、config 写入 | 不渲染 UI，不保存页面状态 |
@@ -89,9 +89,10 @@ Electron 应用第一版不引入数据库。
 
 | 存储 | 内容 | 规则 |
 | --- | --- | --- |
-| OS keychain | API key、provider secret | renderer 不读取 raw value |
+| Electron `safeStorage` + 本地加密 secret store | API key、provider secret | renderer 不读取 raw value；只通过 main process 保存、替换、删除和查询 masked status |
+| Daemon transient secret store | API job/live check 的一次性 `secret_ref` | 只保存在 daemon 内存；短 TTL、单次消费；不写 request/job/events/log |
 | Electron main memory | daemon ready token、base URL、进程句柄 | token 不写入磁盘，不暴露给任意 renderer |
-| 配置文件 | 用户设置、默认模型、provider 默认值、API key 环境变量名、key alias、masked 状态 | 不保存 raw API key |
+| 配置文件 | 用户设置、默认模型、provider 默认值、API key 环境变量名、key alias、masked 状态、provider API base URL/model | 不保存 raw API key |
 
 ### 外部后端存储边界
 
@@ -127,7 +128,7 @@ Fast Sub Electron 应用是单用户本地桌面应用，不实现账号、团�
 | REST 请求 | main/preload controlled client 添加 bearer token |
 | SSE 订阅 | 通过 main/preload controlled client 订阅，处理 EventSource header 限制或使用 fetch-based SSE |
 | Health/version | 可无 token 调用，但仍通过 client 边界 |
-| API key 管理 | renderer 提交 key alias 或用户输入给 main process；main process 写入 OS keychain |
+| API key 管理 | renderer 提交 key alias 或用户输入给 main process；main process 写入 `safeStorage` + 本地加密 secret store，配置文件只保存 alias/env 名称；创建 API job/live check 前由 main 调用 `/v1/secrets` 换取一次性 `secret_ref` |
 | 远程 provider 使用 | UI 必须展示上传内容、provider 名称、费用/隐私提示，并要求确认 |
 | 文件访问 | 用户通过 file dialog 或 drag-and-drop 授权路径；UI 不扫描未选择目录 |
 
@@ -148,7 +149,7 @@ Electron 应用不运行 AI 推理。它只创建任务、展示进度、展示�
 | 分类 | 示例 | UI 文案重点 |
 | --- | --- | --- |
 | 本地 ASR | `local-faster-whisper` | 本地处理，不上传音频；需要本地模型 |
-| Native ASR | `local-whisper-cpp` | 本地处理，依赖本机 binary 和模型 |
+| Native ASR | `local-whisper-cpp` | 本地处理，依赖本机 binary 和模型；Windows 缺 binary 时由 Electron main 受控下载安装到 app 私有 native-binaries 目录 |
 | API ASR | `api-openai-transcription` | 会上传音频；需要 API key、base URL 和模型 |
 | 本地翻译 | `local-nllb-ct2` | 本地处理字幕文本；需要翻译模型 |
 | 网页翻译 | `web-bing`、`web-google` | 会把字幕文本发送到第三方网页翻译服务 |
@@ -158,10 +159,10 @@ Electron 应用不运行 AI 推理。它只创建任务、展示进度、展示�
 
 | Job 类型 | 用户入口 | UI 处理 |
 | --- | --- | --- |
-| `transcribe` | 主界面一键生成 | 默认主流程，展示用户友好阶段 |
+| `transcribe` | 主界面一键生成 | 默认主流程；当输出内容为翻译字幕/双语字幕时，daemon 在同一 job 内部串联转写和翻译 |
+| `model_install` | 设置 / 模型管理 | 独立模型下载/验证长任务；模型页在当前 tab 内显示进度、失败、取消和重试 |
 | `translate_srt` | 子功能：翻译已有 SRT | 独立工具，不影响主流程 |
 | `burn_in` | 子功能：字幕烧录 | 独立工具，展示视频重编码进度 |
-| `transcribe_translate` / `pipeline` | 输出类型：翻译字幕/双语字幕 | 后续根据 daemon API 补齐 |
 | `bench` / `bench_translate` | 设置 / 诊断 / Benchmark | 第一版只保留入口或规划状态 |
 
 ### UI 状态映射
@@ -251,6 +252,8 @@ FastSubClient
   listModels()
   installModel(modelId)
   verifyModel(modelId)
+  createModelInstallJob(modelId)
+  removeModel(modelId)
   listProviders()
   testProvider(providerId, mode)
   createJob(request)
@@ -275,21 +278,22 @@ FastSubClient
 
 - 设置页的用户设置直接映射到 Fast Sub 配置文件。
 - renderer 只编辑配置 view model；真实读写由 main/preload controlled client 完成。
-- API key 和 provider secret 不写入配置文件，只保存 key alias、环境变量名、masked 状态或 keychain reference。
+- API key 和 provider secret 不写入配置文件，只保存 key alias、环境变量名、masked 状态或 secret store reference；API job/live check 只向 daemon 传一次性 `secret_ref`。
 - mock 阶段也要模拟配置读写，保证 UI 行为和真实集成一致。
 
-## 已定实现选择和后续待确认
+## 当前实现选择和后续待确认
 
-| 问题 | Round 11 选择 | 后续需要确认 |
+| 问题 | 当前实现 | 后续需要确认 |
 | --- | --- | --- |
 | Electron 目录名 | 使用 `desktop/` | 无 |
 | UI 状态库 | 使用 React state，不引入 Zustand/Jotai | 复杂度上升后是否引入轻量 store |
 | UI 组件库 | 使用自定义组件，基于 prototype 和 `ui-context.md` token 整理 | Round 13 是否引入 Radix/shadcn 等组件基础 |
-| 安全存储库 | Round 11 只做 mock 安全存储 | Round 12/13 选择具体 Electron keychain 依赖 |
-| SSE 实现 | Round 11 只模拟 job event/progress | Round 12 确认 EventSource 代理、fetch-based SSE 或 main process stream bridge |
-| 配置存储 | 用户设置同步到 Fast Sub 配置文件；纯 UI 偏好保存在 Electron store | 配置文件路径和真实写入 adapter 细节 |
-| 默认 ASR 模型 | Round 11 使用 `whisper-small` 占位 | 真实 manifest id，以及是否根据硬件推荐更小/更大模型 |
-| 默认翻译模型 | Round 11 使用 NLLB 占位；失败不阻断主转写流程 | 具体 NLLB manifest id 和磁盘占用提示 |
-| 批量文件夹 | 主界面支持添加文件夹 | 是否递归扫描、支持哪些扩展名、如何过滤 |
-| 远程 provider | 默认在设置中可见但不启用 | 是否默认隐藏到高级设置 |
+| Provider 信息架构 | 单个 Provider 页面，分为转写 Provider 和翻译 Provider；API key/Base URL/模型配置内嵌 Provider 卡片 | 是否在 Round 13 做更精细的 provider onboarding |
+| 安全存储库 | Electron `safeStorage` + 本地加密 secret store；renderer 只见 alias/masked status | keytar/OS keychain 的打包、ABI 和跨平台兼容验证 |
+| SSE 实现 | main/preload controlled fetch-based SSE client；renderer 只订阅 typed event | Electron 打包后长连接和 sleep/wake 行为 smoke |
+| 配置存储 | 运行配置通过 daemon `GET/PATCH /v1/config` 持久化；Electron store 只保存 UI 偏好 | 配置迁移和损坏配置恢复 polish |
+| 默认 ASR 模型 | Provider 卡片指定兼容默认模型；模型管理阻止不兼容默认模型 | 硬件推荐策略是否自动化 |
+| 默认翻译模型 | 翻译 Provider 卡片指定兼容默认模型；主流程翻译/双语字幕需要可用翻译 provider | NLLB 磁盘占用和首次下载提示 polish |
+| 批量文件夹 | 主界面支持文件夹添加；默认不递归，设置中可开启嵌套扫描；默认最大数量 100，硬上限 500；只保留媒体扩展 | 是否为超大文件夹提供后台索引队列 |
+| 远程 provider | 默认可见但不自动启用；任务 request 必须携带显式上传确认 | 是否默认隐藏到高级设置 |
 | Benchmark | 设置中保留规划入口 | 第一版是否完全隐藏 |

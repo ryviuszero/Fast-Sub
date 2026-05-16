@@ -15,16 +15,16 @@ Round 13 只做打包、安装器、发布检查、E2E/smoke、诊断 polish 和
 - main/preload controlled client 持有 daemon `base_url` 和 bearer token；renderer 不接触 token、Authorization、raw HTTP/SSE 或 raw secret。
 - Go daemon 扩展 `model_install`、`translate_srt`、`burn_in` job type。
 - 模型安装走独立 `model_install` job，通过同一套 job/SSE/取消/失败/结果模型展示进度。
-- `translate_srt` 和 `burn_in` 本轮允许 Go daemon 受控调用现有 `fast-sub` Python CLI 能力，后续再逐步 Go 原生化。
+- `translate_srt` 本轮通过 Go daemon 受控 Python CLI bridge 接入现有 `fast-sub translate`；`burn_in` 通过 Go daemon 内部受控 ffmpeg bridge 接入真实字幕烧录。两者都不向 renderer 暴露 Python、ffmpeg 或 raw command。
 - 配置读写真实落地，普通设置写入 Fast Sub 配置文件。
-- API key 和 provider secret 使用 Electron main process 管理的 secret storage；首选 `keytar` 保存到 OS keychain / Windows Credential Manager，必要时 fallback 到 Electron `safeStorage` + 本地加密 secret store。配置文件只保存 alias、masked 状态或 keychain reference。
+- API key 和 provider secret 使用 Electron main process 管理的 secret storage；当前实现使用 Electron `safeStorage` + 本地加密 secret store，配置文件只保存 alias、masked 状态或环境变量名。API job 和 live Provider check 通过一次性 transient `secret_ref` 传递到 daemon，daemon 不在启动环境中注入全部 Provider secret。
 - mock 模式继续保留，用于无 daemon、无模型、无网络的 UI 开发和默认测试。
 
 ## Non-goals
 
 - 不做 Electron 打包、签名、安装器和发布流程。
 - 不重写 Go 原生 translation runtime。
-- 不重写 Go 原生 burn-in runtime，除非只是复用已有 Go/CLI 能力的薄封装。
+- 不把 burn-in 的 ffmpeg、临时文件、命令行或 stderr 细节暴露给 renderer；当前实现只在 daemon 内部使用受控 ffmpeg bridge。
 - 不把 Python worker、ffmpeg、whisper.cpp 或 provider runtime 直接暴露给 renderer。
 - 不实现 WebSocket、远程 Web 控制、本机 daemon 公网访问、多用户权限或云同步。
 - 不实现复杂多 running job 资源调度、priority queue、retry/DLQ、warm worker pool。
@@ -42,6 +42,25 @@ Round 12 覆盖 UI、daemon API、配置和安全存储，建议一个主分支�
 
 分支内每完成一个主要 workstream，都必须更新 `ui-docs/project-tracker.md`，记录完成内容、验证命令、剩余问题和下一步。
 
+## Current Implementation Snapshot (2026-05-14)
+
+以下为当前 Round 12 实现口径，后续审查以此为基准：
+
+- 默认生产路径使用 `DaemonFastSubClient`，Electron main process 自管 `fast-sub-go` daemon，renderer 不接触 daemon token、Authorization、raw HTTP/SSE 或 raw secret。
+- daemon REST/SSE 已接入真实 `transcribe`、`model_install`、`translate_srt` 和 `burn_in` job；生产模式不会因 daemon 失败静默切回 mock。
+- `GET /v1/config` 和 `PATCH /v1/config` 是桌面运行配置的 daemon 写入入口；Electron 自管 daemon 通过 `FAST_SUB_GO_CONFIG` 使用桌面配置文件。
+- Provider 设置按任务组织为转写 Provider 和翻译 Provider；API key、Base URL、模型名、上传确认、live/static check 均归属对应 Provider 卡片，`API 服务` 不再作为独立用户入口。
+- API key 和 provider secret 由 Electron main process 管理，当前实现使用 Electron `safeStorage` + 本地加密 secret store；renderer、配置文件、job metadata、events、logs 和测试 snapshot 只看到 alias、masked 状态或环境变量名。
+- 自管 daemon 不再在启动环境中注入全部 Provider secret；Electron main 在创建 API job 或 live Provider check 前读取 safeStorage，向 daemon `/v1/secrets` 注册短 TTL 一次性 `secret_ref`，daemon 消费后只放入当前内存请求。
+- `translate_srt` 通过受控 Python CLI bridge 执行，支持 `.srt`、`.txt`、`.text`、`.md`、`.markdown`；纯文本翻译遵守“一行输入对应一行输出”，不在用户目录保留 raw progress/internal JSON。
+- 主路径 `transcribe` 在 `output_type` 为翻译字幕或双语字幕时，在同一个 daemon job 内串联“转写 -> 翻译”，UI 不暴露额外内部 job。
+- `burn_in` 通过 daemon 内部受控 ffmpeg bridge 执行，使用标准扩展临时文件和原子 rename，不向 renderer 暴露 ffmpeg 命令或 stderr 细节。
+- 模型安装使用独立 `model_install` job；模型管理页在当前 tab 内展示进度，并支持验证、移除、设为默认和兼容性约束。
+- Windows 取消和 repair 路径使用 Job Object / 进程树终止兜底，尽量清理 Python worker、ffmpeg、whisper.cpp 和 GPU 子进程。
+- 任务队列已针对批量文件、文件夹扫描、后台运行、历史列表和失败续跑收口；历史页默认只显示近期任务，文件夹递归扫描默认关闭并受最大数量限制。
+- 首次启动环境检查只作为 onboarding gate；后续打开应用直接进入主界面，后台运行环境检查并更新右上角状态。
+- 当前剩余收口已从 Round 12 核心功能中移出：Round 13 只继续 OS keychain/keytar 打包验证、web 翻译大文件限制 smoke、daemon repair/401/disconnect 打包 smoke、安装包 smoke 和发布级诊断 polish。
+
 ## Implementation Units
 
 Round 12 范围包含 Electron、Go daemon、Python CLI bridge、配置和安全存储，必须按以下顺序推进。除非前一个单元的 contract 和测试边界已经稳定，否则不要跳到后续 UI 集成。
@@ -51,7 +70,7 @@ Round 12 范围包含 Electron、Go daemon、Python CLI bridge、配置和安全
 | 12.1 | Daemon API contract 扩展 | 更新 `go-docs/specs/daemon-api.md`，补 `model_install`、`translate_srt`、`burn_in`、config、transient secret reference 边界和 fixtures | UI 不再猜 API；fake daemon fixtures 覆盖新增 job type |
 | 12.2 | Daemon lifecycle 和 ready bridge | Electron main 启动 daemon、读取 ready JSON、保存 token、处理超时/退出/repair | renderer 不接触 token；ready 成功和失败路径可测 |
 | 12.3 | REST/SSE client 和状态映射 | 实现 `DaemonFastSubClient` adapter、REST envelope 映射、fetch-based SSE、重连和 `events_lost` resync | job progress、terminal event、401、断线和 unsubscribe 可测 |
-| 12.4 | Config 和 secret storage 基础 adapter | 真实配置读写、atomic write、schema version、secret storage adapter、provider secret 传递策略 | API key 不进配置文件；fake keytar/safeStorage 测试通过 |
+| 12.4 | Config 和 secret storage 基础 adapter | 真实配置读写、atomic write、schema version、secret storage adapter、provider secret 传递策略 | API key 不进配置文件；safeStorage/local secret store 测试通过 |
 | 12.5 | 真实 transcribe job 接入 | 主界面创建真实 `transcribe` job，展示进度、取消、完成和日志 | 小媒体手动 smoke 可生成 SRT；保存配置会影响后续默认 request |
 | 12.6 | `model_install` job | 模型安装通过 job/SSE 展示进度、失败、取消、重试和结果 | 模型页和首次启动页从 `listModels()` 重新同步真实状态 |
 | 12.7 | `translate_srt` / `burn_in` bridge | Go daemon 受控调用 Python CLI 或等效 CLI 能力，接入任务队列和结果 | CLI resolver、参数白名单、取消、失败、redacted logs 和小 fixture smoke 可用 |
@@ -78,8 +97,8 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
 - ready JSON 必须包含 `schema_version`、`ready`、`base_url`、`token`、`pid`。
 - daemon token 只保存在 main/preload controlled adapter 的内存中，不写磁盘、不进 renderer state、不进日志。
 - app 退出时关闭 daemon；daemon 退出、ready 超时、ready JSON 格式错误、端口不可用都映射为 `UiError`。
-- Windows 下必须至少处理直接 daemon 子进程关闭和取消；如果本轮不实现完整 Windows Job Object / 递归进程树终止，必须在文档和诊断中记录限制。
-- repair 或 app 退出时应尽量避免遗留 `fast-sub-go`、Python CLI、ffmpeg 等孤儿进程；无法保证时必须提供诊断提示。
+- Windows 下必须处理 daemon 子进程关闭、job 取消和 repair 时的进程树清理；当前实现使用 Windows Job Object / `taskkill` fallback，避免遗留 `fast-sub-go`、Python CLI、ffmpeg、whisper.cpp 或 GPU worker。
+- repair 或 app 退出时应尽量避免遗留 `fast-sub-go`、Python CLI、ffmpeg 等孤儿进程；失败时必须提供诊断提示。
 - `repairDaemon()` 负责重启 daemon、重新读取 ready JSON、重新同步 health/models/providers/jobs。
 - `health()` 和 `version()` 可在 daemon 未授权状态下探测；业务 API 必须带 bearer token。
 
@@ -91,10 +110,12 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
   - 推荐新增 `createModelInstallJob(modelId): Promise<JobDetail>`。
   - 保留 `installModel(modelId): Promise<ModelStatus>` 只用于兼容 UI 旧调用，内部创建 `model_install` job 后返回 `installing` 状态，并包含 `installJobId`。
   - 实现层和测试应优先使用 `createModelInstallJob()`，避免长任务被误当成短请求。
+  - 新增 `removeModel(modelId): Promise<ModelStatus>`，映射 daemon `DELETE /v1/models/{model_id}`；renderer 只传 manifest model id，不传 raw path。
 - `desktop/shared/contracts/types.ts` 需要同步更新：
   - `JobKind` 增加 `model_install`。
   - `ModelStatus` 增加可选 `installJobId?: string`。
   - `FastSubClient` 增加 `createModelInstallJob(modelId): Promise<JobDetail>`。
+  - `FastSubClient` 增加 `removeModel(modelId): Promise<ModelStatus>`。
   - mock client、daemon client、tests 和 fixtures 必须使用同一份 contract。
 - client 实现：
   - `health`
@@ -118,6 +139,7 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
   - `deleteJob`
   - `subscribeJobEvents`
   - `createModelInstallJob`
+  - `removeModel`
 - REST response envelope 统一映射为 UI view model；不把 raw HTTP response、raw JSON envelope、daemon job id、token 或 raw errors 暴露到普通主界面。
 - 401 映射为“本地服务认证失效”，提供 `repairDaemon` 恢复动作。
 - daemon disconnected 映射为“本地服务中断”，提供重新连接/一键修复。
@@ -172,7 +194,7 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
 - 写配置失败时必须保留旧配置，并返回可恢复 `UiError`。
 - 配置文件必须包含 schema version 或等效版本字段；后续可做 migration。
 - 读取损坏配置时必须提供恢复动作，例如使用默认配置、打开配置位置或备份损坏文件。
-- masked key、key alias、环境变量名和 keychain reference 不能被误当作 raw API key 写回。
+- masked key、key alias、环境变量名和 secret store reference 不能被误当作 raw API key 写回。
 - 普通设置写入 Fast Sub 配置文件，至少覆盖：
   - 默认语言
   - 输出位置
@@ -188,20 +210,19 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
   - OpenAI-compatible model
   - OpenAI upload format
 - API key 和 provider secret 不写入配置文件。
-- 首选 `keytar`，由 Electron main process 保存、读取、删除 provider secret。
-- 因 `keytar` 是 native module 且上游仓库已归档，Round 12 实现前必须确认当前 Electron/Node ABI、Windows/macOS/Linux 预编译或 rebuild 兼容性。
-- 如果 `keytar` 兼容性不可接受，备选方案是 Electron `safeStorage` + 本地加密 secret store；Linux 上必须检测 `safeStorage.getSelectedStorageBackend()`，不能在 `basic_text` 后端下静默宣称安全存储。
+- 当前实现使用 Electron `safeStorage` + 本地加密 secret store，由 Electron main process 保存、读取、删除 provider secret。后续可评估 `keytar` 或 OS keychain，但不作为 Round 12 默认验收前置条件。
+- Linux 上必须检测 `safeStorage.getSelectedStorageBackend()`，不能在 `basic_text` 后端下静默宣称安全存储。
 - secret 从 Electron 到 daemon 的传递策略：
   - daemon 启动时不注入全部 provider secret。
   - renderer 永远不读取 raw secret。
-  - 创建 API job 或 live provider test 时，Electron main 从 keytar/safeStorage 读取 secret，并通过 main-controlled transient secret channel 传给 daemon 或 job runner。
+  - 创建 API job 或 live provider test 时，Electron main 从 safeStorage/local secret store 读取 secret，先调用 daemon `/v1/secrets` 换取一次性 `secret_ref`，再把该引用放入 job request 或 live check request。
   - transient secret 推荐使用一次性 secret reference / handle；默认单次使用、短 TTL，建议 5 分钟，使用后立即失效。
-  - raw secret 不得放入普通 persisted request、daemon persisted config、job metadata、events、logs、stdout、stderr 或 renderer state。
+  - raw secret 不得放入普通 persisted request、daemon persisted config、job metadata、events、logs、stdout、stderr 或 renderer state；daemon `request.json` 中的 `*_secret_ref` 也必须脱敏为占位。
   - `secret_ref` 本身也不得原样持久化到 job metadata、events、logs、stdout、stderr 或 renderer state；需要落盘时只能写入 `[REDACTED_SECRET_REF]` 或等效脱敏占位。
-  - 如果 Round 12 不新增 daemon secret channel，则 API job 必须继续使用 `api_key_env`，并在 UI 中明确提示“保存到系统凭据库的 key 暂不用于 daemon API 调用”；但这只能作为临时降级路径，不能作为最终验收路径。
+  - 如果未提供 saved secret，API job 可以继续不带 Authorization 调用兼容端点；是否需要认证由 live check 或真实请求的 401/403 决定。
 - renderer 只看到 key alias、masked credential、是否已配置。
-- 配置文件只保存 alias、masked 状态、环境变量名或 keychain reference。
-- `testProvider(providerId, "live")` 使用 keytar/safeStorage 中的 secret 或配置中的 `api_key_env`，但不得将 raw secret 返回给 renderer。
+- 配置文件只保存 alias、masked 状态、环境变量名或 secret store reference。
+- `testProvider(providerId, "live")` 使用 Electron main 注册的 transient `secret_ref` 或无 key 请求，raw secret 不返回给 renderer。OpenAI-compatible live check 以实际 `/v1/models` 请求是否可连通为准；本地兼容 API 可以没有 key，401/403 才映射为缺 key 或认证失败。
 - 删除 provider secret 后，provider 状态应刷新为 `missing_api_key` 或对应用户文案。
 
 ## Workstream 5: Real Transcribe Job
@@ -213,6 +234,9 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
   - `local-whisper-cpp`
   - `api-openai-transcription`
 - API provider 必须显式选择并确认上传；不能因本地 provider 不可用自动切 API。
+- 当主流程 `output_type` 为 `translated_srt` 或 `bilingual_srt` 时，Electron 仍创建一个 `transcribe` job，但 request 必须携带 `translation_provider`、`translation_model`、`target_language` 和翻译上传确认状态。
+- Go daemon 必须在同一个 `transcribe` job 内部串联“转写 -> 翻译”，最终输出翻译字幕或双语字幕；不得让 UI 看到一个额外的内部 `translate_srt` job。
+- 远程翻译 provider 在组合流程中也必须要求显式字幕文本上传确认，不能复用本地默认或静默上传。
 
 ## Workstream 6: Model Install Job
 
@@ -226,6 +250,7 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
   - redacted error。
   - result 中返回 model id、status、path、size summary。
 - `verifyModel(modelId)` 可走短请求；如果后续校验变长，可升级为 job，但 Round 12 默认保留短请求。
+- `removeModel(modelId)` 可走短请求，但 daemon 只能删除 manifest 中声明的本机模型目录，不能接受 renderer 传入的任意路径。
 - 模型页和首次启动页必须使用真实 `listModels()` 状态刷新，不能只相信 install job 的本地乐观状态。
 - 模型安装失败必须提供重试和诊断入口。
 
@@ -234,7 +259,8 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
 ### Translate SRT
 
 - Go daemon 新增 `translate_srt` job type。
-- Round 12 允许 Go daemon 受控调用现有 `fast-sub translate` Python CLI。
+- Round 12 当前由 Go daemon 受控调用现有 `fast-sub translate` Python CLI。
+- 支持 `.srt`、`.txt`、`.text`、`.md`、`.markdown` 输入；纯文本翻译必须保持一行输入对应一行输出，保留空行和可识别的行级前缀，不得把整段文本合并成单段输出。
 - 必须使用 `exec.CommandContext` 和参数白名单，不拼 shell 字符串。
 - Python CLI resolver 优先级：
   1. 显式配置的 CLI command/path。
@@ -246,17 +272,17 @@ Round 12 的实现顺序是：先 contract，后 daemon bridge，再 config/secr
 - Python CLI bridge 必须 scrub 环境变量，只传必要变量和明确的 provider secret reference。
 - stdout/stderr 必须按 UTF-8 或可控编码读取，避免 Windows GBK 解码崩溃；无法解码的字节必须以 replacement 方式进入 redacted log。
 - JSON stdout 和日志必须分离，不能把第三方日志混入 JSON contract。
-- 取消时必须取消 context，并尽量终止直接子进程；如果子进程树清理不完整，必须记录限制和诊断提示。
+- 取消时必须取消 context，并终止直接子进程和可控子进程树；Windows 当前实现使用 Job Object / `taskkill` fallback。
 - 支持取消、失败、结果和 redacted logs。
 - 远程翻译 provider 必须显示上传字幕文本确认。
 
 ### Burn In
 
 - Go daemon 新增 `burn_in` job type。
-- Round 12 允许 Go daemon 受控调用现有 `fast-sub burn` 或等效 CLI 能力。
+- Round 12 当前由 Go daemon 通过受控 ffmpeg runner 直接执行字幕烧录。
 - 必须使用 `exec.CommandContext` 和参数白名单，不拼 shell 字符串。
-- 使用与 `translate_srt` 相同的 Python CLI resolver 和 missing runtime 错误规则。
-- Python/ffmpeg bridge 必须遵守和 `translate_srt` 相同的编码、环境变量、取消、redaction 和 JSON/log 分离规则。
+- 临时输出必须使用标准媒体扩展，完成后原子 rename 到目标文件，避免 ffmpeg 无法识别无扩展临时文件。
+- ffmpeg bridge 必须遵守编码、环境变量、取消、redaction 和 JSON/log 分离规则。
 - 支持取消、失败、结果和 redacted logs。
 
 ## Workstream 8: UI Integration
@@ -310,7 +336,7 @@ go test ./...
 - `translate_srt` job 成功、失败、取消，且参数白名单构造。
 - `burn_in` job 成功、失败、取消，且参数白名单构造。
 - 配置读写 roundtrip。
-- secret storage save/read/delete/masked status，包括 keytar 首选路径和 safeStorage fallback。
+- secret storage save/read/delete/masked status，包括 Electron `safeStorage` + 本地加密 secret store 路径。
 - `safeStorage` fallback 的可用性检测和 Linux `basic_text` 风险提示。
 - 配置文件 validate、atomic write、损坏配置恢复、masked key 不被当作 raw key 写回。
 - API key、Authorization、daemon token、signed URL、proxy credential 不出现在 stdout、stderr、JSON、UI、日志、errors report、测试快照。
@@ -333,7 +359,7 @@ go test ./...
 - 模型安装通过独立 `model_install` job 执行，UI 可查看进度、取消、失败、重试。
 - 翻译 SRT 和字幕烧录通过 daemon job type 接入真实功能。
 - 设置页写入真实配置，后续任务使用保存后的设置。
-- API key 使用 Electron main process 管理的 secret storage 保存；首选 keytar，如兼容性验证失败，则使用已记录并测试通过的 safeStorage fallback，且 Linux `basic_text` 不可静默视为安全存储。配置文件不保存 raw API key。
+- API key 使用 Electron main process 管理的 secret storage 保存；当前实现为 Electron `safeStorage` + 本地加密 secret store，且 Linux `basic_text` 不可静默视为安全存储。配置文件不保存 raw API key；一次性 `secret_ref` channel 已作为默认传递路径，OS keychain/keytar 打包验证保留到 Round 13。
 - daemon 断开、401、events_lost、job failed、job canceled 都有用户可理解恢复路径。
 - mock 模式保留，默认测试不依赖真实 daemon、模型、网络、ffmpeg、whisper.cpp、OpenAI 或 GPU。
 - Round 13 不再需要新增核心业务功能，只做发布和产品化收口。

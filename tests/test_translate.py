@@ -6,22 +6,25 @@ from types import SimpleNamespace
 
 import pytest
 
+from fast_sub.clients.openai_chat import _message_content
 from fast_sub.models import Segment
 from fast_sub.translation.errors import TranslationProviderError
 from fast_sub.translation.service import (
+    TranslateOptions,
     detect_subtitle_language,
     flores_code,
     parse_chat_translations,
     resolve_nllb_model_path,
     translate_segments,
+    translate_srt,
 )
 
 
 def test_translate_segments_uses_translators_package(monkeypatch) -> None:
     calls = []
 
-    def fake_translate_text(*, text, translator, from_language, to_language):
-        calls.append((text, translator, from_language, to_language))
+    def fake_translate_text(*, text, translator, from_language, to_language, timeout=None):
+        calls.append((text, translator, from_language, to_language, timeout))
         return f"{text}-zh"
 
     monkeypatch.setattr("fast_sub.translation.service._translate_text", fake_translate_text)
@@ -35,11 +38,33 @@ def test_translate_segments_uses_translators_package(monkeypatch) -> None:
 
     assert result.errors == []
     assert result.segments[0].translation == "hello-zh"
-    assert calls == [("hello", "bing", "en", "zh")]
+    assert calls == [("hello", "bing", "en", "zh", 60.0)]
+
+
+def test_translate_segments_passes_explicit_timeout_to_web_provider(monkeypatch) -> None:
+    captured = {}
+
+    def fake_translate_text(*, text, translator, from_language, to_language, timeout=None):
+        captured["timeout"] = timeout
+        return f"{text}-zh"
+
+    monkeypatch.setattr("fast_sub.translation.service._translate_text", fake_translate_text)
+
+    result = translate_segments(
+        segments=[Segment(id=1, start=0, end=1, text="hello")],
+        provider="web-google",
+        source_lang="en",
+        target_lang="zh",
+        timeout=12.5,
+    )
+
+    assert result.errors == []
+    assert result.segments[0].translation == "hello-zh"
+    assert captured["timeout"] == 12.5
 
 
 def test_translate_segments_records_failed_segment(monkeypatch) -> None:
-    def fake_translate_text(*, text, translator, from_language, to_language):
+    def fake_translate_text(*, text, translator, from_language, to_language, timeout=None):
         raise RuntimeError("service down")
 
     monkeypatch.setattr("fast_sub.translation.service._translate_text", fake_translate_text)
@@ -68,9 +93,38 @@ def test_chat_parser_accepts_fenced_json_think_and_prefix() -> None:
     assert parse_chat_translations(content, expected_ids=[1, 2]) == {1: "你好", 2: "世界"}
 
 
+def test_chat_parser_accepts_single_cue_plain_text_variants() -> None:
+    assert parse_chat_translations("1. 你好", expected_ids=[1]) == {1: "你好"}
+    assert parse_chat_translations('{"translation":"你好"}', expected_ids=[1]) == {1: "你好"}
+    assert parse_chat_translations('["你好"]', expected_ids=[1]) == {1: "你好"}
+
+
+def test_openai_chat_message_content_accepts_compatible_shapes() -> None:
+    assert (
+        _message_content(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": '{"translations":[{"id":1,"text":"你好"}]}',
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        )
+        == '{"translations":[{"id":1,"text":"你好"}]}'
+    )
+    assert _message_content({"choices": [{"text": "你好"}]}) == "你好"
+
+
 def test_chat_parser_rejects_malformed_json_and_id_mismatch() -> None:
     with pytest.raises(ValueError, match="parse"):
-        parse_chat_translations("not json", expected_ids=[1])
+        parse_chat_translations("{not json", expected_ids=[1])
     with pytest.raises(ValueError, match="mismatch"):
         parse_chat_translations(
             '{"translations":[{"id":2,"text":"你好"}]}',
@@ -107,6 +161,72 @@ def test_chat_provider_splits_batch_then_falls_back_to_single(monkeypatch) -> No
     assert result.errors == []
     assert [segment.translation for segment in result.segments] == ["a-ok", "b-ok"]
     assert calls == [[1, 2], [1], [2]]
+
+
+def test_translate_srt_strips_provider_echoed_source_text(monkeypatch, tmp_path: Path) -> None:
+    input_file = tmp_path / "input.srt"
+    output = tmp_path / "out.srt"
+    input_file.write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\n안녕하세요\n",
+        encoding="utf-8",
+    )
+
+    def fake_request(batch, **kwargs):  # noqa: ANN001, ANN003
+        return {batch[0].id: "안녕하세요\n\n译文：你好"}
+
+    monkeypatch.setattr(
+        "fast_sub.translation.service._request_openai_chat_translation", fake_request
+    )
+
+    translate_srt(
+        input_file,
+        TranslateOptions(
+            provider="api-openai-chat",
+            source_language="ko",
+            target_language="zh",
+            model="local-model",
+            api_key="test-key",
+            batch_size=1,
+            output=output,
+            resume=False,
+        ),
+    )
+
+    assert "안녕하세요" not in output.read_text(encoding="utf-8")
+    assert "你好" in output.read_text(encoding="utf-8")
+
+
+def test_chat_provider_all_failed_error_includes_first_cue_reason(
+    monkeypatch, tmp_path: Path
+) -> None:
+    def fake_request(batch, **kwargs):  # noqa: ANN001, ANN003
+        raise ValueError("provider returned non-translation text")
+
+    monkeypatch.setattr(
+        "fast_sub.translation.service._request_openai_chat_translation", fake_request
+    )
+
+    input_file = tmp_path / "input.srt"
+    input_file.write_text("1\n00:00:00,000 --> 00:00:01,000\na\n", encoding="utf-8")
+
+    with pytest.raises(TranslationProviderError) as exc_info:
+        translate_srt(
+            input_file,
+            TranslateOptions(
+                provider="api-openai-chat",
+                source_language="en",
+                target_language="zh",
+                model="explicit-model",
+                api_key="sk-test-secret",
+                batch_size=1,
+                output=tmp_path / "out.srt",
+                resume=False,
+            ),
+        )
+
+    message = str(exc_info.value)
+    assert "All translation cues failed" in message
+    assert "provider returned non-translation text" in message
 
 
 def test_nllb_language_mapping_and_auto_rejection() -> None:

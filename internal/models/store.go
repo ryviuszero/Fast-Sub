@@ -46,6 +46,7 @@ type ListRow struct {
 	Backend             string   `json:"backend"`
 	ArtifactKind        string   `json:"artifact_kind"`
 	CompatibleProviders []string `json:"compatible_providers"`
+	DefaultFor          []string `json:"default_for,omitempty"`
 	SizeBytes           int64    `json:"size_bytes"`
 	License             string   `json:"license"`
 	Installed           bool     `json:"installed"`
@@ -92,6 +93,7 @@ func (s Store) List(manifest Manifest) []ListRow {
 			Backend:             entry.Backend,
 			ArtifactKind:        entry.ArtifactKind,
 			CompatibleProviders: entry.CompatibleProviders,
+			DefaultFor:          entry.DefaultFor,
 			SizeBytes:           entry.SizeBytes,
 			License:             entry.License,
 			Installed:           status.Installed,
@@ -115,6 +117,30 @@ func (s Store) Verify(entry ManifestEntry) Status {
 		return s.verifyDirectory(entry, path)
 	}
 	return s.verifySingle(entry, filepath.Join(path, singleFilename(entry)))
+}
+
+// Remove deletes the managed model directory for one manifest entry.
+func (s Store) Remove(entry ManifestEntry) (Status, *fserrors.AppError) {
+	command := "models remove"
+	if err := entry.validate(); err != nil {
+		return Status{}, fserrors.New(fserrors.CodeInvalidInput, command, err.Error(), "Check the model manifest.", map[string]any{"model_id": entry.ID})
+	}
+	path := s.ModelDir(entry)
+	root, err := filepath.Abs(s.Root)
+	if err != nil {
+		return Status{}, fserrors.New(fserrors.CodeInvalidInput, command, err.Error(), "Check the model store path.", map[string]any{"model_id": entry.ID})
+	}
+	target, err := filepath.Abs(path)
+	if err != nil {
+		return Status{}, fserrors.New(fserrors.CodeInvalidInput, command, err.Error(), "Check the model path.", map[string]any{"model_id": entry.ID})
+	}
+	if target == root || !strings.HasPrefix(target, root+string(os.PathSeparator)) {
+		return Status{}, fserrors.New(fserrors.CodeInvalidInput, command, "refusing to remove a path outside the model store.", "Check the model manifest and store path.", map[string]any{"model_id": entry.ID})
+	}
+	if err := os.RemoveAll(target); err != nil {
+		return Status{}, fserrors.New(fserrors.CodePermissionDenied, command, err.Error(), "Check file permissions for the model store.", map[string]any{"model_id": entry.ID, "path": target})
+	}
+	return s.Verify(entry), nil
 }
 
 func (s Store) verifyDirectory(entry ManifestEntry, path string) Status {

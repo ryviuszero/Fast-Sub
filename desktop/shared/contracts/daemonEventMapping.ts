@@ -34,36 +34,105 @@ function numberField(record: Record<string, unknown>, key: string, fallback = 0)
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function uiError(title: string, message: string, code: string): UiError {
+function uiError(title: string, message: string, code: string, details?: Record<string, string | number | boolean>): UiError {
   return {
     code,
     title,
     message: redactSecretText(message),
     action: "查看诊断并重试",
     recoveryActions: ["retry", "open_diagnostics"],
-    diagnostic: redactSecretText(`${code}: ${message}`)
+    diagnostic: redactSecretText(`${code}: ${message}`),
+    details
   };
+}
+
+function errorFromRecord(record: Record<string, unknown>): UiError {
+  const nested = asRecord(record.error);
+  const source = Object.keys(nested).length > 0 ? nested : record;
+  const code = stringField(source, "code", "job_failed");
+  const stage = stringField(source, "stage", "");
+  const title = code === "ffmpeg_failed" && stage === "extract"
+    ? "音频轨无法提取"
+    : "生成失败";
+  const details: Record<string, string | number | boolean> = {};
+  if (stage) {
+    details.stage = stage;
+  }
+  for (const [key, value] of Object.entries(asRecord(source.details))) {
+    if (typeof value === "string") {
+      details[key] = redactSecretText(value);
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      details[key] = value;
+    }
+  }
+  const message = stringField(source, "message", "任务失败");
+  if (code === "output_exists" && details.output_path === undefined) {
+    const outputPath = outputPathFromExistsMessage(message);
+    if (outputPath) {
+      details.output_path = outputPath;
+    }
+  }
+  return uiError(title, message, code, details);
+}
+
+function outputFolderFor(path: string, fallback = ""): string {
+  if (!path) {
+    return fallback;
+  }
+  const index = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
+  if (index <= 0) {
+    return fallback;
+  }
+  if (index === 2 && /^[A-Za-z]:[\\/]/.test(path)) {
+    return path.slice(0, 3);
+  }
+  return path.slice(0, index);
+}
+
+function durationLabel(record: Record<string, unknown>): string {
+  const explicit = stringField(record, "duration", "");
+  if (explicit) {
+    return explicit;
+  }
+  const elapsed = numberField(record, "elapsed_sec", 0);
+  return elapsed > 0 ? `${Math.round(elapsed)} 秒` : "";
+}
+
+function outputPathFromExistsMessage(message: string): string {
+  const match = /^output already exists:\s*(.+)$/i.exec(message.trim());
+  return match?.[1] ?? "";
 }
 
 function jobFromRecord(record: Record<string, unknown>): JobDetail {
   const status = stringField(record, "status", "queued");
+  const normalizedStatus = status === "running" || status === "succeeded" || status === "failed" || status === "canceled" || status === "interrupted" ? status : "queued";
+  const inputPath = stringField(record, "input_path", "");
+  const outputPath = stringField(record, "output_path", "");
+  const title = stringField(record, "title", inputPath.split(/[\\/]/).pop() || stringField(record, "current_file", "字幕任务"));
   return {
-    id: "redacted-job",
+    id: stringField(record, "job_id", stringField(record, "id", "")),
     displayId: "任务",
     type: "transcribe",
-    status: status === "running" || status === "succeeded" || status === "failed" || status === "canceled" || status === "interrupted" ? status : "queued",
+    status: normalizedStatus,
     statusLabel: status === "succeeded" ? "已完成" : status === "failed" ? "已失败" : status === "canceled" ? "已取消" : "等待中",
-    title: stringField(record, "title", "字幕生成任务"),
-    currentFile: stringField(record, "current_file", "已选择的媒体"),
-    progressPercent: numberField(record, "percent", 0),
-    stageLabel: stringField(record, "stage_label", "等待开始"),
-    createdAt: stringField(record, "created_at", "刚刚"),
-    inputPaths: [stringField(record, "input_path", "C:\\Users\\Example\\Videos\\a b.mp4")],
-    outputDirectory: stringField(record, "output_path", "C:\\Users\\Example\\Videos"),
-    providerName: "本地转写",
-    modelName: "Whisper Small",
+    title,
+    currentFile: stringField(record, "current_file", inputPath),
+    progressPercent: progressPercentForStatus(normalizedStatus, numberField(record, "percent", 0)),
+    stageLabel: stringField(record, "stage_label", ""),
+    createdAt: stringField(record, "created_at", ""),
+    inputPaths: inputPath ? [inputPath] : [],
+    outputDirectory: outputFolderFor(outputPath, ""),
+    providerName: stringField(record, "provider", ""),
+    modelName: stringField(record, "model", ""),
     logs: []
   };
+}
+
+function progressPercentForStatus(status: JobDetail["status"], percent: number): number {
+  if (status === "succeeded") {
+    return 100;
+  }
+  return Math.max(0, Math.min(100, percent));
 }
 
 export function mapDaemonEventToJobEvent(fixture: DaemonEventFixture): JobEvent | null {
@@ -107,17 +176,22 @@ export function mapDaemonEventToJobEvent(fixture: DaemonEventFixture): JobEvent 
       };
     }
     case "completed":
-      return {
-        type: "succeeded",
-        result: {
-          subtitlePath: stringField(record, "subtitle_path", "C:\\Users\\Example\\Videos\\a b.srt"),
-          outputFolder: stringField(record, "output_folder", "C:\\Users\\Example\\Videos"),
-          summary: "字幕已生成",
-          durationLabel: stringField(record, "duration", "00:42")
-        }
-      };
+      {
+        const outputPath = stringField(record, "subtitle_path", stringField(record, "output_path", ""));
+        const outputFolder = stringField(record, "output_folder", outputFolderFor(outputPath, ""));
+        return {
+          type: "succeeded",
+          result: {
+            subtitlePath: outputPath,
+            outputFolder,
+            summary: stringField(record, "summary", "字幕已生成"),
+            durationLabel: durationLabel(record),
+            language: stringField(record, "language", "")
+          }
+        };
+      }
     case "failed":
-      return { type: "failed", error: uiError("生成失败", stringField(record, "message", "任务失败"), stringField(record, "code", "job_failed")) };
+      return { type: "failed", error: errorFromRecord(record) };
     case "canceled":
       return { type: "canceled" };
     case "interrupted":

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,7 +31,29 @@ type DefaultRunner struct {
 	ModelLookup func(string, string) (string, error)
 }
 
+func (r DefaultRunner) RunJob(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
+	switch req.Type {
+	case "transcribe", "":
+		return r.RunTranscribe(ctx, job, req, emit)
+	case "model_install":
+		return r.runModelInstall(ctx, req, emit)
+	case "translate_srt":
+		return r.runTranslateSRT(ctx, req, emit)
+	case "burn_in":
+		return r.runBurnIn(ctx, req, emit)
+	default:
+		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "create_job", "unsupported job type: "+req.Type, "", nil)
+	}
+}
+
 func (r DefaultRunner) RunTranscribe(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
+	if outputTypeNeedsTranslation(req.OutputType) {
+		return r.runTranscribeThenTranslate(ctx, job, req, emit)
+	}
+	return r.runTranscribeOnly(ctx, job, req, emit)
+}
+
+func (r DefaultRunner) runTranscribeOnly(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
 	switch req.Provider {
 	case "", "local-faster-whisper":
 		return r.runFasterWhisper(ctx, job, req, emit)
@@ -43,12 +66,156 @@ func (r DefaultRunner) RunTranscribe(ctx context.Context, job Job, req CreateReq
 	}
 }
 
+func (r DefaultRunner) runTranscribeThenTranslate(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
+	finalOutput := outputPath(req)
+	if appErr := validateOutput(finalOutput, boolOption(req, "overwrite")); appErr != nil {
+		return Result{}, appErr
+	}
+	transcribeReq := req
+	transcribeReq.OutputPath = filepath.Join(r.jobDir(job.ID), "tmp", "transcribed.srt")
+	transcribeReq.Options = cloneOptions(req.Options)
+	transcribeReq.Options["overwrite"] = true
+	transcribeReq.Options["_preserve_tmp_for_translation"] = true
+	transcribeReq.Options["_render_percent"] = float64(68)
+	transcribeReq.Options["_finalizing_percent"] = float64(72)
+	transcribed, appErr := r.runTranscribeOnly(ctx, job, transcribeReq, emit)
+	if appErr != nil {
+		return Result{}, appErr
+	}
+	if transcribed.Segments == 0 {
+		if err := os.WriteFile(finalOutput, []byte{}, 0o600); err != nil {
+			return Result{}, classifyWriteError("rendering", "write SRT: "+err.Error())
+		}
+		if !boolOption(req, "keep_temp") {
+			_ = os.RemoveAll(filepath.Join(r.jobDir(job.ID), "tmp"))
+		}
+		transcribed.InputPath = req.InputPath
+		transcribed.OutputPath = finalOutput
+		transcribed.Warnings = append(transcribed.Warnings, "No speech was detected; translation was skipped.")
+		emitProgress(emit, "finalizing", 95)
+		return transcribed, nil
+	}
+	translateReq := CreateRequest{
+		SchemaVersion:  req.SchemaVersion,
+		Type:           "translate_srt",
+		InputPath:      transcribed.OutputPath,
+		OutputPath:     finalOutput,
+		Provider:       stringDefault(req.TranslationProvider, stringOption(req, "translation_provider")),
+		Model:          stringDefault(req.TranslationModel, stringOption(req, "translation_model")),
+		Language:       stringDefault(transcribed.Language, language(req)),
+		TargetLanguage: req.TargetLanguage,
+		OutputFormat:   req.OutputFormat,
+		Options:        cloneOptions(req.Options),
+		Extra:          req.Extra,
+	}
+	translateReq.Options["overwrite"] = boolOption(req, "overwrite")
+	translateReq.Options["yes"] = req.TranslationUploadConfirmed || boolOption(req, "translation_upload_confirmed")
+	translateReq.Options["target_language"] = stringDefault(req.TargetLanguage, stringOption(req, "target_language"))
+	if req.OutputType == "bilingual_srt" {
+		translateReq.Options["mode"] = "bilingual"
+	} else {
+		translateReq.Options["mode"] = "replace"
+	}
+	translated, appErr := r.runTranslateSRT(ctx, translateReq, scaleProgress(emit, 72, 95))
+	if appErr != nil {
+		return Result{}, appErr
+	}
+	if !boolOption(req, "keep_temp") {
+		_ = os.RemoveAll(filepath.Join(r.jobDir(job.ID), "tmp"))
+	}
+	translated.InputPath = req.InputPath
+	translated.Language = transcribed.Language
+	translated.ElapsedSec += transcribed.ElapsedSec
+	translated.Warnings = append(transcribed.Warnings, translated.Warnings...)
+	return translated, nil
+}
+
+func (r DefaultRunner) runModelInstall(ctx context.Context, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
+	modelID := stringDefault(req.ModelID, req.Model)
+	if modelID == "" {
+		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "installing_model", "model_id is required.", "Choose a model and retry.", nil)
+	}
+	manifest, err := models.LoadManifest("")
+	if err != nil {
+		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "installing_model", "model manifest could not be loaded: "+err.Error(), "Check the model manifest.", map[string]any{"model_id": modelID})
+	}
+	entry, ok := manifest.Get(modelID)
+	if !ok {
+		return Result{}, fserrors.New("unknown_model", "installing_model", "unknown model: "+modelID, "Choose a model from the model list.", map[string]any{"model_id": modelID})
+	}
+	store := r.ModelStore
+	if store.Root == "" {
+		store = models.DefaultStore()
+	}
+	emitProgress(emit, "validating", 5)
+	installResult, appErr := store.Install(ctx, entry, models.InstallOptions{
+		Progress: func(progress models.Progress) {
+			percent := 10
+			if progress.OverallTotal > 0 {
+				percent = 10 + int((progress.OverallBytes*80)/progress.OverallTotal)
+			}
+			if percent > 90 {
+				percent = 90
+			}
+			emit(ProgressUpdate("installing_model", percent))
+		},
+	})
+	if appErr != nil {
+		return Result{}, appErr
+	}
+	emitProgress(emit, "finalizing", 95)
+	return Result{
+		InputPath:  modelID,
+		OutputPath: installResult.Status.Path,
+		Provider:   req.Provider,
+		Model:      modelID,
+		Warnings:   []string{},
+	}, nil
+}
+
+func (r DefaultRunner) runTranslateSRT(ctx context.Context, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
+	return r.runTranslateSRTBridge(ctx, req, emit)
+}
+
+func (r DefaultRunner) runBurnIn(ctx context.Context, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
+	if strings.TrimSpace(req.InputPath) == "" || strings.TrimSpace(req.SubtitlePath) == "" {
+		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "burning_in", "input_path and subtitle_path are required.", "Choose a video and subtitle file.", nil)
+	}
+	output := req.OutputPath
+	if output == "" {
+		output = strings.TrimSuffix(req.InputPath, filepath.Ext(req.InputPath)) + ".burned.mp4"
+	}
+	if err := validateOutput(output, boolOption(req, "overwrite")); err != nil {
+		return Result{}, err
+	}
+	emitProgress(emit, "validating", 10)
+	if ctx.Err() != nil {
+		return Result{}, fserrors.New(fserrors.CodeCanceled, "burning_in", "job was canceled.", "", nil)
+	}
+	emitProgress(emit, "burning_in", 35)
+	burned, appErr := r.ffmpegRunner().BurnIn(ctx, req.InputPath, req.SubtitlePath, output, ffmpeg.BurnInOptions{
+		Preset: stringOption(req, "burn_preset"),
+	})
+	if appErr != nil {
+		return Result{}, appErr
+	}
+	emitProgress(emit, "finalizing", 95)
+	return Result{
+		InputPath:  req.InputPath,
+		OutputPath: burned.OutputPath,
+		Provider:   req.Provider,
+		Model:      req.Model,
+		ElapsedSec: burned.ElapsedSec,
+		Warnings:   []string{},
+	}, nil
+}
+
 func finishTranscribe(input finishTranscribeInput) (Result, *fserrors.AppError) {
 	jobDir := input.jobDir
 	req := input.req
 	result := input.result
 	emit := input.emit
-	emitProgress(emit, "rendering", 85)
+	emitProgress(emit, "rendering", intDefault(intOption(req, "_render_percent"), 85))
 	refined := subtitle.RefineSegments(input.segments, subtitle.RefineOptions{Lang: input.language})
 	srt, err := subtitle.RenderSRT(refined)
 	if err != nil {
@@ -57,10 +224,10 @@ func finishTranscribe(input finishTranscribeInput) (Result, *fserrors.AppError) 
 	if err := os.WriteFile(input.output, []byte(srt), 0o600); err != nil {
 		return Result{}, classifyWriteError("rendering", "write SRT: "+err.Error())
 	}
-	if !boolOption(req, "keep_temp") {
+	if !boolOption(req, "keep_temp") && !boolOption(req, "_preserve_tmp_for_translation") {
 		_ = os.RemoveAll(filepath.Join(jobDir, "tmp"))
 	}
-	emitProgress(emit, "finalizing", 95)
+	emitProgress(emit, "finalizing", intDefault(intOption(req, "_finalizing_percent"), 95))
 	result.InputPath = req.InputPath
 	result.OutputPath = input.output
 	result.Language = input.language
@@ -69,6 +236,30 @@ func finishTranscribe(input finishTranscribeInput) (Result, *fserrors.AppError) 
 		result.Warnings = []string{}
 	}
 	return result, nil
+}
+
+func outputTypeNeedsTranslation(value string) bool {
+	return value == "translated_srt" || value == "bilingual_srt"
+}
+
+func cloneOptions(options map[string]any) map[string]any {
+	out := map[string]any{}
+	for key, value := range options {
+		out[key] = value
+	}
+	return out
+}
+
+func scaleProgress(emit func(Update), minPercent, maxPercent int) func(Update) {
+	return func(update Update) {
+		if update.Percent != nil {
+			scaled := minPercent + ((*update.Percent) * (maxPercent - minPercent) / 100)
+			update.Percent = &scaled
+			update.Stage = update.Stage
+			update.Event.Data = map[string]any{"stage": update.Stage, "percent": scaled}
+		}
+		emit(update)
+	}
 }
 
 type finishTranscribeInput struct {
@@ -160,11 +351,14 @@ func validateRequest(req CreateRequest, whisperCPP bool) *fserrors.AppError {
 	return nil
 }
 
-func validateOutput(output string) *fserrors.AppError {
+func validateOutput(output string, overwrite bool) *fserrors.AppError {
 	if output == "" {
 		return fserrors.New(fserrors.CodeInvalidInput, "rendering", "output_path is required or input must have an extension.", "", nil)
 	}
 	if _, err := os.Stat(output); err == nil {
+		if overwrite {
+			return nil
+		}
 		return fserrors.New(fserrors.CodeOutputExists, "rendering", "output already exists: "+output, "Choose a different output_path.", nil)
 	}
 	if err := os.MkdirAll(filepath.Dir(output), 0o700); err != nil && filepath.Dir(output) != "." {
@@ -233,6 +427,26 @@ func intOption(req CreateRequest, key string) int {
 		return int(typed)
 	case int:
 		return typed
+	default:
+		return 0
+	}
+}
+
+func floatOption(req CreateRequest, key string) float64 {
+	if req.Options == nil {
+		return 0
+	}
+	switch typed := req.Options[key].(type) {
+	case float64:
+		return typed
+	case int:
+		return float64(typed)
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+		if err != nil {
+			return 0
+		}
+		return parsed
 	default:
 		return 0
 	}

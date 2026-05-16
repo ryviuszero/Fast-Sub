@@ -21,17 +21,25 @@ const (
 )
 
 type CreateRequest struct {
-	SchemaVersion  int               `json:"schema_version"`
-	Type           string            `json:"type"`
-	InputPath      string            `json:"input_path"`
-	OutputPath     string            `json:"output_path"`
-	Provider       string            `json:"provider"`
-	Model          string            `json:"model"`
-	ModelPath      string            `json:"model_path"`
-	Language       string            `json:"language"`
-	WordTimestamps string            `json:"word_timestamps"`
-	Options        map[string]any    `json:"options"`
-	Extra          map[string]string `json:"-"`
+	SchemaVersion              int               `json:"schema_version"`
+	Type                       string            `json:"type"`
+	ModelID                    string            `json:"model_id"`
+	InputPath                  string            `json:"input_path"`
+	SubtitlePath               string            `json:"subtitle_path"`
+	OutputPath                 string            `json:"output_path"`
+	Provider                   string            `json:"provider"`
+	Model                      string            `json:"model"`
+	ModelPath                  string            `json:"model_path"`
+	Language                   string            `json:"language"`
+	TargetLanguage             string            `json:"target_language"`
+	OutputType                 string            `json:"output_type"`
+	OutputFormat               string            `json:"output_format"`
+	WordTimestamps             string            `json:"word_timestamps"`
+	TranslationProvider        string            `json:"translation_provider"`
+	TranslationModel           string            `json:"translation_model"`
+	TranslationUploadConfirmed bool              `json:"translation_upload_confirmed"`
+	Options                    map[string]any    `json:"options"`
+	Extra                      map[string]string `json:"-"`
 }
 
 type Progress struct {
@@ -71,6 +79,7 @@ type Job struct {
 }
 
 type Runner interface {
+	RunJob(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError)
 	RunTranscribe(ctx context.Context, job Job, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError)
 }
 

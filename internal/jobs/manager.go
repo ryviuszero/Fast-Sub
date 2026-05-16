@@ -20,6 +20,7 @@ type Manager struct {
 	mu         sync.Mutex
 	ctx        context.Context
 	cancel     context.CancelFunc
+	runningWG  sync.WaitGroup
 	root       string
 	maxRunning int
 	runner     Runner
@@ -74,17 +75,32 @@ func (m *Manager) Shutdown() {
 	for _, cancel := range cancels {
 		cancel()
 	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		m.runningWG.Wait()
+	}()
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+	}
 }
 
 func (m *Manager) Create(req CreateRequest) (*Job, *fserrors.AppError) {
 	if req.SchemaVersion != 0 && req.SchemaVersion != 1 {
 		return nil, fserrors.New(fserrors.CodeInvalidInput, "create_job", "unsupported schema_version", "", nil)
 	}
-	if req.Type != "transcribe" {
-		return nil, fserrors.New(fserrors.CodeInvalidInput, "create_job", "only transcribe jobs are supported in this daemon gate.", "", nil)
+	if req.Type == "" {
+		req.Type = "transcribe"
 	}
-	if strings.TrimSpace(req.InputPath) == "" {
+	if !supportedJobType(req.Type) {
+		return nil, fserrors.New(fserrors.CodeInvalidInput, "create_job", "unsupported job type: "+req.Type, "", nil)
+	}
+	if req.Type != "model_install" && strings.TrimSpace(req.InputPath) == "" {
 		return nil, fserrors.New(fserrors.CodeInvalidInput, "create_job", "input_path is required.", "", nil)
+	}
+	if req.Type == "model_install" && strings.TrimSpace(req.ModelID) == "" && strings.TrimSpace(req.Model) == "" {
+		return nil, fserrors.New(fserrors.CodeInvalidInput, "create_job", "model_id is required.", "", nil)
 	}
 	if req.Provider == "" {
 		req.Provider = "local-faster-whisper"
@@ -121,6 +137,15 @@ func (m *Manager) Create(req CreateRequest) (*Job, *fserrors.AppError) {
 	m.appendEvent(id, events.TypeCreated, map[string]any{"status": StatusCreated})
 	m.enqueue(id)
 	return m.Get(id)
+}
+
+func supportedJobType(value string) bool {
+	switch value {
+	case "transcribe", "model_install", "translate_srt", "burn_in":
+		return true
+	default:
+		return false
+	}
 }
 
 func (m *Manager) List() []Job {

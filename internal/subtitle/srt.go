@@ -26,7 +26,7 @@ type Segment struct {
 // RenderSRT renders worker segments as SubRip text.
 func RenderSRT(segments []Segment) (string, error) {
 	if len(segments) == 0 {
-		return "", fmt.Errorf("segments must not be empty")
+		return "", nil
 	}
 	var b strings.Builder
 	for i, segment := range segments {

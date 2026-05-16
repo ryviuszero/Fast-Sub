@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -67,7 +68,7 @@ func (b HTTPBackend) Download(ctx context.Context, request Request) (Result, err
 		client = b.Client
 	}
 	if client == nil {
-		client = &http.Client{Timeout: 60 * time.Second}
+		client = defaultHTTPClient()
 	}
 	if request.URL == "" {
 		return Result{}, fmt.Errorf("download URL is empty")
@@ -168,6 +169,24 @@ func (b HTTPBackend) Download(ctx context.Context, request Request) (Result, err
 		AcceptRanges:  resp.Header.Get("Accept-Ranges"),
 		ContentLength: contentLength(resp.Header.Get("Content-Length")),
 	}, nil
+}
+
+func defaultHTTPClient() *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          10,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   30 * time.Second,
+			ResponseHeaderTimeout: 60 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}
 }
 
 // Sha256File returns the lowercase SHA-256 digest for a file.
