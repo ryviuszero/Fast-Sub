@@ -4,14 +4,16 @@
 
 ## 当前阶段
 
-- Round 12 Electron Daemon Integration And Release Feature Closure 已完成，准备进入 Round 13
+- Round 13 Electron Productization And Release Readiness 规划已启动
 
 ## 当前目标
 
-- Round 12 核心代码和文档验收已收口：真实 daemon client、模型安装、转写、翻译、烧录、配置持久化、safeStorage/BYOK、一次性 transient `secret_ref`、任务队列、Windows 取消链路和 FFmpeg/FFprobe 自动修复已落地并通过当前自动化回归；Round 13 只承接打包、发布 smoke、诊断 polish 和真实外部 Provider/安装包形态验证。
+- Round 13 只承接产品化和发布准备：打包形态、安装包/便携包 smoke、打包后 daemon lifecycle、诊断 polish、隐私/redaction 验证、真实外部 Provider smoke、真实文件路径/GPU/超时场景验证，以及可重复执行的发布检查清单。Round 13 不再新增核心业务能力或改变 daemon/UI 主 contract。
 
 ## 完成的
 
+- 已创建 `desktop-tests/round13-release-smoke.md`，作为 Round 13 打包形态、真实 Provider、真实文件、诊断和隐私 smoke 的记录模板。
+- 已创建 `ui-docs/specs/round13-electron-productization-release.md`，明确 Round 13 的目标、非目标、分支建议、输入状态、13.1 到 13.7 实现单元、打包/真实 Provider/诊断/发布检查清单和验收标准。
 - Round 12 环境依赖补齐：Electron main process 在环境检查中会真实检测 `ffmpeg/ffprobe`，缺失时在 Windows 后台自动下载 gyan.dev FFmpeg essentials zip，解压到 app `userData/native-binaries/ffmpeg/bin`，并在自管 Go daemon 启动环境中 prepend 该目录；renderer 只展示 `ffmpegReady`、安装进度、简短安装日志和失败重试入口，不直接运行安装逻辑。下载和 staging 使用独立临时文件，避免旧安装进程锁住 zip 后阻塞重试。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`。
 - Round 12 FFmpeg 下载加速补齐：环境依赖安装器优先使用 app 私有 aria2，其次系统 `aria2c`，缺失时先下载 aria2 到 `userData/native-binaries/aria2/bin`，再用 `aria2c -x16 -s16` 加速下载 FFmpeg；aria2 准备失败时自动回退普通 HTTPS 下载，并在安装日志中显示当前阶段。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`，并用 HEAD 检查 aria2 GitHub release URL 返回 200。
 - Round 12 FFmpeg 包管理器 fallback：环境检查页在 FFmpeg 缺失时提供显式的 Scoop、Winget、Chocolatey 安装按钮；renderer 不执行 shell，main process 只允许固定白名单命令：`scoop install ffmpeg`、`winget install --id Gyan.FFmpeg --exact --source winget --accept-package-agreements --accept-source-agreements`、`choco install ffmpeg -y`。安装后重新检查 FFmpeg 并重启自管 daemon。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`。
@@ -175,13 +177,13 @@
 
 ## 进行中
 
-- Round 12 无剩余代码阻断项；当前只等待进入 Round 13 的打包/发布 smoke。
+- Round 13 规划阶段：先做 release inventory 和 packaging decision，再进入打包 pipeline、打包形态 smoke、真实 Provider smoke、诊断 polish 和发布检查清单。
 
 ## 接下来
 
-- Round 13 只补充打包形态 smoke：daemon repair、401、disconnect、events_lost、web 翻译 3 分钟超时和大文件提示、FFmpeg/FFprobe 首装、安装包启动。
-- Round 13 继续真实外部 Provider smoke：本地 NLLB、Bing/Google 网页翻译、OpenAI-compatible STT/翻译、本地兼容 API、中文/日文/韩文文件名、GPU 长任务取消。
-- 将 `local_tests/round12/` 和 `desktop-tests/` 的手动真实 smoke 结果整理进 Round 13 发布验收记录。
+- 13.1：盘点 release artifact、daemon binary、Python runtime/CLI bridge、native binaries、model store、job store、config、secret store、logs 和 userData 路径，确定第一版 Windows/macOS 发布包形态。
+- 13.2：使用 `electron-builder` 建立打包 pipeline 和 `npm run package` 或等效命令，确保打包产物不依赖 Vite dev server 或系统 Python，且不会打入 secret、模型、真实媒体或本机产物。
+- 13.3 到 13.7：按 `ui-docs/specs/round13-electron-productization-release.md` 依次执行打包后 daemon/dependency smoke、真实 Provider smoke、诊断隐私 polish、截图/E2E 基线和发布检查清单，并把真实环境结果写入 `desktop-tests/round13-release-smoke.md`。
 
 ## 决策清单
 
@@ -227,11 +229,27 @@
 - Round 12 `secret_ref` 不得原样持久化到 job metadata、events、logs、stdout、stderr 或 renderer state；需要落盘时只能写入脱敏占位。
 - 生产模式不能因 daemon 失败静默切 mock；mock/fake daemon 只能通过明确开发/测试入口启用。
 - Round 12 配置读写真实落地，普通设置通过 daemon config API 写入 Fast Sub runtime 配置。
+- Round 13 spec 路径：`ui-docs/specs/round13-electron-productization-release.md`。
+- Round 13 smoke 记录路径：`desktop-tests/round13-release-smoke.md`。
+- Round 13 只做产品化和发布准备，不新增核心业务能力，不改变 daemon/UI 主 contract。
+- Round 13 发布平台包括 Windows 和 macOS；Windows 第一版同时做 x64 installer 和 portable zip，macOS 第一版只做 arm64 dmg。
+- Round 13 默认打包工具确定为 `electron-builder`；原因是需要跨平台 artifact、installer/portable/dmg/zip target、`extraResources` 打包 Go/Python/native binaries，以及后续 Windows signing、macOS signing/notarization 标准入口。
+- Round 13 Go daemon 作为平台二进制随包分发；Electron main 在打包态从 app resources 下的平台目录定位 `fast-sub-go(.exe)`。
+- Round 13 普通用户不需要系统 Python、uv 或全局 `fast-sub` CLI；本轮采用 app 私有 Python runtime + Python CLI bridge/worker 随包分发，不在本轮全量迁移 STT/translation 到 Go。
+- Round 13 模型不随包分发；首次启动根据本地环境安装默认转写模型和默认翻译模型，安装成功后才标记本地转写/本地翻译就绪。
+- Round 13 默认 ASR 模型优先安装小模型，不做复杂硬件推荐；默认翻译模型使用当前默认 NLLB manifest。
+- Round 13 Provider smoke 分级：默认本地 ASR Provider、默认本地翻译 Provider 和本地兼容 OpenAI API 作为 release blocker；真实 OpenAI、Bing、Google 作为外部服务记录项，失败不默认阻塞本地桌面发布。
+- Round 13 macOS 验收必须在 macOS host 或 macOS CI runner 上完成；Windows 上的配置检查不能作为 macOS artifact 验收。
+- Round 13 所有可执行 runtime 必须位于 ASAR 外，macOS arm64 还必须验证可执行权限、quarantine 风险和取消/退出/repair 后的子进程清理。
+- Round 13 license/notice 不只列清单，还要给每个组件明确 `bundle-ok`、`download-only`、`manual-user-install`、`blocked` 或 `needs-review` 结论；`blocked` 组件不得进入发布包。
+- Round 13 实现顺序：13.1 release inventory，13.2 packaging pipeline，13.3 packaged daemon/dependency smoke，13.4 real provider/file smoke，13.5 diagnostics/privacy polish，13.6 release E2E/screenshot baseline，13.7 release checklist。
+- Round 13 手动真实 smoke 结果应整理到 `desktop-tests`，真实网络、真实模型和 GPU 压力测试不进入默认 CI。
+- Round 13 可以接受第一版未签名内部试用包，但必须在发布记录中明确安装风险、安全软件误报风险和用户提示。
 
 ### 实现前必须确认
 
-- 默认 ASR 真实 manifest id，以及是否根据硬件推荐更小/更大模型。
-- 默认 NLLB 真实 manifest id、磁盘占用提示和安装失败文案。
+- 默认小型 ASR 真实 manifest id。
+- 当前默认 NLLB manifest id、磁盘占用提示和安装失败文案。
 
 ## 架构决策
 
