@@ -15,7 +15,8 @@ export function QueueList({ jobs, queueInitialFilter, setScreen, openJob, cancel
   useEffect(() => {
     setQueueFilter(queueInitialFilter);
   }, [queueInitialFilter]);
-  const orderedJobs = useMemo(() => orderedQueueJobs(jobs), [jobs]);
+  const queueJobs = useMemo(() => jobs.filter((job) => job.type !== "model_install"), [jobs]);
+  const orderedJobs = useMemo(() => orderedQueueJobs(queueJobs), [queueJobs]);
   const runningJobs = useMemo(() => orderedJobs.filter((job) => job.status === "running" || job.status === "canceling"), [orderedJobs]);
   const queuedJobs = useMemo(() => orderedJobs.filter((job) => job.status === "queued"), [orderedJobs]);
   const activeJobs = useMemo(() => [...runningJobs, ...queuedJobs], [queuedJobs, runningJobs]);

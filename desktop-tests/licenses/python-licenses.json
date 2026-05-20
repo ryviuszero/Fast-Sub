@@ -1,0 +1,384 @@
+{
+  "generated_at": "2026-05-19T12:37:06.388Z",
+  "source": "desktop/resources/python/win32-x64/Lib/site-packages/*.dist-info/METADATA",
+  "packages": [
+    {
+      "name": "annotated-doc",
+      "version": "0.0.4",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\annotated_doc-0.0.4.dist-info\\METADATA"
+    },
+    {
+      "name": "annotated-types",
+      "version": "0.7.0",
+      "license": "License :: OSI Approved :: MIT License",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\annotated_types-0.7.0.dist-info\\METADATA"
+    },
+    {
+      "name": "anyio",
+      "version": "4.13.0",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\anyio-4.13.0.dist-info\\METADATA"
+    },
+    {
+      "name": "av",
+      "version": "17.0.1",
+      "license": "BSD-3-Clause",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\av-17.0.1.dist-info\\METADATA"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.4.22",
+      "license": "MPL-2.0",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\certifi-2026.4.22.dist-info\\METADATA"
+    },
+    {
+      "name": "click",
+      "version": "8.4.0",
+      "license": "BSD-3-Clause",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\click-8.4.0.dist-info\\METADATA"
+    },
+    {
+      "name": "colorama",
+      "version": "0.4.6",
+      "license": "License :: OSI Approved :: BSD License",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\colorama-0.4.6.dist-info\\METADATA"
+    },
+    {
+      "name": "ctranslate2",
+      "version": "4.7.2",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\ctranslate2-4.7.2.dist-info\\METADATA"
+    },
+    {
+      "name": "fast-sub",
+      "version": "0.1.0",
+      "license": "UNKNOWN",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\fast_sub-0.1.0.dist-info\\METADATA"
+    },
+    {
+      "name": "faster-whisper",
+      "version": "1.2.1",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\faster_whisper-1.2.1.dist-info\\METADATA"
+    },
+    {
+      "name": "filelock",
+      "version": "3.29.0",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\filelock-3.29.0.dist-info\\METADATA"
+    },
+    {
+      "name": "flatbuffers",
+      "version": "25.12.19",
+      "license": "Apache 2.0",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\flatbuffers-25.12.19.dist-info\\METADATA"
+    },
+    {
+      "name": "fsspec",
+      "version": "2026.4.0",
+      "license": "BSD-3-Clause",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\fsspec-2026.4.0.dist-info\\METADATA"
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\h11-0.16.0.dist-info\\METADATA"
+    },
+    {
+      "name": "hf-xet",
+      "version": "1.5.0",
+      "license": "Apache-2.0",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\hf_xet-1.5.0.dist-info\\METADATA"
+    },
+    {
+      "name": "httpcore",
+      "version": "1.0.9",
+      "license": "BSD-3-Clause",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\httpcore-1.0.9.dist-info\\METADATA"
+    },
+    {
+      "name": "httpx",
+      "version": "0.28.1",
+      "license": "BSD-3-Clause",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\httpx-0.28.1.dist-info\\METADATA"
+    },
+    {
+      "name": "huggingface_hub",
+      "version": "1.15.0",
+      "license": "Apache-2.0",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\huggingface_hub-1.15.0.dist-info\\METADATA"
+    },
+    {
+      "name": "idna",
+      "version": "3.15",
+      "license": "BSD-3-Clause",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\idna-3.15.dist-info\\METADATA"
+    },
+    {
+      "name": "lxml",
+      "version": "6.1.1",
+      "license": "BSD-3-Clause",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\lxml-6.1.1.dist-info\\METADATA"
+    },
+    {
+      "name": "markdown-it-py",
+      "version": "4.2.0",
+      "license": "License :: OSI Approved :: MIT License",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\markdown_it_py-4.2.0.dist-info\\METADATA"
+    },
+    {
+      "name": "mdurl",
+      "version": "0.1.2",
+      "license": "License :: OSI Approved :: MIT License",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\mdurl-0.1.2.dist-info\\METADATA"
+    },
+    {
+      "name": "numpy",
+      "version": "2.4.6",
+      "license": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\numpy-2.4.6.dist-info\\METADATA"
+    },
+    {
+      "name": "onnxruntime",
+      "version": "1.26.0",
+      "license": "MIT License",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\onnxruntime-1.26.0.dist-info\\METADATA"
+    },
+    {
+      "name": "packaging",
+      "version": "26.2",
+      "license": "Apache-2.0 OR BSD-2-Clause",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\packaging-26.2.dist-info\\METADATA"
+    },
+    {
+      "name": "pip",
+      "version": "26.0.1",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\pip-26.0.1.dist-info\\METADATA"
+    },
+    {
+      "name": "platformdirs",
+      "version": "4.9.6",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\platformdirs-4.9.6.dist-info\\METADATA"
+    },
+    {
+      "name": "portalocker",
+      "version": "3.2.0",
+      "license": "BSD-3-Clause",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\portalocker-3.2.0.dist-info\\METADATA"
+    },
+    {
+      "name": "protobuf",
+      "version": "7.34.1",
+      "license": "3-Clause BSD License",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\protobuf-7.34.1.dist-info\\METADATA"
+    },
+    {
+      "name": "pydantic",
+      "version": "2.13.4",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\pydantic-2.13.4.dist-info\\METADATA"
+    },
+    {
+      "name": "pydantic_core",
+      "version": "2.46.4",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\pydantic_core-2.46.4.dist-info\\METADATA"
+    },
+    {
+      "name": "Pygments",
+      "version": "2.20.0",
+      "license": "BSD-2-Clause",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\pygments-2.20.0.dist-info\\METADATA"
+    },
+    {
+      "name": "pysubs2",
+      "version": "1.8.1",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\pysubs2-1.8.1.dist-info\\METADATA"
+    },
+    {
+      "name": "pywin32",
+      "version": "311",
+      "license": "PSF",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\pywin32-311.dist-info\\METADATA"
+    },
+    {
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\pyyaml-6.0.3.dist-info\\METADATA"
+    },
+    {
+      "name": "regex",
+      "version": "2026.5.9",
+      "license": "Apache-2.0 AND CNRI-Python",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\regex-2026.5.9.dist-info\\METADATA"
+    },
+    {
+      "name": "rich",
+      "version": "15.0.0",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\rich-15.0.0.dist-info\\METADATA"
+    },
+    {
+      "name": "sacrebleu",
+      "version": "2.6.0",
+      "license": "Apache-2.0",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\sacrebleu-2.6.0.dist-info\\METADATA"
+    },
+    {
+      "name": "sentencepiece",
+      "version": "0.2.1",
+      "license": "Apache-2.0",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\sentencepiece-0.2.1.dist-info\\METADATA",
+      "evidence": "https://github.com/google/sentencepiece/blob/master/LICENSE"
+    },
+    {
+      "name": "setuptools",
+      "version": "82.0.1",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\setuptools-82.0.1.dist-info\\METADATA"
+    },
+    {
+      "name": "shellingham",
+      "version": "1.5.4",
+      "license": "ISC License",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\shellingham-1.5.4.dist-info\\METADATA"
+    },
+    {
+      "name": "tabulate",
+      "version": "0.10.0",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\tabulate-0.10.0.dist-info\\METADATA"
+    },
+    {
+      "name": "tokenizers",
+      "version": "0.23.1",
+      "license": "License :: OSI Approved :: Apache Software License",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\tokenizers-0.23.1.dist-info\\METADATA"
+    },
+    {
+      "name": "tqdm",
+      "version": "4.67.3",
+      "license": "MPL-2.0 AND MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\tqdm-4.67.3.dist-info\\METADATA"
+    },
+    {
+      "name": "typer",
+      "version": "0.25.1",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\typer-0.25.1.dist-info\\METADATA"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.15.0",
+      "license": "PSF-2.0",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\typing_extensions-4.15.0.dist-info\\METADATA",
+      "evidence": "https://pypi.org/project/typing-extensions/4.15.0/"
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.2",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "C:\\Users\\example-user\\Desktop\\SaaS\\P05\\desktop\\resources\\python\\win32-x64\\Lib\\site-packages\\typing_inspection-0.4.2.dist-info\\METADATA"
+    }
+  ]
+}

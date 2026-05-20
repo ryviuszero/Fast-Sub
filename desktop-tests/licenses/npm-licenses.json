@@ -1,0 +1,4574 @@
+{
+  "generated_at": "2026-05-19T12:37:06.381Z",
+  "source": "desktop/package-lock.json",
+  "packages": [
+    {
+      "name": "@acemir/cssom",
+      "version": "0.9.31",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@adobe/css-tools",
+      "version": "4.4.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@asamuzakjp/css-color",
+      "version": "4.1.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@asamuzakjp/css-color/node_modules/lru-cache",
+      "version": "11.3.6",
+      "license": "BlueOak-1.0.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@asamuzakjp/dom-selector",
+      "version": "6.8.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@asamuzakjp/dom-selector/node_modules/lru-cache",
+      "version": "11.3.6",
+      "license": "BlueOak-1.0.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@asamuzakjp/nwsapi",
+      "version": "2.3.9",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/code-frame",
+      "version": "7.29.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/compat-data",
+      "version": "7.29.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/core",
+      "version": "7.29.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/generator",
+      "version": "7.29.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/helper-compilation-targets",
+      "version": "7.28.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/helper-globals",
+      "version": "7.28.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/helper-module-imports",
+      "version": "7.28.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/helper-module-transforms",
+      "version": "7.28.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/helper-plugin-utils",
+      "version": "7.28.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/helper-string-parser",
+      "version": "7.27.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/helper-validator-identifier",
+      "version": "7.28.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/helper-validator-option",
+      "version": "7.27.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/helpers",
+      "version": "7.29.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/parser",
+      "version": "7.29.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/plugin-transform-arrow-functions",
+      "version": "7.27.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/plugin-transform-react-jsx-self",
+      "version": "7.27.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/plugin-transform-react-jsx-source",
+      "version": "7.27.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/runtime",
+      "version": "7.29.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/template",
+      "version": "7.28.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/traverse",
+      "version": "7.29.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@babel/types",
+      "version": "7.29.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@bcoe/v8-coverage",
+      "version": "1.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@csstools/color-helpers",
+      "version": "6.0.2",
+      "license": "MIT-0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@csstools/css-calc",
+      "version": "3.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@csstools/css-color-parser",
+      "version": "4.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@csstools/css-parser-algorithms",
+      "version": "4.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@csstools/css-syntax-patches-for-csstree",
+      "version": "1.1.3",
+      "license": "MIT-0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@csstools/css-tokenizer",
+      "version": "4.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@develar/schema-utils",
+      "version": "2.6.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/asar",
+      "version": "3.4.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/asar/node_modules/balanced-match",
+      "version": "1.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/asar/node_modules/brace-expansion",
+      "version": "1.1.14",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/asar/node_modules/minimatch",
+      "version": "3.1.5",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/fuses",
+      "version": "1.8.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/fuses/node_modules/fs-extra",
+      "version": "9.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/fuses/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/fuses/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/get",
+      "version": "2.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/notarize",
+      "version": "2.5.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/notarize/node_modules/fs-extra",
+      "version": "9.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/notarize/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/notarize/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/osx-sign",
+      "version": "1.3.3",
+      "license": "BSD-2-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/osx-sign/node_modules/fs-extra",
+      "version": "10.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/osx-sign/node_modules/isbinaryfile",
+      "version": "4.0.10",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/osx-sign/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/osx-sign/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/rebuild",
+      "version": "4.0.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/universal",
+      "version": "2.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/universal/node_modules/balanced-match",
+      "version": "1.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/universal/node_modules/brace-expansion",
+      "version": "2.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/universal/node_modules/fs-extra",
+      "version": "11.3.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/universal/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/universal/node_modules/minimatch",
+      "version": "9.0.9",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/universal/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/windows-sign",
+      "version": "1.2.2",
+      "license": "BSD-2-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/windows-sign/node_modules/fs-extra",
+      "version": "11.3.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/windows-sign/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@electron/windows-sign/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/aix-ppc64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/android-arm",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/android-arm64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/android-x64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/darwin-arm64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/darwin-x64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/freebsd-arm64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/freebsd-x64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/linux-arm",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/linux-arm64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/linux-ia32",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/linux-loong64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/linux-mips64el",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/linux-ppc64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/linux-riscv64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/linux-s390x",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/linux-x64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/netbsd-arm64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/netbsd-x64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/openbsd-arm64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/openbsd-x64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/openharmony-arm64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/sunos-x64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/win32-arm64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/win32-ia32",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@esbuild/win32-x64",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@exodus/bytes",
+      "version": "1.15.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@isaacs/fs-minipass",
+      "version": "4.0.1",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@jridgewell/gen-mapping",
+      "version": "0.3.13",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@jridgewell/remapping",
+      "version": "2.3.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@jridgewell/resolve-uri",
+      "version": "3.1.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@jridgewell/sourcemap-codec",
+      "version": "1.5.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@jridgewell/trace-mapping",
+      "version": "0.3.31",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@malept/cross-spawn-promise",
+      "version": "2.0.0",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@malept/flatpak-bundler",
+      "version": "0.4.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@malept/flatpak-bundler/node_modules/fs-extra",
+      "version": "9.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@malept/flatpak-bundler/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@malept/flatpak-bundler/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rolldown/pluginutils",
+      "version": "1.0.0-rc.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-android-arm-eabi",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-android-arm64",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-darwin-arm64",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-darwin-x64",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-freebsd-arm64",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-freebsd-x64",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-arm-gnueabihf",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-arm-musleabihf",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-arm64-gnu",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-arm64-musl",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-loong64-gnu",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-loong64-musl",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-ppc64-gnu",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-ppc64-musl",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-riscv64-gnu",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-riscv64-musl",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-s390x-gnu",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-x64-gnu",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-linux-x64-musl",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-openbsd-x64",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-openharmony-arm64",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-win32-arm64-msvc",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-win32-ia32-msvc",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-win32-x64-gnu",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@rollup/rollup-win32-x64-msvc",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@sindresorhus/is",
+      "version": "4.6.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@standard-schema/spec",
+      "version": "1.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core",
+      "version": "1.15.33",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-darwin-arm64",
+      "version": "1.15.33",
+      "license": "Apache-2.0 AND MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-darwin-x64",
+      "version": "1.15.33",
+      "license": "Apache-2.0 AND MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-linux-arm-gnueabihf",
+      "version": "1.15.33",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-linux-arm64-gnu",
+      "version": "1.15.33",
+      "license": "Apache-2.0 AND MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-linux-arm64-musl",
+      "version": "1.15.33",
+      "license": "Apache-2.0 AND MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-linux-ppc64-gnu",
+      "version": "1.15.33",
+      "license": "Apache-2.0 AND MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-linux-s390x-gnu",
+      "version": "1.15.33",
+      "license": "Apache-2.0 AND MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-linux-x64-gnu",
+      "version": "1.15.33",
+      "license": "Apache-2.0 AND MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-linux-x64-musl",
+      "version": "1.15.33",
+      "license": "Apache-2.0 AND MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-win32-arm64-msvc",
+      "version": "1.15.33",
+      "license": "Apache-2.0 AND MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-win32-ia32-msvc",
+      "version": "1.15.33",
+      "license": "Apache-2.0 AND MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/core-win32-x64-msvc",
+      "version": "1.15.33",
+      "license": "Apache-2.0 AND MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/counter",
+      "version": "0.1.3",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@swc/types",
+      "version": "0.1.26",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@szmarczak/http-timer",
+      "version": "4.0.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@testing-library/dom",
+      "version": "10.4.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@testing-library/jest-dom",
+      "version": "6.9.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@testing-library/jest-dom/node_modules/dom-accessibility-api",
+      "version": "0.6.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@testing-library/react",
+      "version": "16.3.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/aria-query",
+      "version": "5.0.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/babel__core",
+      "version": "7.20.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/babel__generator",
+      "version": "7.27.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/babel__template",
+      "version": "7.4.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/babel__traverse",
+      "version": "7.28.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/cacheable-request",
+      "version": "6.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/chai",
+      "version": "5.2.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/debug",
+      "version": "4.1.13",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/deep-eql",
+      "version": "4.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/estree",
+      "version": "1.0.9",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/fs-extra",
+      "version": "9.0.13",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/http-cache-semantics",
+      "version": "4.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/keyv",
+      "version": "3.1.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/ms",
+      "version": "2.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/node",
+      "version": "24.12.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/plist",
+      "version": "3.0.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/react",
+      "version": "19.2.14",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/react-dom",
+      "version": "19.2.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/responselike",
+      "version": "1.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/verror",
+      "version": "1.10.11",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@types/yauzl",
+      "version": "2.10.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@vitejs/plugin-react",
+      "version": "5.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@vitest/coverage-v8",
+      "version": "4.1.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@vitest/expect",
+      "version": "4.1.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@vitest/mocker",
+      "version": "4.1.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@vitest/pretty-format",
+      "version": "4.1.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@vitest/runner",
+      "version": "4.1.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@vitest/snapshot",
+      "version": "4.1.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@vitest/spy",
+      "version": "4.1.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@vitest/utils",
+      "version": "4.1.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "@xmldom/xmldom",
+      "version": "0.8.13",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "7zip-bin",
+      "version": "5.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "abbrev",
+      "version": "4.0.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "agent-base",
+      "version": "7.1.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "ajv",
+      "version": "6.15.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "ajv-keywords",
+      "version": "3.5.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "ansi-regex",
+      "version": "5.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "ansi-styles",
+      "version": "5.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "app-builder-bin",
+      "version": "5.0.0-alpha.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "app-builder-lib",
+      "version": "26.8.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "app-builder-lib/node_modules/@electron/get",
+      "version": "3.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "app-builder-lib/node_modules/@electron/get/node_modules/fs-extra",
+      "version": "8.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "app-builder-lib/node_modules/@electron/get/node_modules/semver",
+      "version": "6.3.1",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "app-builder-lib/node_modules/ci-info",
+      "version": "4.3.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "app-builder-lib/node_modules/fs-extra",
+      "version": "10.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "app-builder-lib/node_modules/fs-extra/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "app-builder-lib/node_modules/fs-extra/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "app-builder-lib/node_modules/semver",
+      "version": "7.7.4",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "argparse",
+      "version": "2.0.1",
+      "license": "Python-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "aria-query",
+      "version": "5.3.0",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "assert-plus",
+      "version": "1.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "assertion-error",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "ast-v8-to-istanbul",
+      "version": "1.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "ast-v8-to-istanbul/node_modules/js-tokens",
+      "version": "10.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "astral-regex",
+      "version": "2.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "async",
+      "version": "3.2.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "async-exit-hook",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "asynckit",
+      "version": "0.4.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "at-least-node",
+      "version": "1.0.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "balanced-match",
+      "version": "4.0.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "base64-js",
+      "version": "1.5.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "baseline-browser-mapping",
+      "version": "2.10.27",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "bidi-js",
+      "version": "1.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "boolean",
+      "version": "3.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "brace-expansion",
+      "version": "5.0.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "browserslist",
+      "version": "4.28.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "buffer",
+      "version": "5.7.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "buffer-crc32",
+      "version": "0.2.13",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "buffer-from",
+      "version": "1.1.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "builder-util",
+      "version": "26.8.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "builder-util-runtime",
+      "version": "9.5.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "builder-util/node_modules/fs-extra",
+      "version": "10.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "builder-util/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "builder-util/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "cac",
+      "version": "6.7.14",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "cacheable-lookup",
+      "version": "5.0.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "cacheable-request",
+      "version": "7.0.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "call-bind-apply-helpers",
+      "version": "1.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "caniuse-lite",
+      "version": "1.0.30001792",
+      "license": "CC-BY-4.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "chai",
+      "version": "6.2.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "chalk",
+      "version": "4.1.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "chalk/node_modules/ansi-styles",
+      "version": "4.3.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "chownr",
+      "version": "3.0.0",
+      "license": "BlueOak-1.0.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "chromium-pickle-js",
+      "version": "0.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "ci-info",
+      "version": "4.4.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "cli-truncate",
+      "version": "2.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "cliui",
+      "version": "8.0.1",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "clone-response",
+      "version": "1.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "color-convert",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "color-name",
+      "version": "1.1.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "combined-stream",
+      "version": "1.0.8",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "commander",
+      "version": "5.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "compare-version",
+      "version": "0.1.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "concat-map",
+      "version": "0.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "convert-source-map",
+      "version": "2.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "core-util-is",
+      "version": "1.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "crc",
+      "version": "3.8.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "cross-dirname",
+      "version": "0.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "cross-spawn",
+      "version": "7.0.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "cross-spawn/node_modules/isexe",
+      "version": "2.0.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "cross-spawn/node_modules/which",
+      "version": "2.0.2",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "css-tree",
+      "version": "3.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "css.escape",
+      "version": "1.5.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "cssstyle",
+      "version": "5.3.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "cssstyle/node_modules/lru-cache",
+      "version": "11.3.6",
+      "license": "BlueOak-1.0.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "csstype",
+      "version": "3.2.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "data-urls",
+      "version": "6.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "data-urls/node_modules/whatwg-mimetype",
+      "version": "5.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "debug",
+      "version": "4.4.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "decimal.js",
+      "version": "10.6.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "decompress-response",
+      "version": "6.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "decompress-response/node_modules/mimic-response",
+      "version": "3.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "defer-to-connect",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "define-data-property",
+      "version": "1.1.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "define-properties",
+      "version": "1.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "delayed-stream",
+      "version": "1.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dequal",
+      "version": "2.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "detect-node",
+      "version": "2.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dir-compare",
+      "version": "4.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dir-compare/node_modules/balanced-match",
+      "version": "1.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dir-compare/node_modules/brace-expansion",
+      "version": "1.1.14",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dir-compare/node_modules/minimatch",
+      "version": "3.1.5",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dmg-builder",
+      "version": "26.8.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dmg-builder/node_modules/fs-extra",
+      "version": "10.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dmg-builder/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dmg-builder/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dmg-license",
+      "version": "1.0.11",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dom-accessibility-api",
+      "version": "0.5.16",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dotenv",
+      "version": "16.6.1",
+      "license": "BSD-2-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dotenv-expand",
+      "version": "11.0.7",
+      "license": "BSD-2-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "dunder-proto",
+      "version": "1.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "ejs",
+      "version": "3.1.10",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron",
+      "version": "39.8.10",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-builder",
+      "version": "26.8.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-builder-squirrel-windows",
+      "version": "26.8.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-builder/node_modules/fs-extra",
+      "version": "10.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-builder/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-builder/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-publish",
+      "version": "26.8.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-publish/node_modules/fs-extra",
+      "version": "10.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-publish/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-publish/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-to-chromium",
+      "version": "1.5.352",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-vite",
+      "version": "4.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-winstaller",
+      "version": "5.4.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron-winstaller/node_modules/fs-extra",
+      "version": "7.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron/node_modules/@types/node",
+      "version": "22.19.17",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "electron/node_modules/undici-types",
+      "version": "6.21.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "emoji-regex",
+      "version": "8.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "end-of-stream",
+      "version": "1.4.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "entities",
+      "version": "8.0.0",
+      "license": "BSD-2-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "env-paths",
+      "version": "2.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "err-code",
+      "version": "2.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "es-define-property",
+      "version": "1.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "es-errors",
+      "version": "1.3.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "es-module-lexer",
+      "version": "2.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "es-object-atoms",
+      "version": "1.1.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "es-set-tostringtag",
+      "version": "2.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "es6-error",
+      "version": "4.1.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "esbuild",
+      "version": "0.25.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "escalade",
+      "version": "3.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "escape-string-regexp",
+      "version": "4.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "estree-walker",
+      "version": "3.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "expect-type",
+      "version": "1.3.0",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "exponential-backoff",
+      "version": "3.1.3",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "extract-zip",
+      "version": "2.0.1",
+      "license": "BSD-2-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "extsprintf",
+      "version": "1.4.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "fast-deep-equal",
+      "version": "3.1.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "fast-json-stable-stringify",
+      "version": "2.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "fd-slicer",
+      "version": "1.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "fdir",
+      "version": "6.5.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "filelist",
+      "version": "1.0.6",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "filelist/node_modules/balanced-match",
+      "version": "1.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "filelist/node_modules/brace-expansion",
+      "version": "2.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "filelist/node_modules/minimatch",
+      "version": "5.1.9",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "form-data",
+      "version": "4.0.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "fs-extra",
+      "version": "8.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "fs.realpath",
+      "version": "1.0.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "fsevents",
+      "version": "2.3.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "function-bind",
+      "version": "1.1.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "gensync",
+      "version": "1.0.0-beta.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "get-caller-file",
+      "version": "2.0.5",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "get-intrinsic",
+      "version": "1.3.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "get-proto",
+      "version": "1.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "get-stream",
+      "version": "5.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "glob",
+      "version": "7.2.3",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "glob/node_modules/balanced-match",
+      "version": "1.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "glob/node_modules/brace-expansion",
+      "version": "1.1.14",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "glob/node_modules/minimatch",
+      "version": "3.1.5",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "global-agent",
+      "version": "3.0.0",
+      "license": "BSD-3-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "global-agent/node_modules/semver",
+      "version": "7.7.4",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "globalthis",
+      "version": "1.0.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "gopd",
+      "version": "1.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "got",
+      "version": "11.8.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "graceful-fs",
+      "version": "4.2.11",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "has-flag",
+      "version": "4.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "has-property-descriptors",
+      "version": "1.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "has-symbols",
+      "version": "1.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "has-tostringtag",
+      "version": "1.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "hasown",
+      "version": "2.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "hosted-git-info",
+      "version": "4.1.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "hosted-git-info/node_modules/lru-cache",
+      "version": "6.0.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "hosted-git-info/node_modules/yallist",
+      "version": "4.0.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "html-encoding-sniffer",
+      "version": "6.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "html-escaper",
+      "version": "2.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "http-cache-semantics",
+      "version": "4.2.0",
+      "license": "BSD-2-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "http-proxy-agent",
+      "version": "7.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "http2-wrapper",
+      "version": "1.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "https-proxy-agent",
+      "version": "7.0.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "iconv-corefoundation",
+      "version": "1.1.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "iconv-lite",
+      "version": "0.6.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "ieee754",
+      "version": "1.2.1",
+      "license": "BSD-3-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "indent-string",
+      "version": "4.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "inflight",
+      "version": "1.0.6",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "inherits",
+      "version": "2.0.4",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "is-fullwidth-code-point",
+      "version": "3.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "is-potential-custom-element-name",
+      "version": "1.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "isbinaryfile",
+      "version": "5.0.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "isexe",
+      "version": "3.1.5",
+      "license": "BlueOak-1.0.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "istanbul-lib-coverage",
+      "version": "3.2.2",
+      "license": "BSD-3-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "istanbul-lib-report",
+      "version": "3.0.1",
+      "license": "BSD-3-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "istanbul-reports",
+      "version": "3.2.0",
+      "license": "BSD-3-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "jake",
+      "version": "10.9.4",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "jiti",
+      "version": "2.7.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "js-tokens",
+      "version": "4.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "js-yaml",
+      "version": "4.1.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "jsdom",
+      "version": "27.4.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "jsesc",
+      "version": "3.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "json-buffer",
+      "version": "3.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "json-schema-traverse",
+      "version": "0.4.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "json-stringify-safe",
+      "version": "5.0.1",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "json5",
+      "version": "2.2.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "jsonfile",
+      "version": "4.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "keyv",
+      "version": "4.5.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "lazy-val",
+      "version": "1.0.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "lodash",
+      "version": "4.18.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "lowercase-keys",
+      "version": "2.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "lru-cache",
+      "version": "5.1.1",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "lucide-react",
+      "version": "0.468.0",
+      "license": "ISC",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "lz-string",
+      "version": "1.5.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "magic-string",
+      "version": "0.30.21",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "magicast",
+      "version": "0.5.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "make-dir",
+      "version": "4.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "make-dir/node_modules/semver",
+      "version": "7.7.4",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "matcher",
+      "version": "3.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "math-intrinsics",
+      "version": "1.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "mdn-data",
+      "version": "2.27.1",
+      "license": "CC0-1.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "mime",
+      "version": "2.6.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "mime-db",
+      "version": "1.52.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "mime-types",
+      "version": "2.1.35",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "mimic-response",
+      "version": "1.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "min-indent",
+      "version": "1.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "minimatch",
+      "version": "10.2.5",
+      "license": "BlueOak-1.0.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "minimist",
+      "version": "1.2.8",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "minipass",
+      "version": "7.1.3",
+      "license": "BlueOak-1.0.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "minizlib",
+      "version": "3.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "mkdirp",
+      "version": "0.5.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "ms",
+      "version": "2.1.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "nanoid",
+      "version": "3.3.12",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "node-abi",
+      "version": "4.31.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "node-abi/node_modules/semver",
+      "version": "7.8.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "node-addon-api",
+      "version": "1.7.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "node-api-version",
+      "version": "0.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "node-api-version/node_modules/semver",
+      "version": "7.8.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "node-gyp",
+      "version": "12.3.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "node-gyp/node_modules/isexe",
+      "version": "4.0.0",
+      "license": "BlueOak-1.0.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "node-gyp/node_modules/semver",
+      "version": "7.8.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "node-gyp/node_modules/which",
+      "version": "6.0.1",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "node-releases",
+      "version": "2.0.38",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "nopt",
+      "version": "9.0.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "normalize-url",
+      "version": "6.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "object-keys",
+      "version": "1.1.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "obug",
+      "version": "2.1.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "once",
+      "version": "1.4.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "p-cancelable",
+      "version": "2.1.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "p-limit",
+      "version": "3.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "parse5",
+      "version": "8.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "path-is-absolute",
+      "version": "1.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "path-key",
+      "version": "3.1.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "pathe",
+      "version": "2.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "pe-library",
+      "version": "0.4.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "pend",
+      "version": "1.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "picocolors",
+      "version": "1.1.1",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "picomatch",
+      "version": "4.0.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "plist",
+      "version": "3.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "postcss",
+      "version": "8.5.14",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "postject",
+      "version": "1.0.0-alpha.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "postject/node_modules/commander",
+      "version": "9.5.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "pretty-format",
+      "version": "27.5.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "proc-log",
+      "version": "6.1.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "progress",
+      "version": "2.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "promise-retry",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "proper-lockfile",
+      "version": "4.1.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "pump",
+      "version": "3.0.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "punycode",
+      "version": "2.3.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "quick-lru",
+      "version": "5.1.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "react",
+      "version": "19.2.6",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "react-dom",
+      "version": "19.2.6",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "react-is",
+      "version": "17.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "react-refresh",
+      "version": "0.18.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "read-binary-file-arch",
+      "version": "1.0.6",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "redent",
+      "version": "3.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "require-directory",
+      "version": "2.1.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "require-from-string",
+      "version": "2.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "resedit",
+      "version": "1.7.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "resolve-alpn",
+      "version": "1.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "responselike",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "retry",
+      "version": "0.12.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "rimraf",
+      "version": "2.6.3",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "roarr",
+      "version": "2.15.4",
+      "license": "BSD-3-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "rollup",
+      "version": "4.60.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "rollup/node_modules/@types/estree",
+      "version": "1.0.8",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "safer-buffer",
+      "version": "2.1.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "sanitize-filename",
+      "version": "1.6.4",
+      "license": "WTFPL OR ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "sax",
+      "version": "1.6.0",
+      "license": "BlueOak-1.0.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "saxes",
+      "version": "6.0.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "scheduler",
+      "version": "0.27.0",
+      "license": "MIT",
+      "scope": "runtime",
+      "policy": "bundle-ok",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "semver",
+      "version": "6.3.1",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "semver-compare",
+      "version": "1.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "serialize-error",
+      "version": "7.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "shebang-command",
+      "version": "2.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "shebang-regex",
+      "version": "3.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "siginfo",
+      "version": "2.0.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "signal-exit",
+      "version": "3.0.7",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "simple-update-notifier",
+      "version": "2.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "simple-update-notifier/node_modules/semver",
+      "version": "7.8.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "slice-ansi",
+      "version": "3.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "slice-ansi/node_modules/ansi-styles",
+      "version": "4.3.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "smart-buffer",
+      "version": "4.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "source-map",
+      "version": "0.6.1",
+      "license": "BSD-3-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "source-map-js",
+      "version": "1.2.1",
+      "license": "BSD-3-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "source-map-support",
+      "version": "0.5.21",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "sprintf-js",
+      "version": "1.1.3",
+      "license": "BSD-3-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "stackback",
+      "version": "0.0.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "stat-mode",
+      "version": "1.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "std-env",
+      "version": "4.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "string-width",
+      "version": "4.2.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "strip-ansi",
+      "version": "6.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "strip-indent",
+      "version": "3.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "sumchecker",
+      "version": "3.0.1",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "supports-color",
+      "version": "7.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "symbol-tree",
+      "version": "3.2.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tar",
+      "version": "7.5.15",
+      "license": "BlueOak-1.0.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tar/node_modules/yallist",
+      "version": "5.0.0",
+      "license": "BlueOak-1.0.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "temp",
+      "version": "0.9.4",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "temp-file",
+      "version": "3.4.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "temp-file/node_modules/fs-extra",
+      "version": "10.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "temp-file/node_modules/jsonfile",
+      "version": "6.2.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "temp-file/node_modules/universalify",
+      "version": "2.0.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tiny-async-pool",
+      "version": "1.3.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tiny-async-pool/node_modules/semver",
+      "version": "5.7.2",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tinybench",
+      "version": "2.9.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tinyexec",
+      "version": "1.1.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tinyglobby",
+      "version": "0.2.16",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tinyrainbow",
+      "version": "3.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tldts",
+      "version": "7.0.30",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tldts-core",
+      "version": "7.0.30",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tmp",
+      "version": "0.2.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tmp-promise",
+      "version": "3.0.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tough-cookie",
+      "version": "6.0.1",
+      "license": "BSD-3-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "tr46",
+      "version": "6.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "truncate-utf8-bytes",
+      "version": "1.0.2",
+      "license": "WTFPL",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "type-fest",
+      "version": "0.13.1",
+      "license": "(MIT OR CC0-1.0)",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "typescript",
+      "version": "5.9.3",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "undici",
+      "version": "6.25.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "undici-types",
+      "version": "7.16.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "universalify",
+      "version": "0.1.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "update-browserslist-db",
+      "version": "1.2.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "uri-js",
+      "version": "4.4.1",
+      "license": "BSD-2-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "utf8-byte-length",
+      "version": "1.0.5",
+      "license": "(WTFPL OR MIT)",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "verror",
+      "version": "1.10.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite",
+      "version": "7.3.3",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/aix-ppc64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/android-arm",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/android-arm64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/android-x64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/darwin-arm64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/darwin-x64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/freebsd-arm64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/freebsd-x64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/linux-arm",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/linux-arm64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/linux-ia32",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/linux-loong64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/linux-mips64el",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/linux-ppc64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/linux-riscv64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/linux-s390x",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/linux-x64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/netbsd-arm64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/netbsd-x64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/openbsd-arm64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/openbsd-x64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/openharmony-arm64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/sunos-x64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/win32-arm64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/win32-ia32",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/@esbuild/win32-x64",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vite/node_modules/esbuild",
+      "version": "0.27.7",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "vitest",
+      "version": "4.1.5",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "w3c-xmlserializer",
+      "version": "5.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "webidl-conversions",
+      "version": "8.0.1",
+      "license": "BSD-2-Clause",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "whatwg-mimetype",
+      "version": "4.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "whatwg-url",
+      "version": "15.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "which",
+      "version": "5.0.0",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "why-is-node-running",
+      "version": "2.3.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "wrap-ansi",
+      "version": "7.0.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "wrap-ansi/node_modules/ansi-styles",
+      "version": "4.3.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "wrappy",
+      "version": "1.0.2",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "ws",
+      "version": "8.20.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "xml-name-validator",
+      "version": "5.0.0",
+      "license": "Apache-2.0",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "xmlbuilder",
+      "version": "15.1.1",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "xmlchars",
+      "version": "2.2.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "y18n",
+      "version": "5.0.8",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "yallist",
+      "version": "3.1.1",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "yargs",
+      "version": "17.7.2",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "yargs-parser",
+      "version": "21.1.1",
+      "license": "ISC",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "yauzl",
+      "version": "2.10.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    },
+    {
+      "name": "yocto-queue",
+      "version": "0.1.0",
+      "license": "MIT",
+      "scope": "build-test",
+      "policy": "manual-user-install",
+      "source": "desktop/package-lock.json"
+    }
+  ]
+}

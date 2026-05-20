@@ -593,39 +593,82 @@ def _translate_nllb_segments(
     processor = spm.SentencePieceProcessor(model_file=str(sp_model))
     translator = ctranslate2.Translator(str(resolved_model_path), device="auto")
     translated = [segment.model_copy() for segment in segments]
+    by_id = {segment.id: segment for segment in translated}
     errors: list[TranslationError] = []
     for batch in _chunks(translated, batch_size):
-        try:
-            source_tokens = [
-                [source_code, *processor.encode(segment.text, out_type=str), "</s>"]
-                for segment in batch
-            ]
-            results = translator.translate_batch(
-                source_tokens,
-                target_prefix=[[target_code] for _ in batch],
-                disable_unk=True,
-            )
-            if len(results) != len(batch):
-                raise ValueError("NLLB returned a mismatched translation count.")
-            for segment, result in zip(batch, results, strict=True):
-                tokens = list(result.hypotheses[0])
-                if tokens and tokens[0] == target_code:
-                    tokens = tokens[1:]
-                segment.translation = processor.decode(tokens).strip()
-                if not segment.translation:
-                    raise ValueError("NLLB returned empty translation text.")
-        except Exception as exc:
-            for segment in batch:
-                segment.translation = None
-            errors.append(
-                TranslationError(
-                    batch_start_id=batch[0].id,
-                    batch_end_id=batch[-1].id,
-                    message=_sanitize_error(str(exc)),
-                    raw_response=None,
-                )
-            )
+        _translate_nllb_batch_with_fallback(
+            batch=batch,
+            by_id=by_id,
+            errors=errors,
+            source_code=source_code,
+            target_code=target_code,
+            processor=processor,
+            translator=translator,
+        )
     return TranslationResult(segments=translated, errors=errors)
+
+
+def _translate_nllb_batch_with_fallback(
+    *,
+    batch: list[Segment],
+    by_id: dict[int, Segment],
+    errors: list[TranslationError],
+    source_code: str,
+    target_code: str,
+    processor: Any,
+    translator: Any,
+) -> None:
+    try:
+        source_tokens = [
+            [source_code, *processor.encode(segment.text, out_type=str), "</s>"]
+            for segment in batch
+        ]
+        results = translator.translate_batch(
+            source_tokens,
+            target_prefix=[[target_code] for _ in batch],
+            disable_unk=True,
+        )
+        if len(results) != len(batch):
+            raise ValueError("NLLB returned a mismatched translation count.")
+        for segment, result in zip(batch, results, strict=True):
+            tokens = list(result.hypotheses[0])
+            if tokens and tokens[0] == target_code:
+                tokens = tokens[1:]
+            translation = processor.decode(tokens).strip()
+            if not translation:
+                raise ValueError("NLLB returned empty translation text.")
+            by_id[segment.id].translation = translation
+    except Exception as exc:
+        if len(batch) > 1:
+            midpoint = max(1, len(batch) // 2)
+            _translate_nllb_batch_with_fallback(
+                batch=batch[:midpoint],
+                by_id=by_id,
+                errors=errors,
+                source_code=source_code,
+                target_code=target_code,
+                processor=processor,
+                translator=translator,
+            )
+            _translate_nllb_batch_with_fallback(
+                batch=batch[midpoint:],
+                by_id=by_id,
+                errors=errors,
+                source_code=source_code,
+                target_code=target_code,
+                processor=processor,
+                translator=translator,
+            )
+            return
+        by_id[batch[0].id].translation = None
+        errors.append(
+            TranslationError(
+                batch_start_id=batch[0].id,
+                batch_end_id=batch[-1].id,
+                message=_sanitize_error(str(exc)),
+                raw_response=None,
+            )
+        )
 
 
 def resolve_nllb_model_path(*, model: str | None, explicit_model_path: Path | None) -> Path:

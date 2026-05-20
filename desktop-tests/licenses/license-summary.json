@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-05-19T12:37:06.388Z",
+  "counts": {
+    "total": 618,
+    "bundle_ok": 51,
+    "download_only": 0,
+    "manual_user_install": 567,
+    "needs_review": 0,
+    "blocked": 0
+  },
+  "needs_review": [],
+  "blocked": []
+}

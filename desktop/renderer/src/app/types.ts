@@ -79,4 +79,5 @@ export type RenderProps = {
   testProvider: (id: string, mode: "static" | "live") => Promise<ProviderStatus>;
   updateConfig: (patch: Partial<ConfigViewModel>) => Promise<void>;
   saveProviderSecret: (providerId: string, alias: string, rawSecret: string) => Promise<void>;
+  deleteProviderSecret: (providerId: string, alias: string) => Promise<void>;
 };

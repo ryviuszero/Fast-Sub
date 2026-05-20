@@ -33,6 +33,14 @@ export function registerFastSubClientIpc(): void {
     await client.repairDaemon().catch(() => undefined);
     return updated;
   });
+  handle("fast-sub-client:delete-provider-secret", async (_event, providerId: unknown, alias: unknown) => {
+    const id = String(providerId);
+    const safeAlias = normalizeSecretAlias(id, alias);
+    await secretStore.delete(id, safeAlias);
+    const updated = await client.updateConfig({ apiProviderConfigs: { [id]: { apiKeyAlias: "", apiKeyStatus: "missing" } } });
+    await client.repairDaemon().catch(() => undefined);
+    return updated;
+  });
   handle("fast-sub-client:list-models", () => client.listModels());
   handle("fast-sub-client:install-model", (_event, modelId: unknown) => client.installModel(String(modelId)));
   handle("fast-sub-client:create-model-install-job", (_event, modelId: unknown) => client.createModelInstallJob(String(modelId)));

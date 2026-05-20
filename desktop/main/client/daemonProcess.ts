@@ -7,6 +7,7 @@ import { createInterface } from "node:readline";
 import { redactSecretText } from "../../shared/privacy/redaction";
 import { daemonTransportLog } from "./transportLog";
 import { prependNativeDependencyPath } from "./nativeDependencies";
+import { packagedDaemonPath, privatePythonRuntimeCommands, prependPathDirs } from "./runtimeResources";
 import { uiError } from "./uiError";
 
 export type DaemonSession = {
@@ -162,6 +163,10 @@ function resolveDaemonCommand(): DaemonCommand | null {
   if (explicit && existsSync(explicit)) {
     return { command: explicit, argsPrefix: [], label: explicit };
   }
+  const packaged = packagedDaemonPath();
+  if (packaged) {
+    return { command: packaged, argsPrefix: [], cwd: app.getPath("userData"), label: packaged };
+  }
   const repoRoot = resolve(process.cwd(), "..");
   const candidates = [
     join(process.cwd(), "fast-sub-go.exe"),
@@ -192,5 +197,15 @@ async function scrubbedEnv(): Promise<NodeJS.ProcessEnv> {
     }
   }
   env.FAST_SUB_GO_CONFIG = env.FAST_SUB_GO_CONFIG ?? join(app.getPath("userData"), "fast-sub-go.toml");
-  return prependNativeDependencyPath(env);
+  const privatePython = privatePythonRuntimeCommands();
+  if (privatePython.python) {
+    env.FAST_SUB_PYTHON = env.FAST_SUB_PYTHON ?? privatePython.python;
+  }
+  if (privatePython.pythonCli) {
+    env.FAST_SUB_PYTHON_CLI = env.FAST_SUB_PYTHON_CLI ?? privatePython.pythonCli;
+  }
+  if (privatePython.sttWorker) {
+    env.FAST_SUB_STT_WORKER_COMMAND = env.FAST_SUB_STT_WORKER_COMMAND ?? privatePython.sttWorker;
+  }
+  return prependNativeDependencyPath(prependPathDirs(env, privatePython.pathDirs));
 }

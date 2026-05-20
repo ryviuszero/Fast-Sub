@@ -33,6 +33,7 @@ const clientApi = {
   getConfig: () => ipcRenderer.invoke("fast-sub-client:get-config"),
   updateConfig: (patch: Partial<ConfigViewModel>) => ipcRenderer.invoke("fast-sub-client:update-config", patch),
   saveProviderSecret: (providerId: string, alias: string, rawSecret: string) => ipcRenderer.invoke("fast-sub-client:save-provider-secret", providerId, alias, rawSecret),
+  deleteProviderSecret: (providerId: string, alias: string) => ipcRenderer.invoke("fast-sub-client:delete-provider-secret", providerId, alias),
   listModels: () => ipcRenderer.invoke("fast-sub-client:list-models"),
   installModel: (modelId: string) => ipcRenderer.invoke("fast-sub-client:install-model", modelId),
   createModelInstallJob: (modelId: string) => ipcRenderer.invoke("fast-sub-client:create-model-install-job", modelId),

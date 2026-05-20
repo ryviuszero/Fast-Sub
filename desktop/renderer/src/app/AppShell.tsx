@@ -1009,6 +1009,10 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
           saveProviderSecret: async (providerId, alias, rawSecret) => {
             setConfig(await client.saveProviderSecret(providerId, alias, rawSecret));
             setProviders(await client.listProviders());
+          },
+          deleteProviderSecret: async (providerId, alias) => {
+            setConfig(await client.deleteProviderSecret(providerId, alias));
+            setProviders(await client.listProviders());
           }
         })}
       </AppContent>

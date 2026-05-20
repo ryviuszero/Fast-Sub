@@ -105,6 +105,85 @@ ui-docs/specs/round13-electron-productization-release.md
 desktop-tests/round13-release-smoke.md
 ```
 
+### 13.1 Inventory Result - 2026-05-17
+
+当前分支：`codex/fast-sub-round13-release-readiness`。起点提交：`dc10f2e docs: plan round 13 release readiness`。
+
+13.1 结论：当前仓库具备 Electron dev/build 输出、Go daemon 源码、Python CLI/worker 源码、Windows FFmpeg/aria2/whisper.cpp 运行时下载逻辑和 userData secret/config 存储，但尚未具备可发布打包形态。13.2 必须先补 packaged resource resolver 和 app 私有 Python runtime，再落 `electron-builder`。
+
+#### Release artifacts and build outputs
+
+| 项 | 当前状态 | Round 13 决策 / gap |
+| --- | --- | --- |
+| Electron dev run | `desktop/package.json` 提供 `npm run dev`，使用 `electron-vite dev` | 保留为开发入口，不作为 release artifact。 |
+| Electron build output | `npm run build` 生成 `desktop/dist/main`、`desktop/dist/preload`、`desktop/dist/renderer` | 仅是 electron-vite build，不是 installer/portable/dmg。 |
+| Packaging scripts | 当前没有 `package:dir` / `package` script，也没有 `electron-builder` 依赖 | 13.2 新增。 |
+| Windows artifact | 未配置 | 13.2 固定 x64 installer + portable zip。 |
+| macOS artifact | 未配置 | 13.2 固定 arm64 dmg；必须在 macOS host/runner 构建和 smoke。 |
+| Artifact name | 未配置 | 建议 `FastSub-Desktop-0.13.0-windows-x64-*`、`FastSub-Desktop-0.13.0-macos-arm64.dmg`。 |
+| App version | `desktop/package.json` 当前为 `0.11.0` | 13.2/13.7 需要明确是否升到 Round 13 release 版本。 |
+
+#### Runtime resource inventory
+
+| Runtime | 当前开发态来源 | 目标打包位置 | 当前 resolver | Gap |
+| --- | --- | --- | --- | --- |
+| Go daemon | `go run ./cmd/fast-sub-go` fallback，或 `FAST_SUB_GO`，或若干 cwd/app path 候选 `fast-sub-go(.exe)` | `desktop/resources/bin/<platform>-<arch>/fast-sub-go(.exe)`，打包后进入 `process.resourcesPath/bin/<platform>-<arch>/` | `desktop/main/client/daemonProcess.ts` 尚未使用 `process.resourcesPath` / platform-arch 目录 | 13.2 必须补 packaged resolver，并增加 build/copy 脚本生成平台 daemon。 |
+| Python CLI bridge | 系统 `fast-sub`，或系统 `uv run fast-sub`，或 `FAST_SUB_PYTHON_CLI` | `desktop/resources/python/<platform>-<arch>/` app 私有 runtime + installed `fast-sub` entry | Go `runner_translate.go` 只解析 env/PATH/system uv | 13.2 必须由 Electron main 向 daemon env 注入 app 私有 `FAST_SUB_PYTHON_CLI`，不得要求系统 Python/uv/global CLI。 |
+| Faster Whisper worker | 系统 `uv run --extra local-asr fast-sub-worker-faster-whisper`，或 `FAST_SUB_STT_WORKER_COMMAND` | 同一 app 私有 Python runtime | Go `worker/stt.go` 只解析 env/PATH/system uv | 13.2 必须注入 app 私有 `FAST_SUB_STT_WORKER_COMMAND` 并 smoke import `faster_whisper`。 |
+| FFmpeg/FFprobe | Windows runtime download to `app.getPath("userData")/native-binaries/ffmpeg/bin`，或 PATH/package manager | userData runtime install；不随包分发，除非后续 license review 改变 | `nativeDependencies.ts` prepends userData bin to daemon env | Windows 可用；macOS 自动安装/检测路径未实现。 |
+| aria2 | Windows runtime download to `userData/native-binaries/aria2/bin/aria2c.exe`，或 system PATH | userData runtime install；download-only | FFmpeg download helper only | Windows 加速器可回退 HTTPS；macOS 未实现。 |
+| whisper.cpp binary | Windows runtime download to `userData/native-binaries/whisper-cpp/bin` | userData runtime install；download-only | Provider dependency installer only | Windows x64 only；macOS arm64 binary path/permission smoke 未实现。 |
+| Models | Go-managed model store, default `%LOCALAPPDATA%/fast-sub/models` on Windows or `$XDG_DATA_HOME/fast-sub/models` / `~/.local/share/fast-sub/models` | 不进入 package；首次启动/模型页下载 | `models.DefaultStore()` | 13.4 从无默认模型环境验证默认小 ASR 和默认 NLLB 安装。 |
+| Job store/logs | `jobs.NewManager("")` 默认相对 `.fast-sub/jobs` | 应落到 userData 或明确 daemon-owned app data path | `serve` 未向 daemon 传 `JobRoot`，Electron daemon cwd 决定实际位置 | 13.2/13.5 需要固定 packaged job/log root，避免写入 app bundle/resources/cwd。 |
+| Config | Electron sets `FAST_SUB_GO_CONFIG` to `app.getPath("userData")/fast-sub-go.toml` | userData | 已有 | 保留；诊断页需展示摘要。 |
+| Secret store | `app.getPath("userData")/provider-secrets` with Electron `safeStorage` | userData | 已有 | 13.5 验证导出/redaction，不迁移 raw secret。 |
+| UI onboarding prefs | renderer `localStorage` key `fast-sub:onboarding-complete` | Electron profile storage | 已有 | 可保留为 UI-only preference；不得保存 secret。 |
+
+#### Content that must not be packaged
+
+- Real model files.
+- Real media/subtitles/task outputs.
+- Real benchmark reports.
+- `.env`, local secret stores, `desktop/local/daemon-transport.log`, `local_tests/`, `.fast-sub/`, `.uv-cache/`, `.gocache/`, and userData contents.
+- API keys, Authorization headers, daemon ready tokens, `secret_ref` values, signed URLs, proxy credentials.
+- Any executable/native runtime inside ASAR.
+
+#### License and notice inventory
+
+Round 13 license inventory now starts at `THIRD_PARTY_NOTICES.md`. Current policy summary:
+
+| Component group | Policy |
+| --- | --- |
+| Electron runtime and runtime npm dependencies | `bundle-ok`, with exact transitive lockfile notices to generate in 13.2. |
+| Go daemon binary | `bundle-ok`, with Go license notice. |
+| App private Python runtime | `needs-review` until source/version/reproducible build command are pinned. |
+| Python site-packages | `needs-review` until lockfile license inventory is generated. |
+| FFmpeg/FFprobe | `download-only` until variant/source-offer obligations are reviewed. |
+| aria2 | `download-only`; do not bundle without GPL obligations review. |
+| whisper.cpp binary | `download-only`. |
+| Whisper / whisper.cpp models | `download-only`. |
+| NLLB model | `download-only` / `needs-review` because manifest license is `CC-BY-NC-4.0`. |
+| Secrets, real media, task outputs, bundled model files, executable inside ASAR | `blocked`. |
+
+#### Packaging and runtime gap list
+
+1. Add `electron-builder` config and scripts only after packaged runtime resolvers are defined.
+2. Build/copy `fast-sub-go(.exe)` into `desktop/resources/bin/<platform>-<arch>/`.
+3. Change Electron daemon resolver to prefer `process.resourcesPath/bin/<platform>-<arch>/fast-sub-go(.exe)` when packaged.
+4. Add app-private Python runtime layout under `desktop/resources/python/<platform>-<arch>/`, with pinned source/version and install command.
+5. Inject packaged `FAST_SUB_PYTHON_CLI` and `FAST_SUB_STT_WORKER_COMMAND` into daemon env; do not rely on system `python`, `uv`, or global `fast-sub`.
+6. Set packaged job/log root explicitly under `app.getPath("userData")`, while preserving config and secret paths.
+7. Keep FFmpeg/aria2/whisper.cpp outside ASAR and prefer userData runtime install; add macOS arm64 download/permission strategy or clear blocker.
+8. Generate exact npm/Python transitive license report before package smoke is considered complete.
+9. Ensure `desktop/local/`, logs, caches, model stores, local tests, `.env`, and task outputs are excluded from package files.
+
+#### Minimal implementation order after 13.1
+
+1. 13.2a: add resource layout and copy/build scripts for Go daemon and placeholder-checked Python runtime without changing daemon/UI API contract.
+2. 13.2b: update Electron main runtime resolver/env injection for packaged daemon, Python CLI, STT worker, and job/log root.
+3. 13.2c: add `electron-builder` config, `package:dir`, `package`, and artifact naming.
+4. 13.2d: add license generation/check script or documented command, then run `typecheck`, `test`, `build`, `smoke`, `package:dir`, and package smoke.
+
 ## Workstream 2: Packaging Pipeline
 
 13.2 使用 `electron-builder` 落地第一版 packaging pipeline。
@@ -144,6 +223,67 @@ npm run package
 
 如果 `npm run package` 需要新增依赖或下载工具，必须记录依赖来源、锁文件变化和离线/网络失败处理。
 
+### 13.2 Implementation Result - 2026-05-17
+
+已完成：
+
+- 新增 `desktop/main/client/runtimeResources.ts`，统一生成 `<platform>-<arch>` resource path。
+- `DaemonProcessManager` packaged mode 现在优先从 `process.resourcesPath/bin/<platform>-<arch>/fast-sub-go(.exe)` 启动 daemon。
+- packaged daemon cwd 设为 `app.getPath("userData")`，因此 daemon 默认 `.fast-sub/jobs` 不会写入 app bundle 或 install directory。
+- `scrubbedEnv()` 在 app 私有 Python scripts 存在时注入 `FAST_SUB_PYTHON_CLI` 和 `FAST_SUB_STT_WORKER_COMMAND`，并把 Python scripts/bin 目录 prepend 到 daemon PATH。
+- 新增 `desktop/scripts/prepare-release-resources.mjs`，构建 Go daemon 到 `desktop/resources/bin/<platform>-<arch>/`。
+- 新增 `desktop/scripts/prepare-python-runtime.mjs`，显式使用 uv managed CPython 3.11 构造 app 私有 `desktop/resources/python/win32-x64/`，安装 `fast-sub[local-asr,local-translate]`，并验证 `fast-sub.exe`、`fast-sub-worker-faster-whisper.exe` 和 `fast_sub/faster_whisper/ctranslate2/sentencepiece` import。
+- 新增 `desktop/scripts/clean-release-output.mjs`，让 `package:dir` / `package` 从干净 `dist-release` 开始，避免旧版本 artifact 污染 smoke。
+- 新增 `desktop/scripts/smoke-packaged-runtime.mjs`，可重复验证 packaged app 启动、Go daemon ready JSON、ASAR 外 Python CLI/worker 和 Python imports。
+- 新增 `electron-builder`、`prepare:python-runtime`、`smoke:packaged`、`package:dir` 和 `package` scripts。
+- Windows target 固定为 x64 NSIS installer + zip portable。
+- macOS config 固定为 arm64 dmg；本 Windows host 不能验收 macOS build/smoke。
+- `THIRD_PARTY_NOTICES.md` 作为 package extraResource 进入 `resources/`。
+- `prepare-release-resources` 默认拒绝缺 app 私有 Python runtime，避免生成依赖系统 Python/uv/global `fast-sub` 的 release package。仅可用 `FAST_SUB_RELEASE_ALLOW_MISSING_PYTHON=1` 做 shell-only packaging diagnostics。
+
+当前 Windows 产物：
+
+```text
+desktop/dist-release/win-unpacked/
+desktop/dist-release/FastSub-Desktop-0.13.0-windows-x64.exe
+desktop/dist-release/FastSub-Desktop-0.13.0-windows-x64.zip
+```
+
+当前 packaged resources 验证：
+
+- `resources/app.asar` 存在。
+- `resources/bin/win32-x64/fast-sub-go.exe` 位于 ASAR 外。
+- `resources/python/win32-x64/Scripts/fast-sub.exe` 位于 ASAR 外。
+- `resources/python/win32-x64/Scripts/fast-sub-worker-faster-whisper.exe` 位于 ASAR 外。
+- packaged app `FAST_SUB_SMOKE=1` 启动通过。
+- packaged Go daemon `serve --json-ready --host 127.0.0.1 --port 0` ready smoke 通过，记录中不输出 token；`/v1/health` 返回 200，`/v1/config` 无 Authorization 返回 401，带 ready token 返回 200。
+- packaged Python runtime `fast-sub.exe --version` 输出 `0.1.0`，worker `--help` 通过，`fast_sub/faster_whisper/ctranslate2/sentencepiece` import 通过。
+- `npm run smoke:packaged` 通过，可作为 13.3 packaged runtime baseline。
+- Windows portable zip 解压到独立目录后，设置 `FAST_SUB_PACKAGED_ROOT` 运行 `npm run smoke:packaged` 通过。
+
+验证：
+
+```powershell
+go test ./...
+cd desktop
+npm run prepare:python-runtime
+npm run typecheck
+npm test
+npm run build
+npm run smoke
+npm run package:dir
+npm run package
+npm run smoke:packaged
+```
+
+已知 13.2/13.3 风险：
+
+- 当前 Windows app 私有 Python runtime 使用 uv managed CPython 3.11.15 + `fast-sub[local-asr,local-translate]` 直接安装到 portable runtime；macOS 对应 runtime 构造仍需在 macOS release host 上补齐。
+- 当前 Windows package 使用 `win.signAndEditExecutable=true` 写入 icon/version resource，但按用户决策保持 unsigned；`Get-AuthenticodeSignature` 对 app exe 和 installer 均为 `NotSigned`。Windows unsigned 是当前 Round 13 Windows 发行形态，风险记录到 release checklist。
+- 当前使用默认 Electron icon；正式试用包需要 app icon。
+- Windows installer 和 portable zip 已用最新 RC artifact 复测：installer 静默安装、已安装 app daemon repair smoke、静默卸载通过；portable zip 解压到独立目录后用 `FAST_SUB_PACKAGED_ROOT` 执行 `npm run smoke:packaged` 通过。
+- macOS arm64 dmg 只能在 macOS host 或 CI runner 验收。
+
 ## Workstream 3: Packaged Runtime Smoke
 
 13.3 在打包产物上验证运行时能力。
@@ -168,6 +308,26 @@ npm run package
 ## Workstream 4: Real Provider And File Smoke
 
 13.4 不进入默认 CI，但必须形成可重复手动记录。
+
+### Round 13 Translation Batching Blocker
+
+2026-05-19 用户实测长翻译任务会逐条提交，导致整体效率过慢并造成机器明显卡顿。该问题影响 packaged app 真实用户体验，因此纳入 Round 13 发布前 blocker，而不是延后到性能优化轮。
+
+修复口径：
+
+- `local-nllb-ct2` 桌面/daemon 任务默认使用 `--batch-size 32`。
+- `api-openai-chat` 桌面/daemon 任务默认使用 `--batch-size 16`，降低请求次数，同时避免默认 prompt 过大。
+- `web-bing` / `web-google` 默认保持 `--batch-size 1`，因为网页 provider 更容易被限流或卡住。
+- daemon request 中显式传入的 `batch_size` 仍优先于默认值，便于后续 UI 设置或 smoke 手动覆盖到 10、100 等值。
+- Python NLLB provider 批量失败时必须递归拆半降级，最后降到单条；大 batch 失败不得导致整批 cue 丢失。
+- 进度和输出语义仍按 cue 数保持不变：cue 顺序、时间轴、TXT 逐行结构和 bilingual/replace 语义不变。
+
+验证：
+
+```powershell
+$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/jobs
+$env:UV_CACHE_DIR='.uv-cache'; $env:PYTHONPATH='src'; uv run pytest tests\test_translate.py -q
+```
 
 建议 smoke 矩阵：
 
@@ -228,6 +388,45 @@ local_tests/round13/text/
 - 结果：PASS / RETEST / TODO / BLOCKED。
 - 失败时的 redacted 日志摘要和下一步。
 
+### 13.3 Implementation Result - 2026-05-17
+
+已完成 packaged runtime baseline：
+
+- 新增 `npm run smoke:packaged`，默认检查 `desktop/dist-release/win-unpacked`，也可用 `FAST_SUB_PACKAGED_ROOT` 指向解压后的 portable 目录。
+- smoke 覆盖 packaged app `FAST_SUB_SMOKE=1` 启动、`app.asar` 存在、Go daemon/Python executable/CLI/worker 均位于 ASAR 外、daemon ready JSON、`/v1/health`、`/v1/config` 401/auth、Python CLI/worker/import checks。
+- Windows portable zip 已解压到独立目录并通过 `FAST_SUB_PACKAGED_ROOT=<portable-dir> npm run smoke:packaged`。
+- Python Provider 依赖动作已按 packaged runtime 策略收口：`local-faster-whisper` 和 `local-nllb-ct2` 不再尝试下载/安装 Python 依赖，按钮改为重新检查内置 runtime，main process 执行 daemon repair + static provider check；`local-whisper-cpp` 仍保留 native binary 安装路径。
+- Electron main 现在向 daemon 注入 `FAST_SUB_PYTHON`，显式指向 app 私有 Python executable；Go provider static check 优先使用该 Python 做依赖 import 检查，避免 packaged app 因 PATH 或系统 Python/uv 漂移继续显示 `missing_dependency`。
+- 新增 `npm run smoke:native-deps`，使用 packaged `dist-release/win-unpacked/Fast Sub.exe` 和隔离 userData 验证 native dependency 首装路径。2026-05-19 真实网络 smoke 结果已记录到 `desktop-tests/round13-release-smoke.md`：FFmpeg/FFprobe 首装通过，aria2 bootstrap + aria2 FFmpeg 下载通过，禁用 aria2 后普通 HTTPS fallback 通过，whisper.cpp Windows x64 binary 下载/解压/发布通过。
+- `ensureWhisperCPPInstalled()` 首装状态修正为与 FFmpeg 一样的轮询语义，避免安装完成后 `installedNow/logs` 被二次静态检查覆盖；`npm run smoke:native-deps -- whisper-cpp` 验证 `available=true`、`installedNow=true`。
+- `npm run smoke:packaged` 已增强 packaged daemon SSE 验证：在隔离 job root 创建受控失败 job，验证 SSE 连接可中断、终态 job 可通过 REST 重新查询，并通过裁剪 event log + `Last-Event-ID` 触发 `events_lost` replay gap。该 smoke 不访问真实模型、真实 ffmpeg、真实 whisper.cpp 或 GPU。
+- `npm run smoke:packaged` 已增强 packaged daemon repair 验证：以无窗口 smoke 模式启动 packaged `Fast Sub.exe`，通过 Electron main 的 `DaemonProcessManager` 从 packaged resources 定位 Go daemon，在隔离 userData 下启动自管 daemon，执行 `repair()` 后确认新 daemon session health=200 且 pid 变化。
+- Windows installer smoke 已通过：`FastSub-Desktop-0.13.0-windows-x64.exe` 静默安装到 `desktop/test-results/round13-installer/Fast Sub`，已安装 app 的 daemon repair smoke 通过，随后静默卸载且安装目录移除。
+- 真实长任务退出 smoke 暴露旧安装包的 Python console script launcher 不可迁移：`fast-sub-worker-faster-whisper.exe` 会启动构建目录下的 Python，退出 app 后残留 `fast-sub.exe` / `python.exe`。已修复为 packaged runtime 使用 `python.exe -m fast_sub.app` 和 `python.exe -m fast_sub_workers.faster_whisper`，并让 `python -m fast_sub.app` 可直接进入 CLI。新 installer/zip 已重新生成并通过 `npm run smoke:packaged`；新包真实本地 Faster Whisper 长任务复测通过，运行中 worker 子 Python 来自安装目录，退出 app 后无 daemon/worker/Python/native 残留。
+
+仍待 13.3 手动或后续自动化验证：
+
+- Windows/macOS 跨机器复测可作为发布候选补充记录；当前 Windows 13.3 blocker 项已通过。
+
+### 13.4 Implementation Result - 2026-05-19
+
+已完成 Windows x64 packaged real provider/file smoke，结果写入 `desktop-tests/round13-release-smoke.md`：
+
+- 默认本地 ASR blocker 通过：packaged `fast-sub-go.exe` 使用 app 私有 Python worker、`local-faster-whisper`、`whisper-small`、CPU，对 `local_tests/media/light/en-podcast-1m.wav` 生成 SRT，15 segments，未依赖 API/mock/system Python/uv。
+- Native ASR 通过：app 私有 whisper.cpp binary + `whispercpp-large-v3-turbo-q5_0` 对同一小音频生成 SRT，13 segments。
+- 本地翻译通过：packaged Python bridge + `local-nllb-ct2` + `nllb-200-distilled-600m-ct2-int8` 完成小 SRT 翻译；daemon `translate_srt` 对 TXT 输入输出逐行翻译并保留空行。
+- 双语字幕通过：单个 daemon `transcribe` job 内完成 `local-faster-whisper` 转写和 `local-nllb-ct2` 翻译，输出双语 SRT。
+- burn-in 通过：daemon `burn_in` 使用 app 私有 FFmpeg 输出硬字幕 MP4，未记录 raw command、daemon token 或敏感 header。
+- 路径兼容通过：中文、日文、韩文和空格路径下的本地 Faster Whisper ASR 输出路径和文件名正常。
+- 本地 OpenAI-compatible blocker 通过：启动本机 loopback mock `http://127.0.0.1:8765/v1`，无 API key，分别验证 `api-openai-transcription` 和 `api-openai-chat`；该 smoke 不访问真实 OpenAI，不产生费用，不记录 Authorization。
+- 默认模型安装通过：先前 `nllb-200-distilled-600m-ct2-int8` 从 missing 安装并 verify 通过；随后使用隔离 `FAST_SUB_MODEL_STORE_DIR=desktop/test-results/round13-clean-model-store-20260519` 从空 store 安装并 verify `whisper-small` 和 `nllb-200-distilled-600m-ct2-int8`，两者均 4 files verified。该复测未删除用户当前模型 store。
+
+未纳入默认阻塞项：
+
+- 真实 OpenAI/Bing/Google external record 按用户决策不执行，记录为 `DEFER`；这些结果不默认阻塞本地桌面发布。
+- GPU 长任务取消已在 Windows installed package 上手动执行并通过：运行中 `nvidia-smi` 显示 packaged `python.exe` 为 compute 进程；退出/取消清理路径取消后立即和 8 秒后复查均无 Fast Sub daemon/worker/Python/native 残留；应用内取消路径取消后 app/daemon 按预期保持运行，但 packaged worker 退出，立即和 8 秒后均无 packaged Python/GPU compute 进程回弹。
+- 翻译模型失败降级已补充：新增 `npm run smoke:translation-model-failure`，以 packaged daemon + 隔离空 `FAST_SUB_MODEL_STORE_DIR` 创建 `local-nllb-ct2` `translate_srt` job，确认缺默认 NLLB 翻译模型时翻译路径以 `missing_model` 失败；原字幕生成由默认 ASR packaged smoke 覆盖且不依赖翻译模型。
+
 ## Workstream 5: Diagnostics And Privacy
 
 13.5 聚焦发布可用性，不扩大核心功能。
@@ -243,6 +442,22 @@ local_tests/round13/text/
 - 复制诊断摘要时必须过滤 API key、Authorization、daemon token、secret_ref、signed URL、proxy credential、本机完整敏感路径。
 
 普通主流程仍不得展示 daemon、SSE、job id、JSON envelope、worker protocol 或 raw command。只有诊断页可以使用必要技术词，并且必须有用户可执行动作。
+
+Secret storage smoke 已补齐：Provider 页支持保存、替换、删除 API key；Electron main 删除 safeStorage secret record 后将对应 Provider key 状态恢复为 `missing`。Renderer 测试覆盖保存/替换后输入框清空，页面文本不保留 raw `sk-*` secret。
+
+### 13.5 Implementation Result - 2026-05-19
+
+已完成第一轮诊断隐私 polish：
+
+- 设置 -> 诊断页不再显示静态 sample log，不再出现 `credential=` / `api_key=` 示例文本。
+- 诊断页改为展示当前 `EnvironmentStatus` 摘要：health、platform/arch、daemon、FFmpeg、model store、本地转写、本地翻译、warnings 和 error diagnostic。
+- warnings、error diagnostic 和 FFmpeg log tail 在 renderer 侧再次经过 `redactSecretText()`；页面固定展示“敏感信息：已脱敏”。
+- 验证：`cd desktop && npm run typecheck`；`cd desktop && npm test -- App.test.tsx -t "shows task queue and settings entrances"`；`cd desktop && npm run build`。Vitest/build 在默认 Windows sandbox 中仍会因 esbuild 读 config 权限失败，按当前权限机制提升后通过。
+
+仍待 13.5/13.6 补充：
+
+- 失败详情页的 redacted diagnostic 行为需要在真实失败样本或 targeted test 中复查。
+- 主流程、Provider 页、完成页和失败页仍需 13.6 screenshot/E2E baseline，确认不显示 daemon token、SSE、job id、JSON envelope 或 raw command。
 
 ## Workstream 6: Release E2E And Screenshot Baseline
 
@@ -270,6 +485,23 @@ desktop-tests/pics/round13/
 
 自动化优先覆盖不依赖真实网络、模型和 GPU 的路径。真实网络、真实模型和 GPU 压力测试只作为手动发布 smoke 记录。
 
+### 13.6 Implementation Result - 2026-05-19
+
+已新增 `desktop-tests/pics/round13/README.md` 作为 Round 13 screenshot baseline manifest，覆盖：
+
+- 首次启动环境检查。
+- 主界面空状态。
+- 添加真实媒体后的主界面。
+- 真实 job 生成中。
+- 完成页。
+- 失败任务详情。
+- 模型管理。
+- Provider 设置。
+- 诊断页。
+- English UI smoke。
+
+每张截图都写明不得包含 API key、Authorization、daemon token、secret_ref、signed URL、proxy credential、完整私有路径、真实客户媒体名或真实任务产物。2026-05-19 已捕获 10 张 GUI screenshot baseline：`01-setup-check.png` 到 `10-english-ui.png`；`desktop-tests/pics/round13/README.md` 和 `desktop-tests/round13-release-smoke.md` 已同步为 PASS。
+
 ## Workstream 7: Release Checklist
 
 13.7 输出最终发布检查清单。
@@ -289,6 +521,42 @@ desktop-tests/pics/round13/
 - macOS 未签名 build 说明：如果未完成 signing/notarization，必须明确该 artifact 只能用于内部试用，记录 Gatekeeper/quarantine 风险和用户打开方式；不得把 unsigned macOS build 标记为正式可分发。
 - 第三方 license/notice 清单路径和状态。
 - 下一轮候选项，必须和 Round 13 release blocker 分开。
+
+### 13.7 Implementation Result - 2026-05-19
+
+已新增 `desktop-tests/round13-release-checklist.md`，覆盖：
+
+- release scope、版本、分支、artifact 名称和平台范围。
+- 自动化验证命令与当前结果。
+- Windows installer/portable、packaged daemon、真实本地 provider/file smoke 汇总。
+- 隐私和 secret 策略。
+- runtime distribution 和 cleanup 说明。
+- 发布前 blockers：macOS arm64 dmg smoke。Windows x64 当前按 unsigned artifact 发行，签名不是本轮 blocker，但会产生 SmartScreen/安全软件声誉风险。
+
+### Windows Icon And Signing Decision - 2026-05-19
+
+Windows artifacts are accepted as unsigned builds for Round 13 by user decision. Public distribution signing is deferred until a real code-signing certificate and publisher identity are available; the release checklist records SmartScreen and antivirus reputation risk instead of treating signing as a current blocker.
+
+- App icon source: `desktop/build/icon.png`.
+- Windows icon: `desktop/build/icon.ico`.
+- Electron builder config: `win.icon=build/icon.ico`.
+- `win.signAndEditExecutable=true` so electron-builder can write icon and version resources even though no certificate is configured.
+- `Get-AuthenticodeSignature desktop/dist-release/win-unpacked/Fast Sub.exe` reports `NotSigned`.
+- Version resource check reports ProductName/FileDescription/CompanyName `Fast Sub`, FileVersion `0.13.0`, ProductVersion `0.13.0.0`.
+- Verification: `cd desktop && npm run package:dir`.
+
+### License Inventory Finalization - 2026-05-19
+
+已新增 `desktop/scripts/generate-license-inventory.mjs` 并生成 `desktop-tests/licenses/` 下的 release license reports：
+
+- `npm-licenses.json`：来自 `desktop/package-lock.json`，571 packages，0 `needs-review`，0 `blocked`。
+- `python-licenses.json`：来自 packaged app private Python `*.dist-info/METADATA`，47 packages，0 `needs-review`，0 `blocked`。`sentencepiece` 使用 upstream Apache-2.0 evidence override；`typing_extensions` 使用 PSF-2.0。
+- `go-licenses.md`：`go.mod` 当前无外部 Go modules，Go standard library only。
+- `license-summary.json`：汇总 618 records，51 `bundle-ok`，567 `manual-user-install`，0 `needs-review`，0 `blocked`。
+
+`THIRD_PARTY_NOTICES.md` 已同步 generated report 路径、Python runtime 版本和 package content scan。`desktop/dist-release/win-unpacked/resources` 顶层只包含 `bin`、`python`、`app.asar`、`elevate.exe` 和 notice 文件；未发现 model store、userData、`local_tests`、`test-results`、`.env` 或 daemon ready token 入包。NLLB 模型仍是 runtime `download-only / needs-review`，因为它不随包分发且带 CC-BY-NC-4.0 使用限制。
+
+该 checklist 是当前 release candidate 审核入口；它明确区分 Windows x64 已通过路径、非默认阻塞 external records，以及仍需手动或跨平台补齐的 blocker。
 
 ## Testing
 

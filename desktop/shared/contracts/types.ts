@@ -226,6 +226,7 @@ export interface FastSubClient {
   getConfig(): Promise<ConfigViewModel>;
   updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel>;
   saveProviderSecret(providerId: string, alias: string, rawSecret: string): Promise<ConfigViewModel>;
+  deleteProviderSecret(providerId: string, alias: string): Promise<ConfigViewModel>;
   listModels(): Promise<ModelStatus[]>;
   installModel(modelId: string): Promise<ModelStatus>;
   createModelInstallJob(modelId: string): Promise<JobDetail>;

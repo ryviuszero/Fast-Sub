@@ -356,8 +356,13 @@ export class MainDaemonFastSubClient {
   }
 
   async installProviderDependency(providerId: string): Promise<ProviderStatus> {
+    if (providerId === "local-faster-whisper" || providerId === "local-nllb-ct2") {
+      await this.processManager.repair().catch(() => undefined);
+      this.nativeDependenciesSynced = true;
+      return this.testProvider(providerId, "static");
+    }
     if (providerId !== "local-whisper-cpp") {
-      throw uiError("unsupported_dependency_install", "暂不支持自动安装该依赖", "当前只能自动安装 local-whisper-cpp 的 whisper.cpp native binary。");
+      throw uiError("unsupported_dependency_install", "暂不支持自动安装该依赖", "当前只能自动安装 local-whisper-cpp 的 whisper.cpp native binary；Python 依赖随应用私有 runtime 分发。");
     }
     const dependency = await ensureWhisperCPPInstalled();
     if (dependency.available) {

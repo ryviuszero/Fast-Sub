@@ -92,6 +92,21 @@ func TestLocalTranslateDependencyCommandUsesUVExtra(t *testing.T) {
 	}
 }
 
+func TestLocalTranslateDependencyCommandPrefersPackagedPython(t *testing.T) {
+	cfg := fakeRuntime(map[string]string{
+		"FAST_SUB_PYTHON":     `"` + filepath.Join("C:", "Fast Sub", "python.exe") + `"`,
+		"FAST_SUB_PYTHON_CLI": "uv run fast-sub",
+	}, true, nil)
+
+	command, args, ok := localTranslateDependencyCommand(cfg)
+	if !ok {
+		t.Fatal("command did not resolve")
+	}
+	if command != filepath.Join("C:", "Fast Sub", "python.exe") || strings.Join(args, " ") != "-c import ctranslate2, sentencepiece" {
+		t.Fatalf("command=%q args=%q", command, strings.Join(args, " "))
+	}
+}
+
 func TestFasterWhisperMissingDependencies(t *testing.T) {
 	cfg := fakeRuntime(nil, true, nil)
 	cfg.RunCommand = func(context.Context, string, []string) error {
@@ -124,6 +139,21 @@ func TestLocalASRDependencyCommandUsesUVExtra(t *testing.T) {
 		t.Fatal("command did not resolve")
 	}
 	if command != "uv" || strings.Join(args, " ") != "run --extra local-asr python -c import faster_whisper" {
+		t.Fatalf("command=%q args=%q", command, strings.Join(args, " "))
+	}
+}
+
+func TestLocalASRDependencyCommandPrefersPackagedPython(t *testing.T) {
+	cfg := fakeRuntime(map[string]string{
+		"FAST_SUB_PYTHON":             `"` + filepath.Join("C:", "Fast Sub", "python.exe") + `"`,
+		"FAST_SUB_STT_WORKER_COMMAND": "uv run fast-sub-worker-faster-whisper",
+	}, true, nil)
+
+	command, args, ok := localASRDependencyCommand(cfg)
+	if !ok {
+		t.Fatal("command did not resolve")
+	}
+	if command != filepath.Join("C:", "Fast Sub", "python.exe") || strings.Join(args, " ") != "-c import faster_whisper" {
 		t.Fatalf("command=%q args=%q", command, strings.Join(args, " "))
 	}
 }
