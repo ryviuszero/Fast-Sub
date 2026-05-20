@@ -264,6 +264,52 @@ func TestTranslateArgsIncludesTimeout(t *testing.T) {
 	}
 }
 
+func TestTranslateArgsUsesProviderDefaultBatchSizes(t *testing.T) {
+	runner := DefaultRunner{
+		ModelLookup: func(modelID, providerID string) (string, error) {
+			if modelID != "nllb-200-distilled-600m-ct2-int8" || providerID != "local-nllb-ct2" {
+				t.Fatalf("unexpected lookup %q %q", modelID, providerID)
+			}
+			return "C:\\models\\nllb", nil
+		},
+		Env: func(key string) string {
+			if key == "OPENAI_MODEL" {
+				return "chat-model"
+			}
+			return ""
+		},
+	}
+	cases := []struct {
+		name     string
+		provider string
+		options  map[string]any
+		want     string
+	}{
+		{name: "local default", provider: "local-nllb-ct2", want: "--batch-size 32"},
+		{name: "api default", provider: "api-openai-chat", options: map[string]any{"yes": true}, want: "--batch-size 16"},
+		{name: "web default", provider: "web-bing", options: map[string]any{"yes": true}, want: "--batch-size 1"},
+		{name: "explicit override", provider: "local-nllb-ct2", options: map[string]any{"batch_size": 100}, want: "--batch-size 100"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			args, appErr := runner.translateArgs(
+				CreateRequest{Provider: tc.provider, Options: tc.options},
+				"input.srt",
+				tc.provider,
+				"en",
+				"zh",
+				"out.srt",
+			)
+			if appErr != nil {
+				t.Fatalf("translateArgs error = %#v", appErr)
+			}
+			if joined := strings.Join(args, " "); !strings.Contains(joined, tc.want) {
+				t.Fatalf("args = %q, want %q", joined, tc.want)
+			}
+		})
+	}
+}
+
 func TestTranslateCLIHelper(t *testing.T) {
 	if os.Getenv("GO_WANT_TRANSLATE_HELPER") != "1" {
 		return

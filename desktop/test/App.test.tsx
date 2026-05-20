@@ -147,7 +147,10 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "通用设置" }));
     expect(screen.getByRole("heading", { name: "通用" })).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "诊断" }).at(-1) as HTMLElement);
-    expect(screen.getByText(/credential=\[REDACTED\]/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "本地服务状态" })).toBeInTheDocument();
+    expect(screen.getByText("已脱敏")).toBeInTheDocument();
+    expect(screen.queryByText(/credential=/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/api_key=/)).not.toBeInTheDocument();
   });
 
   it("selects all filtered queue jobs including hidden rows", async () => {
@@ -189,6 +192,27 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.getByText("已选择 45 项")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "删除选中记录" }));
     await waitFor(() => expect(deleted).toHaveLength(45));
+  });
+
+  it("hides model install jobs from the transcription queue", async () => {
+    const jobs: JobSummary[] = [
+      createSeedJob({ id: "install-small", type: "model_install", title: "whisper-small 安装", status: "succeeded", statusLabel: "已完成", completedAt: "2026-05-10T17:12:00.000Z" }),
+      createSeedJob({ id: "install-nllb", type: "model_install", title: "nllb 安装", status: "running", statusLabel: "正在下载", progressPercent: 33, stageLabel: "正在下载模型" }),
+      createSeedJob({ id: "transcribe-1", type: "transcribe", title: "clip.mp4", status: "succeeded", statusLabel: "已完成", completedAt: "2026-05-10T17:13:00.000Z" })
+    ];
+    class QueueClient extends MockFastSubClient {
+      async listJobs(): Promise<JobSummary[]> {
+        return jobs;
+      }
+    }
+    render(<App client={new QueueClient("setupReady")} />);
+    await enterMainScreen();
+    fireEvent.click(screen.getByRole("button", { name: /历史记录|查看进行中/ }));
+
+    expect(await screen.findByText("全部 1")).toBeInTheDocument();
+    expect(screen.getByText("clip.mp4")).toBeInTheDocument();
+    expect(screen.queryByText("whisper-small 安装")).not.toBeInTheDocument();
+    expect(screen.queryByText("nllb 安装")).not.toBeInTheDocument();
   });
 
   it("updates general settings options", async () => {
@@ -250,6 +274,15 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(within(openAiCard).getByRole("button", { name: "保存密钥" }));
     await waitFor(() => expect(within(openAiCard).getByText(/已保存到 FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY/)).toBeInTheDocument());
     expect(within(openAiCard).getByLabelText("OpenAI 音频转写 API API Key")).toHaveValue("");
+    expect(document.body).not.toHaveTextContent("sk-test-secret");
+    fireEvent.change(within(openAiCard).getByLabelText("OpenAI 音频转写 API API Key"), { target: { value: "sk-replacement-secret" } });
+    fireEvent.click(within(openAiCard).getByRole("button", { name: "替换密钥" }));
+    await waitFor(() => expect(within(openAiCard).getByText(/已保存到 FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY/)).toBeInTheDocument());
+    expect(within(openAiCard).getByLabelText("OpenAI 音频转写 API API Key")).toHaveValue("");
+    expect(document.body).not.toHaveTextContent("sk-replacement-secret");
+    fireEvent.click(within(openAiCard).getByRole("button", { name: "删除密钥" }));
+    await waitFor(() => expect(within(openAiCard).getByText(/未配置/)).toBeInTheDocument());
+    expect(within(openAiCard).queryByRole("button", { name: "删除密钥" })).not.toBeInTheDocument();
     expect(within(openAiCard).queryByText("快速填充提供方")).not.toBeInTheDocument();
     expect(within(openAiCard).getByRole("button", { name: "显示" })).toBeInTheDocument();
     expect(within(openAiCard).getByLabelText("模型")).toHaveValue("gpt-4o-transcribe");

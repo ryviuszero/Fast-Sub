@@ -1,5 +1,6 @@
 .venv/
 .uv-cache/
+.uv-python/
 .fast-sub/
 .pytest-tmp*/
 .test-tmp/
@@ -21,6 +22,7 @@ tests/test_bench_assets.py
 *.ogg
 .env
 .gocache/
+.gocache-release/
 .gomodcache/
 fast-sub-go.toml
 ui-docs/prototype/node_modules/
@@ -28,9 +30,13 @@ ui-docs/prototype/dist/
 desktop/node_modules/
 desktop/dist/
 desktop/dist-electron/
+desktop/dist-release/
 desktop/out/
 desktop/.vite/
+desktop/.gocache-release/
 desktop/coverage/
 desktop/test-results/
 desktop/playwright-report/
 desktop/local/
+desktop/resources/bin/
+desktop/resources/python/

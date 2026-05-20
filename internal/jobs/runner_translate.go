@@ -44,6 +44,12 @@ type translateCLIEnvelope struct {
 
 const webTranslationJobTimeout = 3 * time.Minute
 
+const (
+	defaultLocalTranslationBatchSize = 32
+	defaultAPITranslationBatchSize   = 16
+	defaultWebTranslationBatchSize   = 1
+)
+
 func (r DefaultRunner) runTranslateSRTBridge(ctx context.Context, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {
 	if strings.TrimSpace(req.InputPath) == "" {
 		return Result{}, fserrors.New(fserrors.CodeInvalidInput, "translating", "input_path is required.", "Choose an SRT or text file.", nil)
@@ -184,9 +190,7 @@ func (r DefaultRunner) translateArgs(req CreateRequest, input, provider, sourceL
 			args = append(args, "--model", model)
 		}
 	}
-	if batch := intOption(req, "batch_size"); batch > 0 {
-		args = append(args, "--batch-size", strconv.Itoa(batch))
-	}
+	args = append(args, "--batch-size", strconv.Itoa(translationBatchSize(req, provider)))
 	if timeout := floatOption(req, "timeout"); timeout > 0 {
 		args = append(args, "--timeout", strconv.FormatFloat(timeout, 'f', -1, 64))
 	} else {
@@ -217,6 +221,22 @@ func defaultTranslateOutputPath(inputPath string) string {
 
 func isWebTranslationProvider(provider string) bool {
 	return provider == "web-bing" || provider == "web-google"
+}
+
+func translationBatchSize(req CreateRequest, provider string) int {
+	if batch := intOption(req, "batch_size"); batch > 0 {
+		return batch
+	}
+	switch provider {
+	case "local-nllb-ct2":
+		return defaultLocalTranslationBatchSize
+	case "api-openai-chat":
+		return defaultAPITranslationBatchSize
+	case "web-bing", "web-google":
+		return defaultWebTranslationBatchSize
+	default:
+		return 8
+	}
 }
 
 func providerDisplayName(provider string) string {

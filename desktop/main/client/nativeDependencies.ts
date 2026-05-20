@@ -153,8 +153,14 @@ export async function ensureWhisperCPPInstalled(): Promise<NativeDependencyStatu
     };
   }
   startWhisperCPPInstallTask();
-  await whisperCPPInstallTask;
-  return checkWhisperCPPAvailable();
+  return {
+    ...existing,
+    installedNow: false,
+    installing: true,
+    progressPercent: whisperCPPInstallState.progressPercent,
+    message: whisperCPPInstallState.message,
+    logs: whisperCPPInstallState.logs
+  };
 }
 
 async function checkFFmpegAvailable(): Promise<NativeDependencyStatus> {
@@ -330,6 +336,10 @@ async function installWindowsWhisperCPP(): Promise<void> {
 }
 
 async function ensureAria2Installed(): Promise<string | null> {
+  if (process.env.FAST_SUB_DISABLE_ARIA2_AUTO_INSTALL === "1") {
+    pushLog("aria2 自动准备已禁用，改用普通 HTTPS 下载。", 8);
+    return null;
+  }
   const bundled = aria2ExecutablePath();
   if (await canRun(bundled, process.env)) {
     pushLog("已启用 aria2 加速下载。", 8);

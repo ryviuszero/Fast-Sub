@@ -27,6 +27,7 @@ export interface FastSubClientBridge {
   getConfig(): Promise<ConfigViewModel>;
   updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel>;
   saveProviderSecret(providerId: string, alias: string, rawSecret: string): Promise<ConfigViewModel>;
+  deleteProviderSecret(providerId: string, alias: string): Promise<ConfigViewModel>;
   listModels(): Promise<ModelStatus[]>;
   installModel(modelId: string): Promise<ModelStatus>;
   createModelInstallJob(modelId: string): Promise<JobDetail>;
@@ -57,6 +58,7 @@ export class DaemonFastSubClient implements FastSubClient {
   getConfig(): Promise<ConfigViewModel> { return this.bridge.getConfig(); }
   updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel> { return this.bridge.updateConfig(patch); }
   saveProviderSecret(providerId: string, alias: string, rawSecret: string): Promise<ConfigViewModel> { return this.bridge.saveProviderSecret(providerId, alias, rawSecret); }
+  deleteProviderSecret(providerId: string, alias: string): Promise<ConfigViewModel> { return this.bridge.deleteProviderSecret(providerId, alias); }
   listModels(): Promise<ModelStatus[]> { return this.bridge.listModels(); }
   installModel(modelId: string): Promise<ModelStatus> { return this.bridge.installModel(modelId); }
   createModelInstallJob(modelId: string): Promise<JobDetail> { return this.bridge.createModelInstallJob(modelId); }

@@ -4,15 +4,23 @@ import type { Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { registerFastSubClientIpc } from "./client/ipc";
+import { ensureFFmpegInstalled, ensureWhisperCPPInstalled } from "./client/nativeDependencies";
+import { DaemonProcessManager } from "./client/daemonProcess";
 
 const DEV_SERVER_URL = process.env.ELECTRON_RENDERER_URL ?? (!app.isPackaged ? "http://localhost:5173" : "");
 const SMOKE_MODE = process.env.FAST_SUB_SMOKE === "1";
+const NATIVE_DEPS_SMOKE_MODE = process.env.FAST_SUB_SMOKE_NATIVE_DEPS === "1";
+const DAEMON_REPAIR_SMOKE_MODE = process.env.FAST_SUB_SMOKE_DAEMON_REPAIR === "1";
 const PROD_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
 const DEV_CSP = "default-src 'self' http://localhost:5173 ws://localhost:5173; script-src 'self' http://localhost:5173 'unsafe-inline' 'unsafe-eval'; style-src 'self' http://localhost:5173 'unsafe-inline'; img-src 'self' data: http://localhost:5173; font-src 'self' data: http://localhost:5173; connect-src 'self' http://localhost:5173 ws://localhost:5173; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
 const MEDIA_EXTENSIONS = new Set([".mp4", ".mkv", ".mov", ".mp3", ".wav", ".m4a"]);
 const DEFAULT_FOLDER_SCAN_MAX_FILES = 100;
 const MAX_FOLDER_SCAN_MAX_FILES = 500;
 const SKIPPED_FOLDER_SCAN_DIRS = new Set([".git", ".hg", ".svn", ".venv", "venv", "node_modules", "dist", "build", "__pycache__"]);
+
+if (process.env.FAST_SUB_SMOKE_USER_DATA) {
+  app.setPath("userData", process.env.FAST_SUB_SMOKE_USER_DATA);
+}
 
 type FolderScanOptions = {
   includeSubfolders: boolean;
@@ -176,8 +184,20 @@ function normalizeFolderScanOptions(value: unknown): FolderScanOptions {
   };
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
+  if (NATIVE_DEPS_SMOKE_MODE) {
+    const result = await runNativeDependencySmoke();
+    console.log(`FAST_SUB_SMOKE_NATIVE_DEPS ${JSON.stringify(result)}`);
+    app.exit(result.ok ? 0 : 1);
+    return;
+  }
+  if (DAEMON_REPAIR_SMOKE_MODE) {
+    const result = await runDaemonRepairSmoke();
+    console.log(`FAST_SUB_SMOKE_DAEMON_REPAIR ${JSON.stringify(result)}`);
+    app.exit(result.ok ? 0 : 1);
+    return;
+  }
   createWindow();
   if (SMOKE_MODE) {
     setTimeout(() => {
@@ -198,3 +218,71 @@ app.on("activate", () => {
     createWindow();
   }
 });
+
+async function runNativeDependencySmoke(): Promise<Record<string, unknown>> {
+  const checks = process.env.FAST_SUB_SMOKE_NATIVE_DEPS_CHECKS?.split(",").map((item) => item.trim()).filter(Boolean) ?? ["ffmpeg", "whisper-cpp"];
+  const results: Record<string, unknown> = {};
+  let ok = true;
+  for (const check of checks) {
+    try {
+      if (check === "ffmpeg") {
+        const status = await pollDependency(() => ensureFFmpegInstalled(), 30 * 60 * 1000);
+        results.ffmpeg = summarizeDependency(status);
+        ok = ok && status.available;
+      } else if (check === "whisper-cpp") {
+        const status = await pollDependency(() => ensureWhisperCPPInstalled(), 30 * 60 * 1000);
+        results.whisperCpp = summarizeDependency(status);
+        ok = ok && status.available;
+      } else {
+        results[check] = { available: false, message: "Unknown native dependency smoke check." };
+        ok = false;
+      }
+    } catch (error) {
+      results[check] = { available: false, message: error instanceof Error ? error.message : String(error) };
+      ok = false;
+    }
+  }
+  return { ok, userData: app.getPath("userData"), results };
+}
+
+async function pollDependency<T extends { available: boolean; installing: boolean }>(fn: () => Promise<T>, timeoutMs: number): Promise<T> {
+  const started = Date.now();
+  let latest = await fn();
+  while (!latest.available && latest.installing && Date.now() - started < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    latest = await fn();
+  }
+  return latest;
+}
+
+function summarizeDependency(status: { available: boolean; installedNow: boolean; installing: boolean; progressPercent: number; binDir?: string; message?: string; logs: string[] }): Record<string, unknown> {
+  return {
+    available: status.available,
+    installedNow: status.installedNow,
+    installing: status.installing,
+    progressPercent: status.progressPercent,
+    binDir: status.binDir,
+    message: status.message,
+    logs: status.logs.slice(-8)
+  };
+}
+
+async function runDaemonRepairSmoke(): Promise<Record<string, unknown>> {
+  const manager = new DaemonProcessManager();
+  try {
+    const first = await manager.ensureStarted();
+    const firstHealth = await fetch(new URL("/v1/health", first.baseUrl));
+    const second = await manager.repair();
+    const secondHealth = await fetch(new URL("/v1/health", second.baseUrl));
+    await manager.stop();
+    return {
+      ok: firstHealth.status === 200 && secondHealth.status === 200 && first.pid > 0 && second.pid > 0 && first.pid !== second.pid,
+      first: { pid: first.pid, owned: first.owned, health: firstHealth.status },
+      second: { pid: second.pid, owned: second.owned, health: secondHealth.status },
+      userData: app.getPath("userData")
+    };
+  } catch (error) {
+    await manager.stop().catch(() => undefined);
+    return { ok: false, message: error instanceof Error ? error.message : String(error), userData: app.getPath("userData") };
+  }
+}

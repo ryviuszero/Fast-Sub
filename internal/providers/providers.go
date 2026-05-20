@@ -605,6 +605,13 @@ func checkFasterWhisperDependencies(ctx context.Context, cfg RuntimeConfig) Chec
 
 func localASRDependencyCommand(cfg RuntimeConfig) (string, []string, bool) {
 	snippet := "import faster_whisper"
+	if configured := strings.TrimSpace(cfg.Env("FAST_SUB_PYTHON")); configured != "" {
+		parts := splitCommandLine(configured)
+		if len(parts) == 0 {
+			return "", nil, false
+		}
+		return parts[0], append(parts[1:], "-c", snippet), true
+	}
 	if configured := strings.TrimSpace(cfg.Env("FAST_SUB_STT_WORKER_COMMAND")); configured != "" {
 		parts := splitCommandLine(configured)
 		if len(parts) == 0 {
@@ -637,6 +644,13 @@ func localASRDependencyCommand(cfg RuntimeConfig) (string, []string, bool) {
 
 func localTranslateDependencyCommand(cfg RuntimeConfig) (string, []string, bool) {
 	snippet := "import ctranslate2, sentencepiece"
+	if configured := strings.TrimSpace(cfg.Env("FAST_SUB_PYTHON")); configured != "" {
+		parts := splitCommandLine(configured)
+		if len(parts) == 0 {
+			return "", nil, false
+		}
+		return parts[0], append(parts[1:], "-c", snippet), true
+	}
 	if configured := strings.TrimSpace(cfg.Env("FAST_SUB_PYTHON_CLI")); configured != "" {
 		parts := splitCommandLine(configured)
 		if len(parts) == 0 {

@@ -318,6 +318,67 @@ def test_local_nllb_disables_unknown_token_generation(monkeypatch) -> None:
         shutil.rmtree(root)
 
 
+def test_local_nllb_splits_failed_batch_and_keeps_successful_cues(monkeypatch) -> None:
+    root = (Path(".test-work") / uuid.uuid4().hex).resolve()
+    model_path = root / "model"
+    model_path.mkdir(parents=True)
+    (model_path / "sentencepiece.bpe.model").write_text("fake", encoding="utf-8")
+    calls = []
+
+    class FakeSentencePieceProcessor:
+        def __init__(self, *, model_file: str) -> None:
+            assert model_file == str(model_path / "sentencepiece.bpe.model")
+
+        def encode(self, text: str, *, out_type: type[str]) -> list[str]:
+            assert out_type is str
+            return [text]
+
+        def decode(self, tokens: list[str]) -> str:
+            return "".join(tokens)
+
+    class FakeTranslator:
+        def __init__(self, path: str, *, device: str) -> None:
+            assert path == str(model_path)
+            assert device == "auto"
+
+        def translate_batch(self, source_tokens, **kwargs):  # noqa: ANN001, ANN003
+            calls.append([tokens[1] for tokens in source_tokens])
+            if len(source_tokens) > 1:
+                raise RuntimeError("batch too large")
+            return [SimpleNamespace(hypotheses=[["zho_Hans", f"{source_tokens[0][1]}-zh"]])]
+
+    monkeypatch.setitem(
+        sys.modules,
+        "sentencepiece",
+        SimpleNamespace(SentencePieceProcessor=FakeSentencePieceProcessor),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "ctranslate2",
+        SimpleNamespace(Translator=FakeTranslator),
+    )
+
+    try:
+        result = translate_segments(
+            segments=[
+                Segment(id=1, start=0, end=1, text="a"),
+                Segment(id=2, start=1, end=2, text="b"),
+                Segment(id=3, start=2, end=3, text="c"),
+            ],
+            provider="local-nllb-ct2",
+            source_lang="en",
+            target_lang="zh",
+            model_path=model_path,
+            batch_size=3,
+        )
+
+        assert result.errors == []
+        assert [segment.translation for segment in result.segments] == ["a-zh", "b-zh", "c-zh"]
+        assert calls == [["a", "b", "c"], ["a"], ["b", "c"], ["b"], ["c"]]
+    finally:
+        shutil.rmtree(root)
+
+
 def test_detect_subtitle_language_handles_supported_languages() -> None:
     assert (
         detect_subtitle_language(

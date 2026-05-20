@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { ConfigViewModel, ModelStatus, ProviderState, ProviderStatus } from "../../../../shared/contracts/types";
+import { redactSecretText } from "../../../../shared/privacy/redaction";
 import type { RenderProps, Screen, UiFontStyle, UiLanguage } from "../types";
 import { Chip, Chrome, KV, Segment, SettingRow, Toggle } from "../components";
 import { useT } from "../i18n";
@@ -468,6 +469,7 @@ export function SettingsProviders(props: RenderProps) {
         config={config}
         updateConfig={updateConfig}
         saveProviderSecret={props.saveProviderSecret}
+        deleteProviderSecret={props.deleteProviderSecret}
         checks={providerChecks}
         runProviderCheck={runProviderCheck}
         providerDrafts={providerDrafts}
@@ -490,6 +492,7 @@ export function SettingsProviders(props: RenderProps) {
         config={config}
         updateConfig={updateConfig}
         saveProviderSecret={props.saveProviderSecret}
+        deleteProviderSecret={props.deleteProviderSecret}
         checks={providerChecks}
         runProviderCheck={runProviderCheck}
         providerDrafts={providerDrafts}
@@ -548,6 +551,7 @@ function ProviderSection(props: {
   config: ConfigViewModel;
   updateConfig: RenderProps["updateConfig"];
   saveProviderSecret: RenderProps["saveProviderSecret"];
+  deleteProviderSecret: RenderProps["deleteProviderSecret"];
   checks: Record<string, ProviderCheckState>;
   runProviderCheck: (providerId: string) => Promise<void>;
   providerDrafts: Record<string, ProviderDraft>;
@@ -579,6 +583,7 @@ function ProviderSection(props: {
             config={props.config}
             updateConfig={props.updateConfig}
             saveProviderSecret={props.saveProviderSecret}
+            deleteProviderSecret={props.deleteProviderSecret}
             draft={props.providerDrafts[provider.id] ?? providerDraftFromConfig(props.config, provider.id)}
             onDraft={(patch) => props.updateProviderDraft(provider.id, patch)}
             installProviderDependency={props.installProviderDependency}
@@ -603,6 +608,7 @@ function ProviderCard(props: {
   config: ConfigViewModel;
   updateConfig: RenderProps["updateConfig"];
   saveProviderSecret: RenderProps["saveProviderSecret"];
+  deleteProviderSecret: RenderProps["deleteProviderSecret"];
   draft: ProviderDraft;
   onDraft: (patch: Partial<ProviderDraft>) => void;
   installProviderDependency: RenderProps["installProviderDependency"];
@@ -613,8 +619,9 @@ function ProviderCard(props: {
   const { provider } = props;
   const [secretValue, setSecretValue] = useState("");
   const [showSecret, setShowSecret] = useState(false);
-  const [secretStatus, setSecretStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [secretStatus, setSecretStatus] = useState<"idle" | "saving" | "saved" | "deleting" | "deleted" | "failed">("idle");
   const [dependencyInstalling, setDependencyInstalling] = useState(false);
+  const [dependencyError, setDependencyError] = useState("");
   const modelValue = providerControlValue(props.activeModel, props.draft.model, props.models);
   const selectedModel = props.models.find((model) => model.id === modelValue);
   const installableModel = provider.requiresModel && provider.kind !== "api"
@@ -702,10 +709,27 @@ function ProviderCard(props: {
       setSecretStatus("failed");
     }
   };
+  const deleteSecret = async () => {
+    if (!secretConfigured) {
+      return;
+    }
+    setSecretStatus("deleting");
+    try {
+      await props.deleteProviderSecret(provider.id, secretAlias);
+      setSecretValue("");
+      setShowSecret(false);
+      setSecretStatus("deleted");
+    } catch {
+      setSecretStatus("failed");
+    }
+  };
   const installDependency = async () => {
     setDependencyInstalling(true);
+    setDependencyError("");
     try {
       await props.installProviderDependency(provider.id);
+    } catch {
+      setDependencyError("Dependency check failed");
     } finally {
       setDependencyInstalling(false);
     }
@@ -805,7 +829,13 @@ function ProviderCard(props: {
                 <button className="btn sm ghost" disabled={!secretValue.trim() || secretStatus === "saving"} onClick={() => void saveSecret()} type="button">
                   {secretStatus === "saving" ? t("Saving") : secretConfigured ? t("Replace key") : t("Save key")}
                 </button>
+                {secretConfigured && (
+                  <button className="btn sm ghost" disabled={secretStatus === "deleting"} onClick={() => void deleteSecret()} type="button">
+                    {secretStatus === "deleting" ? t("Deleting") : t("Delete key")}
+                  </button>
+                )}
                 {secretStatus === "saved" && <Chip tone="ok">{t("Saved")}</Chip>}
+                {secretStatus === "deleted" && <Chip tone="ok">{t("Deleted")}</Chip>}
                 {secretStatus === "failed" && <Chip tone="warn">{t("Save failed")}</Chip>}
               </div>
               <p className="caption no-margin">{t("API proxy secret note")}</p>
@@ -817,7 +847,7 @@ function ProviderCard(props: {
         {!props.active && <button className="btn sm" disabled={!canSetDefault} title={defaultBlockReason} onClick={selectAsDefault}>{t("Set as default")}</button>}
         {provider.state === "missing_dependency" && (
           <button className="btn sm" disabled={dependencyInstalling} onClick={() => void installDependency()} type="button">
-            {dependencyInstalling ? t("Installing dependency") : t("Install dependency first")}
+            {dependencyInstalling ? t("Installing dependency") : t(providerDependencyActionLabel(provider.id))}
           </button>
         )}
         {modelInstallNeeded && installableModel && (
@@ -831,9 +861,17 @@ function ProviderCard(props: {
         {props.check && props.check.status !== "idle" && (
           <Chip tone={props.check.status === "ok" ? "ok" : props.check.status === "failed" ? "warn" : "accent"}>{t(props.check.message)}</Chip>
         )}
+        {dependencyError && <Chip tone="warn">{t(dependencyError)}</Chip>}
       </div>
     </article>
   );
+}
+
+function providerDependencyActionLabel(providerId: string): string {
+  if (providerId === "local-faster-whisper" || providerId === "local-nllb-ct2") {
+    return "Recheck bundled runtime";
+  }
+  return "Install dependency first";
 }
 
 function providerControlValue(activeModel: string, draftModel: string, models: ModelStatus[]): string {
@@ -905,18 +943,42 @@ function providerDefaultBlockReason(provider: ProviderStatus, t: (key: string) =
 
 export function SettingsDiagnostics({ environment }: RenderProps) {
   const t = useT();
+  const health = environment?.health ?? "checking";
+  const logLines = (environment?.ffmpegInstallLogs ?? []).map((line) => redactSecretText(line)).slice(-12);
+  const warnings = environment?.warnings ?? [];
   return (
     <div className="settings-list">
-      <div className="between"><h2>{t("Diagnostics")}</h2><Chip tone="accent">{t("Sample info")}</Chip></div>
+      <div className="between"><h2>{t("Diagnostics")}</h2><Chip tone={health === "ok" ? "ok" : health === "degraded" ? "warn" : "accent"}>{healthLabel(health, t)}</Chip></div>
       <section className="panel paper-muted">
         <h3>{t("Local service status")}</h3>
-        <KV k={t("Status")} v={environment?.health === "ok" ? t("Ready") : t("Checking")} />
-        <KV k={t("Last checked")} v="mock health ok" />
+        <KV k={t("Status")} v={healthLabel(health, t)} />
+        <KV k={t("Platform")} v={`${environment?.os ?? processPlatformFallback()} / ${environment?.arch ?? "unknown"}`} />
+        <KV k={t("Daemon")} v={environment?.daemonReady ? t("Ready") : t("Checking")} />
+        <KV k="FFmpeg" v={environment?.ffmpegReady ? t("Ready") : t("Needs repair")} />
+        <KV k={t("Model storage directory")} v={environment?.modelDirectoryReady ? t("Ready") : t("Checking")} />
+        <KV k={t("Local transcription")} v={environment?.localTranscriptionReady ? t("Ready") : t("Missing model")} />
+        <KV k={t("Local translation")} v={environment?.localTranslationReady ? t("Ready") : t("Missing model")} />
         <KV k={t("Sensitive info")} v={t("Redacted")} />
       </section>
-      <pre>{`[12:43:01] local service ready\n[12:43:04] subtitle progress=62\ncredential=[REDACTED]\napi_key=[REDACTED]`}</pre>
+      <section className="panel dashed">
+        <h3>{t("Diagnostics summary")}</h3>
+        {(warnings.length ? warnings : [t("No warnings")]).map((warning) => <p key={warning} className="caption">{redactSecretText(warning)}</p>)}
+        {environment?.error?.diagnostic && <KV k="diagnostic" v={redactSecretText(environment.error.diagnostic)} mono />}
+      </section>
+      <pre>{logLines.length ? logLines.join("\n") : t("No detailed logs")}</pre>
     </div>
   );
+}
+
+function healthLabel(health: string, t: (key: string) => string): string {
+  if (health === "ok") return t("Ready");
+  if (health === "degraded") return t("Degraded");
+  if (health === "disconnected") return t("Disconnected");
+  return t("Checking");
+}
+
+function processPlatformFallback(): string {
+  return typeof navigator === "undefined" ? "unknown" : navigator.platform || "unknown";
 }
 
 export function SettingsBenchmark() {

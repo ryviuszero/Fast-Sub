@@ -240,13 +240,44 @@ export class MockFastSubClient implements FastSubClient {
     if (!rawSecret.trim()) {
       throw new Error("empty secret");
     }
-    this.config = { ...this.config, apiKeyAlias: alias, apiKeyStatus: "configured" };
+    this.config = {
+      ...this.config,
+      apiProviderConfigs: {
+        ...this.config.apiProviderConfigs,
+        [providerId]: {
+          ...(this.config.apiProviderConfigs?.[providerId] ?? {}),
+          apiKeyAlias: alias,
+          apiKeyStatus: "configured"
+        }
+      }
+    };
     this.providers = this.providers.map((provider) => provider.id === providerId ? {
       ...provider,
       state: "available",
       enabled: true,
       checkMode: provider.kind === "api" ? "static" : provider.checkMode,
       maskedCredential: `${alias} (已保存)`
+    } : provider);
+    return clone(this.config);
+  }
+
+  async deleteProviderSecret(providerId: string, _alias: string): Promise<ConfigViewModel> {
+    this.config = {
+      ...this.config,
+      apiProviderConfigs: {
+        ...this.config.apiProviderConfigs,
+        [providerId]: {
+          ...(this.config.apiProviderConfigs?.[providerId] ?? {}),
+          apiKeyAlias: "",
+          apiKeyStatus: "missing"
+        }
+      }
+    };
+    this.providers = this.providers.map((provider) => provider.id === providerId ? {
+      ...provider,
+      state: "missing_api_key",
+      enabled: false,
+      maskedCredential: "未配置"
     } : provider);
     return clone(this.config);
   }
