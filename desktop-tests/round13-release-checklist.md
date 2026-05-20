@@ -1,6 +1,6 @@
 # Round 13 Release Checklist
 
-Status date: 2026-05-19
+Status date: 2026-05-20
 
 ## Release Scope
 
@@ -10,7 +10,7 @@ Status date: 2026-05-19
 - Baseline commit: `dc10f2e docs: plan round 13 release readiness`
 - Release platforms in scope: Windows x64 installer, Windows x64 portable zip, macOS arm64 dmg
 - Windows artifacts built: `desktop/dist-release/FastSub-Desktop-0.13.0-windows-x64.exe`, `desktop/dist-release/FastSub-Desktop-0.13.0-windows-x64.zip`
-- macOS artifact status: TODO on macOS arm64 host
+- macOS artifact status: blocked on macOS arm64 host; package, smoke, signing/notarization, Gatekeeper and cleanup checks move to the macOS release machine follow-up and do not block merging the validated Windows RC branch.
 
 ## Automated Validation
 
@@ -68,7 +68,7 @@ Status date: 2026-05-19
 - FFmpeg, aria2, and whisper.cpp native binary are app private userData downloads, not bundled.
 - Current Windows package is intentionally unsigned; this is the selected Round 13 Windows distribution form. `Get-AuthenticodeSignature` reports `NotSigned` for both `dist-release/win-unpacked/Fast Sub.exe` and `dist-release/FastSub-Desktop-0.13.0-windows-x64.exe`. Windows executable resource editing remains enabled so icon and version metadata are embedded. Current version resource: ProductName/FileDescription/CompanyName `Fast Sub`, FileVersion `0.13.0`, ProductVersion `0.13.0.0`.
 - App icon source is `desktop/build/icon.png`; Windows package icon is `desktop/build/icon.ico`.
-- macOS arm64 dmg must be built and tested on macOS; signing/notarization/Gatekeeper status remains TODO.
+- macOS arm64 dmg must be built and tested on a macOS arm64 machine; signing/notarization/Gatekeeper status remains a follow-up release-machine checkpoint.
 - Third-party license reports are generated under `desktop-tests/licenses/`; current aggregate is 618 records, 0 `needs-review`, 0 `blocked`.
 
 ## Cleanup Notes
@@ -78,9 +78,9 @@ Status date: 2026-05-19
 - Model store lives outside the app package and should be removed separately only on explicit user action.
 - Do not delete user model store or job logs during normal uninstall unless a future uninstaller option explicitly asks the user.
 
-## Release Blockers Before External Distribution
+## Release Blockers Before macOS Distribution
 
-- macOS arm64 dmg build and smoke.
+- macOS arm64 dmg build and smoke on the macOS release machine.
 
 ## Known Distribution Risks
 

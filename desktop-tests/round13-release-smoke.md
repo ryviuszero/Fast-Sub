@@ -75,9 +75,9 @@ Notes:
 | R13-PKG-010 | `PASS` | app 私有 Python runtime | 在无系统 Python/uv 假设下启动本地 worker/translation bridge | daemon 能定位 app 私有 Python runtime，不要求用户安装 Python | 通过 | 2026-05-17：packaged `resources/python/win32-x64/Scripts/fast-sub.exe --version` 输出 `0.1.0`；worker `--help` 通过；`fast_sub/faster_whisper/ctranslate2/sentencepiece` import 通过。 |
 | R13-PKG-010A | `PASS` | Python Provider dependency action | 点击本地 Faster Whisper / NLLB 缺依赖动作 | 不下载 Python 依赖，修复 daemon 后重新检查 bundled runtime；失败时 UI 明确显示错误 | 通过 | 2026-05-17：Python 依赖随 app-private runtime 打包；按钮文案改为“重新检查内置运行时”，main process 对 `local-faster-whisper` / `local-nllb-ct2` 执行 daemon repair + static provider check。 |
 | R13-PKG-010B | `PASS` | local-faster-whisper packaged provider check | 用打包内 daemon + app 私有 Python runtime 做 static provider check | `python_dependencies` 和 worker check 通过；缺模型时只显示模型问题 | 通过 | 2026-05-17：设置 `FAST_SUB_PYTHON`、`FAST_SUB_STT_WORKER_COMMAND` 和临时模型目录后，打包内 `fast-sub-go.exe providers test local-faster-whisper --json` 返回 `status=available`，`python_dependencies=available`。 |
-| R13-PKG-011 | `TODO` | macOS arm64 dmg artifact | 在 macOS arm64 启动 dmg 产物 | app 启动、daemon ready、签名/公证状态有记录 | 未验证 |  |
-| R13-PKG-012 | `TODO` | macOS executable permissions | 在 macOS arm64 app bundle 内检查 daemon/Python/native binaries | 可执行权限正确，未被 quarantine 阻断，resources 定位正确 | 未验证 |  |
-| R13-PKG-013 | `TODO` | macOS process cleanup | macOS arm64 上运行任务后取消/退出/repair | 不遗留 daemon/Python/ffmpeg/whisper.cpp 子进程 | 未验证 |  |
+| R13-PKG-011 | `BLOCKED` | macOS arm64 dmg artifact | 在 macOS arm64 启动 dmg 产物 | app 启动、daemon ready、签名/公证状态有记录 | 等待 macOS 机器 | 2026-05-20：macOS 打包和 smoke 需要切换到 macOS arm64 release machine 执行；不阻塞当前 Windows RC 分支合并。 |
+| R13-PKG-012 | `BLOCKED` | macOS executable permissions | 在 macOS arm64 app bundle 内检查 daemon/Python/native binaries | 可执行权限正确，未被 quarantine 阻断，resources 定位正确 | 等待 macOS 机器 | 2026-05-20：随 macOS arm64 dmg follow-up 一起验证。 |
+| R13-PKG-013 | `BLOCKED` | macOS process cleanup | macOS arm64 上运行任务后取消/退出/repair | 不遗留 daemon/Python/ffmpeg/whisper.cpp 子进程 | 等待 macOS 机器 | 2026-05-20：随 macOS arm64 dmg follow-up 一起验证；Windows 退出清理已通过。 |
 | R13-PKG-014 | `PASS` | Windows installer artifact | 安装 Windows x64 installer 后启动应用 | 安装、启动、daemon ready、卸载/清理说明可用 | 通过 | 2026-05-19：最终 RC installer 静默安装到 `desktop/test-results/round13-installer-latest/Fast Sub`，运行已安装 app 的 `FAST_SUB_SMOKE_DAEMON_REPAIR=1` smoke 通过；随后从安装目录外执行静默卸载通过。首次复测若从安装目录内启动 uninstaller，会留下空安装目录；改用安装目录外 working directory 后无 app 文件残留，空目录已清理。 |
 | R13-PKG-015 | `PASS` | Windows portable artifact | 解压 Windows x64 portable zip 后启动应用 | 不需安装即可启动，daemon ready，userData 不写入包目录敏感文件 | 通过 | 2026-05-19：最终 RC zip 解压到 `desktop/test-results/round13-portable-latest` 后，用 `FAST_SUB_PACKAGED_ROOT=<portable-root>` 执行 `npm run smoke:packaged` 通过。 |
 
@@ -126,7 +126,7 @@ Notes:
 
 | ID | 状态 | 场景 | 步骤 | 期望 | 当前结果 | 证据/下一步 |
 | --- | --- | --- | --- | --- | --- | --- |
-| R13-REL-001 | `PASS` | 发布检查清单 | 输出 Windows/macOS、验证、隐私、清理、blocker 清单 | 能作为 release candidate 审核入口 | 通过 | 2026-05-19：`desktop-tests/round13-release-checklist.md` 已按最终 Windows RC artifact、自动验证、手动 smoke、隐私/secret、unsigned Windows 决策和剩余 macOS arm64 TODO 更新；当前 Windows x64 unsigned RC 可作为本轮审核入口。 |
+| R13-REL-001 | `PASS` | 发布检查清单 | 输出 Windows/macOS、验证、隐私、清理、blocker 清单 | 能作为 release candidate 审核入口 | 通过 | 2026-05-20：`desktop-tests/round13-release-checklist.md` 已按最终 Windows RC artifact、自动验证、手动 smoke、隐私/secret、unsigned Windows 决策更新；macOS arm64 打包/smoke 备注为 release-machine follow-up，不阻塞当前 Windows RC 分支合并。 |
 
 ## 新记录模板
 
