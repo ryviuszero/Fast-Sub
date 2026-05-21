@@ -42,7 +42,7 @@ export const debugScreens: { id: Screen; label: string }[] = [
 export const seedFiles: MediaFile[] = [
   { path: "C:\\Users\\Example\\Videos\\sample-meeting.mp4", name: "sample-meeting.mp4", size: "1.2 GB", duration: "45:12" },
   { path: "D:\\资料\\视频\\sample-lecture.mov", name: "sample-lecture.mov", size: "680 MB", duration: "32:05" },
-  { path: "\\\\NAS\\data\\others\\资料\\sample-podcast.wav", name: "sample-podcast.wav", size: "120 MB", duration: "28:40" }
+  { path: "\\\\NAS\\share\\media\\podcast-episode.wav", name: "podcast-episode.wav", size: "120 MB", duration: "28:40" }
 ];
 
 const SUPPORTED_MEDIA_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".wav", ".m4a", ".mp3"]);

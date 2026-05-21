@@ -495,11 +495,11 @@ describe("Fast Sub renderer flow", () => {
   });
 
   it("uses the preload allowlist for media and folder selection", async () => {
-    const selectMediaFiles = vi.fn(async () => ["D:\\资料\\视频\\片段.mp4"]);
-    const selectFolder = vi.fn(async () => "\\\\NAS\\data\\others\\资料");
+    const selectMediaFiles = vi.fn(async () => ["D:\\SampleMedia\\clip.mp4"]);
+    const selectFolder = vi.fn(async () => "\\\\NAS\\share\\media");
     window.fastSubSystem = {
       selectMediaFiles,
-      selectMediaFolder: async () => ["\\\\NAS\\data\\others\\资料\\片段.mp4"],
+      selectMediaFolder: async () => ["\\\\NAS\\share\\media\\clip.mp4"],
       selectFolder,
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
@@ -514,11 +514,11 @@ describe("Fast Sub renderer flow", () => {
     render(<App />);
     await enterMainScreen();
     fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
-    expect(await screen.findByText("片段.mp4")).toBeInTheDocument();
+    expect(await screen.findByText("clip.mp4")).toBeInTheDocument();
     expect(selectMediaFiles).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
     fireEvent.click(await screen.findByRole("button", { name: "添加文件夹" }));
-    expect(await screen.findByText("片段.mp4")).toBeInTheDocument();
+    expect(await screen.findByText("clip.mp4")).toBeInTheDocument();
   });
 
   it("uses the selected media directory when output is set to source", async () => {

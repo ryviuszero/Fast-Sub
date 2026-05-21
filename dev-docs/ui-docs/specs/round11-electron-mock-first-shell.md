@@ -228,7 +228,7 @@ Mock client 必须可控、可复现，不使用随机失败作为默认行为�
 | `remoteProviderConfirmRequired` | 远程 provider 确认 | 确认前不创建任务，显示上传内容和 provider 信息 |
 | `daemonDisconnected` | daemon 中断 | 显示一键修复和重新同步，但只使用 mock 行为 |
 
-Mock fixture 必须包含 Windows 本地路径、中文路径、空格路径和 UNC 路径示例，例如 `C:\Users\Example\Videos\a b.mp4`、`D:\SampleMedia\片段.mp4`、`\\NAS\data\others\资料\clip.mp4`。
+Mock fixture 必须包含 Windows 本地路径、中文路径、空格路径和 UNC 路径示例，例如 `C:\Users\Example\Videos\a b.mp4`、`D:\SampleMedia\片段.mp4`、`\\NAS\share\media\clip.mp4`。
 
 ## UI Screens
 

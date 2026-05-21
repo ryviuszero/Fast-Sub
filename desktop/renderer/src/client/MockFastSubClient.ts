@@ -142,8 +142,8 @@ export class MockFastSubClient implements FastSubClient {
       status: "queued",
       statusLabel: "等待中",
       title: "sample-podcast.wav",
-      currentFile: "\\\\NAS\\data\\others\\资料\\sample-podcast.wav",
-      inputPaths: ["\\\\NAS\\data\\others\\资料\\sample-podcast.wav"]
+      currentFile: "\\\\NAS\\share\\media\\podcast-episode.wav",
+      inputPaths: ["\\\\NAS\\share\\media\\podcast-episode.wav"]
     });
     this.jobs.set(queuedB.id, queuedB);
     const done = createSeedJob({

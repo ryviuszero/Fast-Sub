@@ -3,7 +3,7 @@ import type { ConfigViewModel, EnvironmentStatus, JobDetail, JobLogEntry, ModelS
 export const mockPaths = {
   spaced: "C:\\Users\\Example\\Videos\\a b.mp4",
   chinese: "D:\\资料\\视频\\片段.mp4",
-  unc: "\\\\NAS\\data\\others\\资料\\clip.mp4",
+  unc: "\\\\NAS\\share\\media\\clip.mp4",
   output: "C:\\Users\\Example\\Videos"
 };
 

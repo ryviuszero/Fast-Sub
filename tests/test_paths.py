@@ -23,10 +23,10 @@ def test_default_output_path_for_audio_input() -> None:
 
 
 def test_default_output_path_for_windows_unc_path() -> None:
-    path = Path(r"\\NAS\data\others\资料\others\sample-user\1\video.mp4")
+    path = Path(r"\\NAS\share\media\sample-video.mp4")
 
-    assert default_output_path(path, Mode.ORIGINAL, "auto", "zh") == (
-        path.parent / "video.auto.srt"
+    assert default_output_path(path, Mode.ORIGINAL, "auto", "zh") == Path(
+        r"\\NAS\share\media\sample-video.auto.srt"
     )
 
 

@@ -88,7 +88,7 @@ def test_run_directory_rejects_file_output_path() -> None:
 
 
 def test_directory_progress_path_supports_windows_unc_path() -> None:
-    input_dir = Path(r"\\NAS\data\others\资料\others\sample-user\1")
+    input_dir = Path(r"\\NAS\share\media")
 
     assert legacy_pipeline._directory_progress_path(input_dir, None) == (
         input_dir / ".fast-sub-progress.json"
