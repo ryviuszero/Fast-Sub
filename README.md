@@ -55,11 +55,11 @@ npm run build
 
 ## Screenshots
 
-![Fast Sub setup check](desktop-tests/pics/round13/01-setup-check.png)
+![Fast Sub public setup check screenshot](desktop-tests/pics/round13/01-setup-check.png)
 
-![Fast Sub main screen with file selected](desktop-tests/pics/round13/03-main-file-selected.png)
+![Fast Sub public media selected screenshot](desktop-tests/pics/round13/03-main-file-selected.png)
 
-![Fast Sub diagnostics](desktop-tests/pics/round13/09-diagnostics.png)
+![Fast Sub public diagnostics screenshot](desktop-tests/pics/round13/09-diagnostics.png)
 
 ## Repository Layout
 
@@ -115,6 +115,7 @@ npm run smoke:packaged
 
 ## Documentation
 
+- [Live user help](https://ryviuszero.github.io/Fast-Sub/): GitHub Pages help site for normal product usage.
 - [help-docs/help/README.md](help-docs/help/README.md): user help and task guides.
 - [help-docs/help/download.md](help-docs/help/download.md): download and platform status.
 - [help-docs/help/release-notes.md](help-docs/help/release-notes.md): user-facing release status and known limitations.

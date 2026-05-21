@@ -48,12 +48,12 @@ node desktop-tests\capture-round12-pages.mjs
 | --- | --- |
 | `pics/01-setup-check.png` | 首次/环境检查页基线。 |
 | `pics/02-main-empty.png` | 主界面空状态基线。 |
-| `pics/03-main-files-real-path.png` | 添加文件后真实路径基线。 |
-| `pics/04-main-generating-real-job.png` | 真实 daemon job 生成中基线。 |
-| `pics/05-main-done-real-result.png` | 完成结果页真实输出基线。 |
+| `pics/03-main-files-real-path.png` | 添加文件后脱敏路径展示基线。 |
+| `pics/04-main-generating-real-job.png` | daemon job 生成中脱敏展示基线。 |
+| `pics/05-main-done-real-result.png` | 完成结果页脱敏输出基线。 |
 | `pics/06-queue-failed-no-hardcoded-fallback.png` | 失败任务不回退 mock 数据基线。 |
 
-说明：这些截图是 Round 12 早期基线，后续 UI 已有多轮调整。它们仍可作为“不能回退到 mock/占位数据”的对照，不代表最新视觉状态。
+说明：这些截图是 Round 12 早期基线的公开安全替换版，使用 sample media 和脱敏诊断内容。它们仍可作为“不能回退到 mock/占位数据”的对照，不代表最新视觉状态，也不保留真实本机路径或真实媒体文件名。
 
 ## 本次检查摘要
 
@@ -70,7 +70,7 @@ node desktop-tests\capture-round12-pages.mjs
 | ID | 状态 | 优先级 | 页面/入口 | 问题/期望 | 当前结论 | 证据/截图 | 下一步 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | DQA-001 | `PASS` | P1 | 主界面 / 完成页 / 失败页 | 不应显示 `a b.srt`、`sample-lecture`、`sample-podcast`、`C:\Users\Example` 等 mock/占位数据。 | 已移除 `seedFiles` 和硬编码 mock fallback；生产 daemon 失败不会静默切 mock。 | `pics/03-main-files-real-path.png`、`pics/05-main-done-real-result.png`、tracker “seedFiles fallback removed”。 | 常规回归。 |
-| DQA-002 | `PASS` | P1 | 主界面添加文件 / 文件夹 / 拖拽 | 添加文件后必须创建真实视频/音频任务，不显示占位任务。 | 主流程已接真实 daemon job；拖拽使用真实路径。 | `pics/04-main-generating-real-job.png`、tracker “webUtils.getPathForFile”、“real job”。 | 常规回归。 |
+| DQA-002 | `PASS` | P1 | 主界面添加文件 / 文件夹 / 拖拽 | 添加文件后必须创建真实视频/音频任务，不显示占位任务。 | 主流程已接 daemon job；公开截图只保留脱敏 sample media。 | `pics/04-main-generating-real-job.png`、tracker “webUtils.getPathForFile”、“real job”。 | 常规回归。 |
 | DQA-003 | `PASS` | P1 | 文件夹添加 | 文件夹添加多个媒体时，应创建多个任务，而不是只创建一个。 | 已修复批量 job 创建与队列显示。 | tracker “batch run / queue status”、“folder add real media tasks”。 | 常规回归。 |
 | DQA-004 | `PASS` | P1 | 批量生成中 | 单个任务完成时不能提前跳转完成页；应全部结束后再进入结果汇总。 | 已改为批量状态聚合，单项完成不会提前结束批次。 | tracker “batch queue not sync / completion aggregation”。 | 常规回归。 |
 | DQA-005 | `PASS` | P1 | 生成中 | 等待列表应显示真实剩余任务，不能使用占位的 `接下来` 数据。 | 已改为基于当前 batch/jobs 渲染。 | tracker “generating pending list only current batch”。 | 常规回归。 |

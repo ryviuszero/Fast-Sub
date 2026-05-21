@@ -1,7 +1,7 @@
 title: Fast Sub Help
 description: Local-first subtitle generation and translation help.
-baseurl: ""
-url: ""
+baseurl: "/Fast-Sub"
+url: "https://ryviuszero.github.io"
 markdown: kramdown
 theme: null
 defaults:
