@@ -28,6 +28,7 @@ The original Python CLI remains available, the Go product core and daemon/job AP
 - macOS signing/notarization and Gatekeeper behavior still need explicit records.
 - Windows code signing remains deferred until a real certificate and publisher identity exist.
 - Real OpenAI/Bing/Google external provider smoke is deferred by decision; local loopback OpenAI-compatible smoke has passed.
+- Public GitHub readiness fixes now include MIT source licensing, baseline CI, Security reporting guidance, and explicit NLLB license-sensitive user docs.
 
 ## Documentation Map
 
@@ -47,7 +48,7 @@ The original Python CLI remains available, the Go product core and daemon/job AP
 
 1. Complete macOS arm64 packaging and smoke on a macOS release machine.
 2. Decide Windows and macOS signing/notarization path before external distribution.
-3. Select the project license before public GitHub release.
+3. Enable GitHub private vulnerability reporting before broad public distribution.
 4. Continue slimming the installer, with highest attention on the app-private Python runtime.
 5. Continue expanding user-facing help under `../help-docs/help/` based on real tester feedback.
 6. Maintain generated API/reference docs under `api/` without replacing the hand-written daemon contract.

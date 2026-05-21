@@ -43,6 +43,8 @@ Do not mark local ASR as ready until the model is installed and verified.
 
 The default local translation provider uses the default NLLB manifest.
 
+The current default NLLB model is license-sensitive. It is not bundled with Fast Sub, and its manifest marks it as `CC-BY-NC-4.0`. That license includes non-commercial restrictions. Review the model license before using it for commercial, client, or organizational work.
+
 If the default NLLB model is missing:
 
 - Local translation is not ready.

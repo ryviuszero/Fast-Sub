@@ -2,8 +2,9 @@
 name = "fast-sub"
 version = "0.1.0"
 description = "Local-first CLI for generating video subtitles"
-readme = "mvp.md"
+readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
 dependencies = [
     "httpx>=0.28.0",
     "platformdirs>=4.3.0",

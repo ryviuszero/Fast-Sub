@@ -14,7 +14,7 @@ pytest-local-tmp/
 __pycache__/
 *.py[cod]
 local_tests/*
-scripts/*
+scripts/bench_assets.py
 scripts/bench_translate_assets.py
 tests/test_bench_assets.py
 *.wav
@@ -24,6 +24,7 @@ tests/test_bench_assets.py
 .gocache/
 .gocache-release/
 .gomodcache/
+dist/
 fast-sub-go.toml
 dev-docs/ui-docs/prototype/node_modules/
 dev-docs/ui-docs/prototype/dist/

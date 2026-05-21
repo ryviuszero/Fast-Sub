@@ -29,6 +29,7 @@ Validated areas:
 - macOS arm64 dmg packaging still needs to run on a macOS arm64 release machine.
 - macOS signing and notarization are not complete.
 - Models are downloaded after installation and are not bundled with the app.
+- The default local NLLB translation model is marked `CC-BY-NC-4.0`; users should review its non-commercial restriction before commercial or organizational use.
 - Real OpenAI/Bing/Google provider smoke is not part of the default automated test suite.
 
 ## Privacy Notes

@@ -18,6 +18,7 @@ Fast Sub is at the Windows desktop release-candidate stage.
 - macOS arm64 dmg packaging still needs to run on a macOS arm64 release machine.
 - Windows builds are currently unsigned internal builds.
 - Models are not bundled with the installer; first-start model installation is managed by the app/model store.
+- The default local translation model is not bundled and is license-sensitive; the current default NLLB manifest is marked `CC-BY-NC-4.0`.
 
 See [dev-docs/current-status.md](dev-docs/current-status.md) for the current project snapshot.
 
@@ -128,6 +129,7 @@ npm run smoke:packaged
 - [ROADMAP.md](ROADMAP.md): public roadmap.
 - [CONTRIBUTING.md](CONTRIBUTING.md): contribution rules.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): community expectations.
+- [LICENSE](LICENSE): Fast Sub source license.
 
 ## Privacy
 
@@ -137,6 +139,6 @@ See [help-docs/privacy.md](help-docs/privacy.md).
 
 ## License
 
-The project license still needs to be selected before a public open-source release.
+Fast Sub source code is licensed under the [MIT License](LICENSE).
 
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party notice and distribution policy details.
+Third-party dependencies, native runtime downloads, and model artifacts keep their own licenses and distribution policies. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details, especially before redistributing packaged binaries or using the default NLLB translation model commercially.

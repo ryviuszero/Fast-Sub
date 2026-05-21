@@ -14,7 +14,7 @@ This file is the Round 13 release-readiness inventory for components that are bu
 
 | Component | Source / version source | License summary | Round 13 policy | Notes |
 | --- | --- | --- | --- | --- |
-| Fast Sub Electron app code | `desktop/` | First-party project code | `bundle-ok` | Production app code stays under `desktop/`. |
+| Fast Sub Electron app code | `desktop/` | First-party project code | `bundle-ok` | Production app code stays under `desktop/`; packaged apps ship `LICENSE` and `THIRD_PARTY_NOTICES.md` as extra resources. |
 | Fast Sub Go daemon | `cmd/fast-sub-go`, `internal/` | First-party project code plus Go runtime/stdlib notices | `bundle-ok` | Must be built per platform and copied outside ASAR. |
 | Go toolchain runtime/stdlib | Go build output | BSD-style Go license | `bundle-ok` | Ship Go license notice with daemon binary artifacts. |
 | Electron runtime | `desktop/package-lock.json` | MIT plus bundled Chromium/Node notices | `bundle-ok` | Must include Electron/Chromium/Node notices in final package. |
@@ -38,6 +38,8 @@ Round 13 generated inventories live under `desktop-tests/licenses/`:
 | `go-licenses.md` | `go.mod` | No external Go modules; Go standard library only. |
 | `license-summary.json` | Aggregated generated reports | 618 total records; 51 `bundle-ok`; 567 `manual-user-install`; 0 `needs-review`; 0 `blocked`. |
 
+The generated summary counts bundled npm, Python, and Go dependency records only. Runtime downloads, native binary download policies, and model artifact policies are tracked in the sections below and are not included in the generated `download_only` count.
+
 Round 13 package content scan of `desktop/dist-release/win-unpacked/resources` found only `bin`, `python`, `app.asar`, `elevate.exe`, and this notice file at the top level. No model store, userData, `local_tests`, `test-results`, `.env`, or daemon ready token file was found in the package. A filename match on `win32comext/authorization/authorization.pyd` is a packaged pywin32 system library, not an API key, token, or credential file.
 
 ## Native Binaries And Runtime Downloads
@@ -58,6 +60,8 @@ Models are not bundled in Round 13 release artifacts. The app installs models in
 | `whisper-base` / `whisper-small` / `whisper-large-v3-turbo` CTranslate2 models | Hugging Face entries in `internal/models/manifest.go` | MIT per manifest | `download-only` | Default ASR smoke should use a small ASR model; model files must not enter installer or portable zip. |
 | `whispercpp-*` GGML models | Hugging Face entries in `internal/models/manifest.go` | MIT per manifest | `download-only` | Only downloaded when native provider/model is selected. |
 | `nllb-200-distilled-600m-ct2-int8` | Hugging Face entry in `internal/models/manifest.go` | CC-BY-NC-4.0 per manifest | `download-only` / `needs-review` | Non-commercial restriction must be surfaced before release use; never bundle in installer. |
+
+Commercial or organizational use of the default NLLB model requires separate license review. Fast Sub's MIT project license does not relicense third-party model weights.
 
 ## Blocked Components
 

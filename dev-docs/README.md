@@ -54,6 +54,7 @@ Do not put user-facing task guides here. User help for GitHub Pages lives under 
 - `release/windows.md`: Windows release notes.
 - `release/macos.md`: macOS release follow-up notes.
 - `release/validation.md`: release validation evidence index.
+- `release/public-github-readiness.md`: public repository readiness checklist.
 - `../desktop-tests/README.md`: desktop QA matrix.
 - `../desktop-tests/round13-release-checklist.md`: release checklist.
 - `../desktop-tests/round13-release-smoke.md`: release smoke record.

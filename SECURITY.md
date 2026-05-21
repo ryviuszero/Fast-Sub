@@ -8,7 +8,9 @@ Fast Sub is currently at the Windows desktop release-candidate stage. Security-s
 
 Do not open public issues containing secrets, API keys, private media paths, or private transcripts.
 
-For now, report security concerns through the project owner or private development channel. Once the project has a public maintainer contact, add it here.
+Use GitHub private vulnerability reporting for this repository when it is enabled. If private vulnerability reporting is not available yet, contact the project owner through a private channel before sharing details. Public issues may be used only for non-sensitive tracking after secrets, paths, logs, media names, and transcripts have been removed.
+
+Before broad public distribution, repository maintainers should enable GitHub private vulnerability reporting in repository settings.
 
 ## Security Expectations
 

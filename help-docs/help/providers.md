@@ -33,6 +33,8 @@ Recommended local setup:
 3. Generate a small test subtitle.
 4. Only then process long files.
 
+The current default local NLLB translation model is marked `CC-BY-NC-4.0` in the model manifest. It is downloaded only after user action and is not bundled with the app. Review that model license before commercial or organizational use.
+
 ## API Providers
 
 API providers connect to OpenAI-compatible endpoints.

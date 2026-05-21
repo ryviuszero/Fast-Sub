@@ -3,6 +3,7 @@
   "version": "0.13.0",
   "description": "Fast Sub local-first desktop subtitle workbench",
   "author": "Fast Sub",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "main": "dist/main/index.js",
@@ -73,6 +74,10 @@
       {
         "from": "../THIRD_PARTY_NOTICES.md",
         "to": "THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE"
       }
     ],
     "win": {

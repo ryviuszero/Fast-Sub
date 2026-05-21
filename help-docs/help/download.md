@@ -22,6 +22,7 @@ Fast Sub is currently at the Windows desktop release-candidate stage.
 
 - Models are not bundled with the app.
 - First run may download the default ASR and translation models.
+- The default local NLLB translation model is license-sensitive and currently marked `CC-BY-NC-4.0`; review the model license before commercial use.
 - Local providers keep media and subtitle text on your machine.
 - Remote API or web providers upload media or subtitle text only when you explicitly select and confirm them.
 - Windows builds are currently unsigned, so SmartScreen or antivirus reputation warnings may appear.

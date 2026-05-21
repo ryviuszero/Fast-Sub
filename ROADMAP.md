@@ -14,8 +14,9 @@ Fast Sub is in active productization. This roadmap is intentionally short and us
 
 - Complete macOS arm64 dmg packaging on a macOS arm64 release machine.
 - Record macOS smoke results, Gatekeeper behavior, and signing/notarization decisions.
-- Decide the project license before public GitHub release.
+- Enable GitHub private vulnerability reporting before broad public distribution.
 - Decide Windows/macOS signing path for external distribution.
+- Review commercial-use language for the default NLLB translation model.
 - Improve first-run model setup and failure recovery copy.
 
 ## Later
