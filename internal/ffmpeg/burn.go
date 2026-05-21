@@ -3,7 +3,6 @@ package ffmpeg
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -72,7 +71,7 @@ func (r Runner) BurnIn(ctx context.Context, input, subtitlePath, output string, 
 }
 
 func subtitleFilter(path string) string {
-	return "subtitles=filename='" + escapeFilterValue(filepath.ToSlash(path)) + "'"
+	return "subtitles=filename='" + escapeFilterValue(strings.ReplaceAll(path, "\\", "/")) + "'"
 }
 
 func burnInArgs(input, subtitlePath, output, preset string) []string {
