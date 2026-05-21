@@ -15,10 +15,12 @@ import (
 type fakeBackend struct {
 	payloads map[string][]byte
 	calls    int
+	urls     []string
 }
 
 func (b *fakeBackend) Download(_ context.Context, request DownloadRequest) (DownloadResult, error) {
 	b.calls++
+	b.urls = append(b.urls, request.URL)
 	payload, ok := b.payloads[request.URL]
 	if !ok {
 		return DownloadResult{}, fmt.Errorf("missing fake payload for %s", request.URL)
@@ -231,8 +233,28 @@ func TestLockContentionAndStaleLock(t *testing.T) {
 	if err := os.Chtimes(lockPath, old, old); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.acquireLock(entry, time.Hour); err == nil || !strings.Contains(err.Error(), "stale") {
-		t.Fatalf("expected stale lock, got %v", err)
+	recovered, err := store.acquireLock(entry, time.Hour)
+	if err != nil {
+		t.Fatalf("stale lock should be recovered, got %v", err)
+	}
+	recovered()
+}
+
+func TestCandidateURLsAppendModelScopeMirror(t *testing.T) {
+	entry := ManifestEntry{
+		ID:   "whisper-small",
+		URLs: []string{"https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/"},
+	}
+	file := ManifestFile{Path: "model.bin"}
+	got := candidateURLs(entry, file)
+	if len(got) != 2 {
+		t.Fatalf("candidate url count = %d, want 2: %#v", len(got), got)
+	}
+	if got[0] != "https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/model.bin" {
+		t.Fatalf("huggingface url = %q", got[0])
+	}
+	if got[1] != "https://modelscope.cn/models/Systran/faster-whisper-small/resolve/master/model.bin" {
+		t.Fatalf("modelscope mirror url = %q", got[1])
 	}
 }
 

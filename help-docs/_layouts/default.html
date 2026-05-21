@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if page.title %}{{ page.title }} | {% endif %}{{ site.title }}</title>
+    <meta name="description" content="{{ page.description | default: site.description }}">
+    <link rel="stylesheet" href="{{ '/assets/styles.css' | relative_url }}">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="{{ '/' | relative_url }}">Fast Sub Help</a>
+      <nav class="top-nav" aria-label="Main navigation">
+        <a href="{{ '/help/' | relative_url }}">Help</a>
+        <a href="{{ '/help/getting-started.html' | relative_url }}">Getting Started</a>
+        <a href="{{ '/help/troubleshooting.html' | relative_url }}">Troubleshooting</a>
+        <a href="{{ '/privacy.html' | relative_url }}">Privacy</a>
+      </nav>
+    </header>
+    <div class="page">
+      <aside class="sidebar" aria-label="Help navigation">
+        <p class="sidebar-title">User Help</p>
+        <a href="{{ '/help/' | relative_url }}">Overview</a>
+        <a href="{{ '/help/getting-started.html' | relative_url }}">Getting started</a>
+        <a href="{{ '/help/install-windows.html' | relative_url }}">Install on Windows</a>
+        <a href="{{ '/help/install-macos.html' | relative_url }}">Install on macOS</a>
+        <a href="{{ '/help/first-run-models.html' | relative_url }}">First run and models</a>
+        <a href="{{ '/help/generate-subtitles.html' | relative_url }}">Generate subtitles</a>
+        <a href="{{ '/help/translate-subtitles.html' | relative_url }}">Translate subtitles</a>
+        <a href="{{ '/help/bilingual-subtitles.html' | relative_url }}">Bilingual subtitles</a>
+        <a href="{{ '/help/burn-in-subtitles.html' | relative_url }}">Burn-in subtitles</a>
+        <a href="{{ '/help/providers.html' | relative_url }}">Providers</a>
+        <a href="{{ '/help/privacy.html' | relative_url }}">Privacy</a>
+        <a href="{{ '/help/troubleshooting.html' | relative_url }}">Troubleshooting</a>
+      </aside>
+      <main class="content">
+        {{ content }}
+      </main>
+    </div>
+    <footer class="site-footer">
+      <span>Fast Sub is local-first by default. Remote providers require explicit selection and confirmation.</span>
+    </footer>
+  </body>
+</html>

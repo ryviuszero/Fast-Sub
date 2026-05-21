@@ -34,12 +34,12 @@ function numberField(record: Record<string, unknown>, key: string, fallback = 0)
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function uiError(title: string, message: string, code: string, details?: Record<string, string | number | boolean>): UiError {
+function uiError(title: string, message: string, code: string, details?: Record<string, string | number | boolean>, action = "查看诊断并重试"): UiError {
   return {
     code,
     title,
     message: redactSecretText(message),
-    action: "查看诊断并重试",
+    action: redactSecretText(action),
     recoveryActions: ["retry", "open_diagnostics"],
     diagnostic: redactSecretText(`${code}: ${message}`),
     details
@@ -72,7 +72,7 @@ function errorFromRecord(record: Record<string, unknown>): UiError {
       details.output_path = outputPath;
     }
   }
-  return uiError(title, message, code, details);
+  return uiError(title, message, code, details, stringField(source, "action_hint", "查看诊断并重试"));
 }
 
 function outputFolderFor(path: string, fallback = ""): string {
@@ -135,8 +135,24 @@ function progressPercentForStatus(status: JobDetail["status"], percent: number):
   return Math.max(0, Math.min(100, percent));
 }
 
+function stageLabelFor(stage: string, fallback: string): string {
+  switch (stage) {
+    case "installing_model":
+      return "正在下载模型";
+    case "validating":
+      return "正在检查";
+    case "finalizing":
+      return "正在收尾";
+    case "done":
+      return "已完成";
+    default:
+      return fallback;
+  }
+}
+
 export function mapDaemonEventToJobEvent(fixture: DaemonEventFixture): JobEvent | null {
   const record = asRecord(fixture.data);
+  const stage = stringField(record, "stage", "");
   switch (fixture.event) {
     case "created":
     case "queued":
@@ -148,15 +164,16 @@ export function mapDaemonEventToJobEvent(fixture: DaemonEventFixture): JobEvent 
         progress: {
           status: "running",
           progressPercent: numberField(record, "percent", fixture.event === "started" ? 3 : 0),
-          stageLabel: stringField(record, "stage_label", "正在生成字幕"),
-          currentFile: stringField(record, "current_file", "已选择的媒体"),
+          stageLabel: stringField(record, "stage_label", stageLabelFor(stage, "正在生成字幕")),
+          currentFile: stringField(record, "current_file", stage === "installing_model" ? "模型下载" : "已选择的媒体"),
           estimatedRemaining: stringField(record, "eta", "")
         }
       };
     case "log": {
+      const level = stringField(record, "level", "info");
       const entry: JobLogEntry = {
         time: stringField(record, "time", "now"),
-        level: "info",
+        level: level === "warning" || level === "error" ? level : "info",
         message: stringField(record, "message", "日志已更新")
       };
       return { type: "log_tail", logs: [entry] };

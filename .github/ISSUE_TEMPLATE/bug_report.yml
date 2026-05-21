@@ -1,0 +1,93 @@
+name: Bug report
+description: Report a reproducible Fast Sub problem.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please remove secrets, API keys, ready tokens, signed URLs, and private media paths before submitting logs.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+      placeholder: Fast Sub failed when...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the smallest workflow that reproduces the issue.
+      placeholder: |
+        1. Open Fast Sub
+        2. Select ...
+        3. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect Fast Sub to do?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What did Fast Sub do instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows x64 installer
+        - Windows x64 portable zip
+        - macOS arm64 dmg
+        - Python CLI
+        - Go CLI / daemon
+        - Development checkout
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: 0.13.0, release artifact name, or git commit
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - local-faster-whisper
+        - local-whisper-cpp
+        - local-nllb-ct2
+        - api-openai-transcription
+        - api-openai-chat
+        - web-bing
+        - web-google
+        - Not provider-specific
+  - type: input
+    id: model
+    attributes:
+      label: Model id
+      placeholder: whisper-small, whispercpp-base, nllb-200-distilled-600m-ct2-int8
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics or logs
+      description: Paste only redacted logs. Do not include raw secrets, ready tokens, signed URLs, or private file paths.
+      render: text
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checklist
+      options:
+        - label: I removed API keys, ready tokens, signed URLs, and Authorization headers.
+          required: true
+        - label: I replaced private local file paths with placeholders where possible.
+          required: true

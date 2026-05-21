@@ -218,6 +218,10 @@ function ModelCard({ model, installJob, isDefault, onInstall, onRemove, onDefaul
   const missing = !installing && !failed && !ready;
   const progress = Math.max(0, Math.min(100, installJob?.progressPercent ?? model.progressPercent ?? 0));
   const stageLabel = modelInstallStageLabel(installJob, t);
+  const failureMessage = installJob?.error?.message || model.diagnostic;
+  const failureAction = installJob?.error?.action;
+  const failureDiagnostic = installJob?.error?.diagnostic && installJob.error.diagnostic !== failureMessage ? installJob.error.diagnostic : "";
+  const recentLogs = installJob?.logs?.slice(-3) ?? [];
   return (
     <article className={`model-card model-card-rich ${ready ? "ok-card" : "dashed"}`}>
       <div className="model-main">
@@ -238,7 +242,16 @@ function ModelCard({ model, installJob, isDefault, onInstall, onRemove, onDefaul
             <div className="bar sm"><span style={{ width: `${progress}%` }} /></div>
           </div>
         )}
-        {failed && installJob?.error && <p className="caption warn-text no-margin">{installJob.error.message}</p>}
+        {failed && failureMessage && <p className="caption warn-text no-margin">{failureMessage}</p>}
+        {failed && failureAction && <p className="caption no-margin">{failureAction}</p>}
+        {failed && failureDiagnostic && <p className="caption mono no-margin">{failureDiagnostic}</p>}
+        {recentLogs.length > 0 && (
+          <div className="model-install-log" aria-label="模型安装日志">
+            {recentLogs.map((log, index) => (
+              <p key={`${log.time}-${index}`} className={`caption no-margin ${log.level === "error" ? "warn-text" : ""}`}>{log.message}</p>
+            ))}
+          </div>
+        )}
       </div>
       <div className="row gap-8 wrap end">
         {ready && <Chip tone="ok">{t("Available")}</Chip>}

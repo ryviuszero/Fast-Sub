@@ -29,6 +29,7 @@ const (
 	CodeNotImplemented      = "not_implemented"
 	CodeProviderUnavailable = "provider_unavailable"
 	CodeDownloadFailed      = "download_failed"
+	CodeModelInstallBusy    = "model_install_busy"
 	CodeHashMismatch        = "hash_mismatch"
 	CodeOutputExists        = "output_exists"
 	CodeFFmpegFailed        = "ffmpeg_failed"
@@ -89,7 +90,7 @@ func ExitCode(err *AppError) int {
 		return ExitMissingDependency
 	case CodeMissingModel:
 		return 4
-	case CodeDiskFull, CodeMissingAPIKey, CodeProviderUnavailable:
+	case CodeDiskFull, CodeMissingAPIKey, CodeProviderUnavailable, CodeModelInstallBusy:
 		return 5
 	case CodePermissionDenied:
 		return 6

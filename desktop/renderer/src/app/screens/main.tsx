@@ -296,8 +296,13 @@ function providerCanRun(provider: ProviderStatus): boolean {
   return provider.kind !== "api" || provider.checkMode === "live";
 }
 
-export function MainMissing({ setScreen, installModel, translationReady }: RenderProps) {
+export function MainMissing({ setScreen, installModel, translationReady, models, modelInstallJobs }: RenderProps) {
   const t = useT();
+  const asr = models.find((model) => model.id === "whisper-small");
+  const installJob = modelInstallJobs["whisper-small"];
+  const installing = asr?.state === "installing" || installJob?.status === "queued" || installJob?.status === "running" || installJob?.status === "canceling";
+  const progress = Math.max(0, Math.min(100, installJob?.progressPercent ?? asr?.progressPercent ?? 0));
+  const stageLabel = modelDownloadStageLabel(installJob, t);
   return (
     <div className="wf">
       <Chrome right={<><Chip tone="warn">{t("Local transcription not ready")}</Chip><Chip tone={translationReady ? "ok" : "warn"}>{translationReady ? t("Translation ready") : t("Translation not ready")}</Chip></>} />
@@ -307,14 +312,46 @@ export function MainMissing({ setScreen, installModel, translationReady }: Rende
           <p>{t("Default ASR model missing")}</p>
           <CheckItem label={t("ASR model")} detail={t("whisper-small is not installed")} status="missing" />
           <CheckItem label={t("Translation model")} detail={t("Can be downloaded later")} status="skip" />
+          {installing && (
+            <div className="model-install-progress" role="status" aria-label={t("Model download progress", { name: asr?.name ?? "whisper-small" })}>
+              <div className="between">
+                <strong>{progress}%</strong>
+                <span>{stageLabel}</span>
+              </div>
+              <div className="bar sm"><span style={{ width: `${Math.max(8, progress)}%` }} /></div>
+            </div>
+          )}
           <div className="row gap-8">
-            <button className="btn primary" onClick={() => void installModel("whisper-small")}>{t("Download default model")}</button>
+            <button className="btn primary" disabled={installing} onClick={() => void installModel("whisper-small")}>{installing ? t("Downloading") : t("Download default model")}</button>
             <button className="btn ghost" onClick={() => setScreen("settings-models")}>{t("Open Models")}</button>
           </div>
         </section>
       </main>
     </div>
   );
+}
+
+function modelDownloadStageLabel(job: RenderProps["activeJob"] | undefined, t: (key: string) => string): string {
+  if (!job || job.status === "queued") {
+    return t("Waiting to download");
+  }
+  if (job.status === "canceling") {
+    return t("Canceling download");
+  }
+  if (job.status === "failed") {
+    return t("Model download failed");
+  }
+  if (job.status === "succeeded") {
+    return t("Model is ready");
+  }
+  const stage = job.stageLabel;
+  if (stage.includes("校验") || stage.includes("验证") || stage.includes("检查") || stage.includes("verify")) {
+    return t("Verifying model");
+  }
+  if (stage.includes("准备") || stage.includes("收尾") || stage.includes("final")) {
+    return t("Preparing model");
+  }
+  return t("Downloading model");
 }
 
 export function OutputConflict({ setScreen, startJob, updateConfig, chooseSubtitleOutputPath, activeJob }: RenderProps) {

@@ -65,6 +65,10 @@ function statusLabel(status: string): string {
   }
 }
 
+function hasActiveJobs(jobs: JobSummary[]): boolean {
+  return jobs.some((job) => job.status === "queued" || job.status === "running" || job.status === "canceling");
+}
+
 function stageLabel(stage: string, type = "transcribe"): string {
   switch (stage) {
     case "validating": return "正在检查文件";
@@ -291,6 +295,7 @@ function providerName(id: string): string {
 
 export class MainDaemonFastSubClient {
   private nativeDependenciesSynced = false;
+  private pendingNativeDependencyRepair = false;
   private readonly secretStore = new SafeStorageSecretStore(defaultSecretStorePath());
 
   constructor(private readonly processManager: DaemonProcessManager) {}
@@ -312,9 +317,20 @@ export class MainDaemonFastSubClient {
   async getEnvironmentStatus(): Promise<EnvironmentStatus> {
     const ffmpeg = await ensureFFmpegInstalled();
     if (ffmpeg.installedNow) {
-      await this.processManager.repair().catch(() => undefined);
+      this.pendingNativeDependencyRepair = true;
     }
-    const [health, models] = await Promise.all([this.health(), this.listModels().catch(() => [] as ModelStatus[])]);
+    const [initialHealth, models, jobs] = await Promise.all([
+      this.health(),
+      this.listModels().catch(() => [] as ModelStatus[]),
+      this.pendingNativeDependencyRepair ? this.listJobs().catch(() => [] as JobSummary[]) : Promise.resolve([] as JobSummary[])
+    ]);
+    let health = initialHealth;
+    if (this.pendingNativeDependencyRepair && !hasActiveJobs(jobs)) {
+      await this.processManager.repair().catch(() => undefined);
+      this.nativeDependenciesSynced = true;
+      this.pendingNativeDependencyRepair = false;
+      health = await this.health();
+    }
     const asrReady = models.some((model) => model.kind === "asr" && model.state === "ready");
     const translationReady = models.some((model) => model.kind === "translation" && model.state === "ready");
     const warnings = [
@@ -343,6 +359,7 @@ export class MainDaemonFastSubClient {
   async repairDaemon(): Promise<EnvironmentStatus> {
     await this.processManager.repair();
     this.nativeDependenciesSynced = true;
+    this.pendingNativeDependencyRepair = false;
     return this.getEnvironmentStatus();
   }
 
@@ -351,6 +368,7 @@ export class MainDaemonFastSubClient {
     if (ffmpeg.available) {
       await this.processManager.repair().catch(() => undefined);
       this.nativeDependenciesSynced = true;
+      this.pendingNativeDependencyRepair = false;
     }
     return this.getEnvironmentStatus();
   }

@@ -376,6 +376,7 @@ const zh: Record<string, string> = {
   "FFmpeg auto install failed hint": "未检测到 FFmpeg / FFprobe 时会自动下载并安装；如果仍未就绪，请检查网络后重试。",
   "Installing FFmpeg": "正在安装 FFmpeg",
   "FFmpeg installing detail": "正在下载并安装 FFmpeg / FFprobe，请保持网络连接。",
+  "Wait for FFmpeg install": "请等待 FFmpeg 安装完成后再下载默认模型。",
   "FFmpeg install log": "FFmpeg 安装日志",
   "FFmpeg install starting": "正在启动 FFmpeg 安装...",
   "Retry environment repair": "重新检查并修复",
@@ -521,6 +522,7 @@ const en: Record<string, string> = {
   "FFmpeg auto install failed hint": "Fast Sub downloads and installs FFmpeg / FFprobe automatically when missing. If it is still not ready, check the network and retry.",
   "Installing FFmpeg": "Installing FFmpeg",
   "FFmpeg installing detail": "Downloading and installing FFmpeg / FFprobe. Keep the network connection available.",
+  "Wait for FFmpeg install": "Wait for FFmpeg installation to finish before downloading the default model.",
   "FFmpeg install log": "FFmpeg install log",
   "FFmpeg install starting": "Starting FFmpeg installation...",
   "Retry environment repair": "Retry environment repair",
@@ -841,6 +843,10 @@ export function useRuntimeText() {
 function resolveLocale(language: UiLanguage): Locale {
   if (language === "en") {
     return "en";
+  }
+  if (language === "system") {
+    const systemLanguage = typeof navigator === "undefined" ? "" : navigator.language.toLowerCase();
+    return systemLanguage.startsWith("zh") ? "zh" : "en";
   }
   return "zh";
 }

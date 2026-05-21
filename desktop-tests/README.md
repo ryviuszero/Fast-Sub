@@ -36,7 +36,7 @@
 现有截图脚本：
 
 ```powershell
-cd C:\Users\Example\Desktop\SaaS\P05
+cd <repo>
 node desktop-tests\capture-round12-pages.mjs
 ```
 
@@ -59,7 +59,7 @@ node desktop-tests\capture-round12-pages.mjs
 
 | 分类 | 数量 | 说明 |
 | --- | ---: | --- |
-| `PASS` | 55 | 已从 `ui-docs/project-tracker.md`、源码搜索、既有截图基线或当前 Round 12 自动化回归命令确认。 |
+| `PASS` | 55 | 已从 `dev-docs/ui-docs/project-tracker.md`、源码搜索、既有截图基线或当前 Round 12 自动化回归命令确认。 |
 | `RETEST` | 0 | 当前表格内没有仍标记为待复测的条目；真实网络、真实模型和打包环境继续按发布 smoke 执行。 |
 | `TODO` | 0 | 当前 README 检查未发现新的明确待修项。 |
 | `CONFIRM` | 0 | 远程 Provider 上传确认策略已按显式确认规则收口。 |

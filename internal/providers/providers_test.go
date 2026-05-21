@@ -107,6 +107,35 @@ func TestLocalTranslateDependencyCommandPrefersPackagedPython(t *testing.T) {
 	}
 }
 
+func TestLocalTranslateDependencyCommandDoesNotUseImplicitUV(t *testing.T) {
+	cfg := fakeRuntime(nil, false, nil)
+	cfg.LookPath = func(name string) (string, error) {
+		if name == "uv" {
+			return filepath.Join("fake", name), nil
+		}
+		return "", errors.New("missing")
+	}
+
+	if command, args, ok := localTranslateDependencyCommand(cfg); ok {
+		t.Fatalf("implicit uv should not resolve command=%q args=%q", command, strings.Join(args, " "))
+	}
+}
+
+func TestLocalTranslateDependencyCommandPackagedRuntimeDoesNotUseSystemPython(t *testing.T) {
+	cfg := fakeRuntime(map[string]string{"FAST_SUB_PACKAGED_RUNTIME_ONLY": "1"}, true, nil)
+	if command, args, ok := localTranslateDependencyCommand(cfg); ok {
+		t.Fatalf("packaged runtime should not use system python command=%q args=%q", command, strings.Join(args, " "))
+	}
+}
+
+func TestLocalTranslatePackagedRuntimeUsesRepairHint(t *testing.T) {
+	check := checkLocalTranslateDependencies(context.Background(), fakeRuntime(map[string]string{"FAST_SUB_PACKAGED_RUNTIME_ONLY": "1"}, true, nil))
+	if check.OK || check.Status != StatusMissingDependency {
+		t.Fatalf("packaged runtime should be missing without app-private Python: %#v", check)
+	}
+	assertPackagedRepairHint(t, check.ActionHint)
+}
+
 func TestFasterWhisperMissingDependencies(t *testing.T) {
 	cfg := fakeRuntime(nil, true, nil)
 	cfg.RunCommand = func(context.Context, string, []string) error {
@@ -156,6 +185,67 @@ func TestLocalASRDependencyCommandPrefersPackagedPython(t *testing.T) {
 	if command != filepath.Join("C:", "Fast Sub", "python.exe") || strings.Join(args, " ") != "-c import faster_whisper" {
 		t.Fatalf("command=%q args=%q", command, strings.Join(args, " "))
 	}
+}
+
+func TestLocalASRDependencyCommandDoesNotUseImplicitUV(t *testing.T) {
+	cfg := fakeRuntime(nil, false, nil)
+	cfg.LookPath = func(name string) (string, error) {
+		if name == "uv" {
+			return filepath.Join("fake", name), nil
+		}
+		return "", errors.New("missing")
+	}
+
+	if command, args, ok := localASRDependencyCommand(cfg); ok {
+		t.Fatalf("implicit uv should not resolve command=%q args=%q", command, strings.Join(args, " "))
+	}
+}
+
+func TestLocalASRDependencyCommandPackagedRuntimeDoesNotUseSystemPython(t *testing.T) {
+	cfg := fakeRuntime(map[string]string{"FAST_SUB_PACKAGED_RUNTIME_ONLY": "1"}, true, nil)
+	if command, args, ok := localASRDependencyCommand(cfg); ok {
+		t.Fatalf("packaged runtime should not use system python command=%q args=%q", command, strings.Join(args, " "))
+	}
+}
+
+func TestLocalASRPackagedRuntimeUsesRepairHint(t *testing.T) {
+	check := checkFasterWhisperDependencies(context.Background(), fakeRuntime(map[string]string{"FAST_SUB_PACKAGED_RUNTIME_ONLY": "1"}, true, nil))
+	if check.OK || check.Status != StatusMissingDependency {
+		t.Fatalf("packaged runtime should be missing without app-private Python: %#v", check)
+	}
+	assertPackagedRepairHint(t, check.ActionHint)
+}
+
+func TestSTTWorkerCommandDoesNotUseImplicitUV(t *testing.T) {
+	cfg := fakeRuntime(nil, false, nil)
+	cfg.LookPath = func(name string) (string, error) {
+		if name == "uv" {
+			return filepath.Join("fake", name), nil
+		}
+		return "", errors.New("missing")
+	}
+
+	check := checkSTTWorkerCommand(cfg)
+	if check.OK || check.Status != StatusMissingDependency {
+		t.Fatalf("implicit uv should not make worker available: %#v", check)
+	}
+}
+
+func TestSTTWorkerCommandPackagedRuntimeDoesNotUsePATHFallback(t *testing.T) {
+	cfg := fakeRuntime(map[string]string{"FAST_SUB_PACKAGED_RUNTIME_ONLY": "1"}, true, nil)
+	check := checkSTTWorkerCommand(cfg)
+	if check.OK || check.Status != StatusMissingDependency {
+		t.Fatalf("packaged runtime should not use PATH worker: %#v", check)
+	}
+	assertPackagedRepairHint(t, check.ActionHint)
+}
+
+func TestWhisperCPPCommandPackagedRuntimeUsesRepairHint(t *testing.T) {
+	check := checkWhisperCPPCommand(fakeRuntime(map[string]string{"FAST_SUB_PACKAGED_RUNTIME_ONLY": "1"}, true, nil))
+	if check.OK || check.Status != StatusMissingDependency {
+		t.Fatalf("packaged runtime should be missing without app-private whisper.cpp: %#v", check)
+	}
+	assertPackagedRepairHint(t, check.ActionHint)
 }
 
 func TestFasterWhisperMissingWorkerThenMissingModelThenAvailable(t *testing.T) {
@@ -488,5 +578,18 @@ func fakeRuntime(env map[string]string, lookPathOK bool, statErr error) RuntimeC
 		ModelResolver: func(providerID string) ModelResolution {
 			return ModelResolution{Message: "No compatible Go-managed model is installed."}
 		},
+	}
+}
+
+func assertPackagedRepairHint(t *testing.T, hint string) {
+	t.Helper()
+	lower := strings.ToLower(hint)
+	if !strings.Contains(lower, "repair") || !strings.Contains(lower, "reinstall") {
+		t.Fatalf("packaged hint = %q, want repair/reinstall guidance", hint)
+	}
+	for _, forbidden := range []string{"uv", "path", "system python"} {
+		if strings.Contains(lower, forbidden) {
+			t.Fatalf("packaged hint = %q, should not mention developer/system setup %q", hint, forbidden)
+		}
 	}
 }

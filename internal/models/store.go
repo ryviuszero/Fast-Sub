@@ -239,7 +239,7 @@ func validateRelativePath(value string) error {
 
 func candidateURLs(entry ManifestEntry, file ManifestFile) []string {
 	if len(file.URLs) > 0 {
-		return file.URLs
+		return withMirrorURLs(file.URLs)
 	}
 	urls := make([]string, 0, len(entry.URLs))
 	for _, root := range entry.URLs {
@@ -248,7 +248,48 @@ func candidateURLs(entry ManifestEntry, file ManifestFile) []string {
 			urls = append(urls, joined)
 		}
 	}
-	return urls
+	return withMirrorURLs(urls)
+}
+
+func withMirrorURLs(values []string) []string {
+	out := make([]string, 0, len(values)*2)
+	seen := map[string]struct{}{}
+	add := func(value string) {
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	for _, value := range values {
+		add(value)
+		add(modelScopeMirrorURL(value))
+	}
+	return out
+}
+
+func modelScopeMirrorURL(value string) string {
+	parsed, err := url.Parse(value)
+	if err != nil || !strings.EqualFold(parsed.Host, "huggingface.co") {
+		return ""
+	}
+	parts := strings.Split(strings.TrimPrefix(parsed.EscapedPath(), "/"), "/")
+	if len(parts) < 5 || parts[2] != "resolve" {
+		return ""
+	}
+	filePath := strings.Join(parts[4:], "/")
+	if filePath == "" {
+		return ""
+	}
+	mirror := url.URL{
+		Scheme: "https",
+		Host:   "modelscope.cn",
+		Path:   "/models/" + parts[0] + "/" + parts[1] + "/resolve/master/" + filePath,
+	}
+	return mirror.String()
 }
 
 func redactURLs(values []string) []string {
@@ -282,6 +323,7 @@ func classifyInstallError(command string, err error) *fserrors.AppError {
 	lower := strings.ToLower(message)
 	code := fserrors.CodeDownloadFailed
 	hint := "Check your network connection and retry the model install."
+	details := map[string]any{}
 	if strings.Contains(lower, "not enough free disk") {
 		code = fserrors.CodeDiskFull
 		hint = "Free disk space or choose a model store with more space."
@@ -295,9 +337,14 @@ func classifyInstallError(command string, err error) *fserrors.AppError {
 		hint = "Retry the install. Fast Sub removed the damaged partial download."
 	}
 	if strings.Contains(lower, "lock") {
-		hint = "Wait for the other install to finish, or remove the stale lock after checking no install is running."
+		code = fserrors.CodeModelInstallBusy
+		hint = "Another model install is still running, or the previous install left a lock. Wait briefly and retry; if it keeps failing, restart Fast Sub and retry."
+		details["reason"] = "model_install_lock"
 	}
-	return fserrors.New(code, command, message, hint, nil)
+	if strings.Contains(lower, "all download sources failed") {
+		details["fallback"] = "huggingface_then_modelscope"
+	}
+	return fserrors.New(code, command, message, hint, details)
 }
 
 // InstallOptions configures model installation.
@@ -307,6 +354,7 @@ type InstallOptions struct {
 	FreeSpace         func(string) (int64, error)
 	StaleLockDuration time.Duration
 	Progress          ProgressFunc
+	Log               LogFunc
 }
 
 // DownloadBackend is the downloader dependency used by model installation.
@@ -332,6 +380,9 @@ type DownloadResult struct {
 
 // ProgressFunc receives install progress events.
 type ProgressFunc func(Progress)
+
+// LogFunc receives human-readable install diagnostics for job logs.
+type LogFunc func(level string, message string)
 
 // Progress describes model install progress without writing to stdout/stderr.
 type Progress struct {

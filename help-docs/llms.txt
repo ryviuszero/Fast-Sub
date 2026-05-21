@@ -1,0 +1,55 @@
+# Fast Sub Documentation Index
+
+Use this file as a compact map for AI assistants and documentation tools.
+
+## Public User Docs
+
+- `README.md`: repository overview, current status, quick start, and docs links.
+- `help-docs/index.md`: GitHub Pages help landing page.
+- `help-docs/help/README.md`: user help index.
+- `help-docs/help/download.md`: platform and download status.
+- `help-docs/help/getting-started.md`: first user workflow.
+- `help-docs/help/install-windows.md`: Windows install notes.
+- `help-docs/help/install-macos.md`: macOS install notes.
+- `help-docs/help/first-run-models.md`: first-run model setup.
+- `help-docs/help/generate-subtitles.md`: subtitle generation.
+- `help-docs/help/translate-subtitles.md`: subtitle translation.
+- `help-docs/help/bilingual-subtitles.md`: bilingual subtitles.
+- `help-docs/help/burn-in-subtitles.md`: burn-in workflow.
+- `help-docs/help/providers.md`: provider setup.
+- `help-docs/help/privacy.md`: user-facing privacy rules.
+- `help-docs/help/troubleshooting.md`: user troubleshooting.
+- `help-docs/help/release-notes.md`: release status and limitations.
+
+## Contributor Docs
+
+- `CONTRIBUTING.md`: contribution rules and validation commands.
+- `SECURITY.md`: security and private reporting guidance.
+- `CODE_OF_CONDUCT.md`: community behavior expectations.
+- `ROADMAP.md`: public roadmap.
+- `AGENTS.md`: detailed agent instructions.
+- `dev-docs/agent-workflow.md`: AI-assisted development workflow.
+
+## Developer Docs
+
+- `dev-docs/README.md`: developer documentation map.
+- `dev-docs/current-status.md`: current project status.
+- `dev-docs/go-docs/specs/daemon-api.md`: hand-written daemon API source of truth.
+- `dev-docs/ui-docs/architecture.md`: desktop architecture.
+- `dev-docs/ui-docs/project-tracker.md`: detailed desktop progress tracker.
+- `dev-docs/release/validation.md`: release validation evidence index.
+
+## API Reference
+
+- `dev-docs/api/README.md`: API/reference documentation policy.
+- `dev-docs/api/go/README.md`: Go API reference.
+- `dev-docs/api/python/README.md`: Python API reference.
+- `dev-docs/api/desktop/README.md`: Desktop API reference.
+- `dev-docs/api/schemas/README.md`: JSON schema reference.
+
+## Important Rules
+
+- Public help docs are English.
+- Internal planning docs may be Chinese.
+- Generated API docs do not replace hand-written contracts.
+- Do not commit secrets, ready tokens, signed URLs, real media, model files, or machine-specific paths.

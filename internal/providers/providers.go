@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -508,8 +509,19 @@ func checkCommand(cfg RuntimeConfig, name, explicitCommand, pathName, actionHint
 
 func checkWhisperCPPCommand(cfg RuntimeConfig) Check {
 	actionHint := "Install whisper.cpp, set FAST_SUB_WHISPER_CPP_COMMAND, or install whisper-cli on PATH."
+	if packagedRuntimeOnly(cfg) {
+		actionHint = packagedRuntimeRepairHint()
+	}
 	if explicitCommand := envFirst(cfg, "FAST_SUB_WHISPER_CPP_COMMAND"); explicitCommand != "" {
 		return checkCommand(cfg, "binary", explicitCommand, "whisper-cli", actionHint)
+	}
+	if packagedRuntimeOnly(cfg) {
+		for _, candidate := range whisperCPPBinCandidates(cfg.Env("FAST_SUB_WHISPER_CPP_BIN_DIR")) {
+			if info, err := cfg.Stat(candidate); err == nil && !info.IsDir() {
+				return Check{Name: "binary", OK: true, Status: StatusAvailable, Message: "App-private whisper.cpp binary is available."}
+			}
+		}
+		return Check{Name: "binary", OK: false, Status: StatusMissingDependency, Message: "App-private whisper.cpp binary was not found.", ActionHint: actionHint}
 	}
 	for _, pathName := range []string{"whisper-cli", "main", "whisper-cpp"} {
 		if _, err := cfg.LookPath(pathName); err == nil {
@@ -521,6 +533,9 @@ func checkWhisperCPPCommand(cfg RuntimeConfig) Check {
 
 func checkSTTWorkerCommand(cfg RuntimeConfig) Check {
 	actionHint := "Install the local ASR extra with `uv sync --extra local-asr`, set FAST_SUB_STT_WORKER_COMMAND, or install fast-sub-worker-faster-whisper on PATH."
+	if packagedRuntimeOnly(cfg) {
+		actionHint = packagedRuntimeRepairHint()
+	}
 	if explicit := envFirst(cfg, "FAST_SUB_STT_WORKER_COMMAND"); explicit != "" {
 		parts := splitCommandLine(explicit)
 		if len(parts) == 0 {
@@ -531,11 +546,11 @@ func checkSTTWorkerCommand(cfg RuntimeConfig) Check {
 		}
 		return Check{Name: "worker", OK: false, Status: StatusMissingDependency, Message: "STT worker command is configured but was not found.", ActionHint: actionHint}
 	}
+	if packagedRuntimeOnly(cfg) {
+		return Check{Name: "worker", OK: false, Status: StatusMissingDependency, Message: "App-private STT worker command is not configured.", ActionHint: actionHint}
+	}
 	if _, err := cfg.LookPath("fast-sub-worker-faster-whisper"); err == nil {
 		return Check{Name: "worker", OK: true, Status: StatusAvailable, Message: "fast-sub-worker-faster-whisper was found on PATH."}
-	}
-	if _, err := cfg.LookPath("uv"); err == nil {
-		return Check{Name: "worker", OK: true, Status: StatusAvailable, Message: "uv can run fast-sub-worker-faster-whisper with the local-asr extra."}
 	}
 	return Check{Name: "worker", OK: false, Status: StatusMissingDependency, Message: "STT worker was not found.", ActionHint: actionHint}
 }
@@ -578,6 +593,9 @@ func checkModelPath(cfg RuntimeConfig, modelPath string, allowFile bool, actionH
 func checkLocalTranslateDependencies(ctx context.Context, cfg RuntimeConfig) Check {
 	command, args, ok := localTranslateDependencyCommand(cfg)
 	actionHint := "Install the local translation extra with `uv sync --extra local-translate`, or choose a configured web/API translation Provider."
+	if packagedRuntimeOnly(cfg) {
+		actionHint = packagedRuntimeRepairHint()
+	}
 	if !ok {
 		return Check{Name: "python_dependencies", OK: false, Status: StatusMissingDependency, Message: "Python runtime for local translation was not found.", ActionHint: actionHint}
 	}
@@ -592,6 +610,9 @@ func checkLocalTranslateDependencies(ctx context.Context, cfg RuntimeConfig) Che
 func checkFasterWhisperDependencies(ctx context.Context, cfg RuntimeConfig) Check {
 	command, args, ok := localASRDependencyCommand(cfg)
 	actionHint := "Install the local ASR extra with `uv sync --extra local-asr`, or choose another ASR Provider."
+	if packagedRuntimeOnly(cfg) {
+		actionHint = packagedRuntimeRepairHint()
+	}
 	if !ok {
 		return Check{Name: "python_dependencies", OK: false, Status: StatusMissingDependency, Message: "Python runtime for local ASR was not found.", ActionHint: actionHint}
 	}
@@ -630,8 +651,8 @@ func localASRDependencyCommand(cfg RuntimeConfig) (string, []string, bool) {
 			return parts[0], append(parts[1:], "-c", snippet), true
 		}
 	}
-	if uv, err := cfg.LookPath("uv"); err == nil {
-		return uv, []string{"run", "--extra", "local-asr", "python", "-c", snippet}, true
+	if packagedRuntimeOnly(cfg) {
+		return "", nil, false
 	}
 	if python, err := cfg.LookPath("python"); err == nil {
 		return python, []string{"-c", snippet}, true
@@ -669,8 +690,8 @@ func localTranslateDependencyCommand(cfg RuntimeConfig) (string, []string, bool)
 			return parts[0], append(parts[1:], "-c", snippet), true
 		}
 	}
-	if uv, err := cfg.LookPath("uv"); err == nil {
-		return uv, []string{"run", "--extra", "local-translate", "python", "-c", snippet}, true
+	if packagedRuntimeOnly(cfg) {
+		return "", nil, false
 	}
 	if python, err := cfg.LookPath("python"); err == nil {
 		return python, []string{"-c", snippet}, true
@@ -719,6 +740,29 @@ func replaceArg(values []string, oldValue, newValue string) []string {
 			out[i] = newValue
 			return out
 		}
+	}
+	return out
+}
+
+func packagedRuntimeOnly(cfg RuntimeConfig) bool {
+	return cfg.Env("FAST_SUB_PACKAGED_RUNTIME_ONLY") == "1"
+}
+
+func packagedRuntimeRepairHint() string {
+	return "Repair the packaged runtime from Fast Sub settings, or reinstall Fast Sub."
+}
+
+func whisperCPPBinCandidates(binDir string) []string {
+	if strings.TrimSpace(binDir) == "" {
+		return nil
+	}
+	names := []string{"whisper-cli", "main", "whisper-cpp"}
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		if runtime.GOOS == "windows" {
+			name += ".exe"
+		}
+		out = append(out, filepath.Join(binDir, name))
 	}
 	return out
 }

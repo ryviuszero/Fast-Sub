@@ -10,6 +10,7 @@ import (
 	"time"
 
 	fserrors "fast-sub/internal/errors"
+	"fast-sub/internal/events"
 	"fast-sub/internal/ffmpeg"
 	"fast-sub/internal/models"
 	openairuntime "fast-sub/internal/runtime/openai"
@@ -148,7 +149,9 @@ func (r DefaultRunner) runModelInstall(ctx context.Context, req CreateRequest, e
 		store = models.DefaultStore()
 	}
 	emitProgress(emit, "validating", 5)
+	emitModelInstallLog(emit, "info", "准备安装模型 "+modelID)
 	installResult, appErr := store.Install(ctx, entry, models.InstallOptions{
+		StaleLockDuration: 90 * time.Second,
 		Progress: func(progress models.Progress) {
 			percent := 10
 			if progress.OverallTotal > 0 {
@@ -159,11 +162,16 @@ func (r DefaultRunner) runModelInstall(ctx context.Context, req CreateRequest, e
 			}
 			emit(ProgressUpdate("installing_model", percent))
 		},
+		Log: func(level string, message string) {
+			emitModelInstallLog(emit, level, message)
+		},
 	})
 	if appErr != nil {
+		emitModelInstallLog(emit, "error", appErr.Message)
 		return Result{}, appErr
 	}
 	emitProgress(emit, "finalizing", 95)
+	emitModelInstallLog(emit, "info", "模型安装完成 "+modelID)
 	return Result{
 		InputPath:  modelID,
 		OutputPath: installResult.Status.Path,
@@ -171,6 +179,17 @@ func (r DefaultRunner) runModelInstall(ctx context.Context, req CreateRequest, e
 		Model:      modelID,
 		Warnings:   []string{},
 	}, nil
+}
+
+func emitModelInstallLog(emit func(Update), level string, message string) {
+	if emit == nil {
+		return
+	}
+	emit(EventUpdate(events.TypeLog, map[string]any{
+		"time":    time.Now().UTC().Format(time.RFC3339),
+		"level":   level,
+		"message": message,
+	}))
 }
 
 func (r DefaultRunner) runTranslateSRT(ctx context.Context, req CreateRequest, emit func(Update)) (Result, *fserrors.AppError) {

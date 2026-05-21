@@ -6,7 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -43,7 +46,34 @@ func (r Runner) tailLimit() int {
 
 // LookPath resolves a media binary.
 func LookPath(name string) (string, error) {
+	if os.Getenv("FAST_SUB_PACKAGED_RUNTIME_ONLY") == "1" && !strings.ContainsAny(name, `/\`) && !filepath.IsAbs(name) {
+		if path, ok := packagedMediaBinary(name); ok {
+			return path, nil
+		}
+		return "", exec.ErrNotFound
+	}
 	return exec.LookPath(name)
+}
+
+func packagedMediaBinary(name string) (string, bool) {
+	binDir := os.Getenv("FAST_SUB_FFMPEG_BIN_DIR")
+	if strings.TrimSpace(binDir) == "" {
+		return "", false
+	}
+	base := filepath.Base(name)
+	if runtime.GOOS == "windows" && !strings.HasSuffix(strings.ToLower(base), ".exe") {
+		base += ".exe"
+	}
+	switch strings.ToLower(strings.TrimSuffix(base, ".exe")) {
+	case "ffmpeg", "ffprobe":
+	default:
+		return "", false
+	}
+	path := filepath.Join(binDir, base)
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		return path, true
+	}
+	return "", false
 }
 
 // CheckBinary returns whether a binary is available and its version first line.

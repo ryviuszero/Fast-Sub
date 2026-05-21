@@ -54,6 +54,7 @@
       "package.json"
     ],
     "asar": true,
+    "compression": "store",
     "extraResources": [
       {
         "from": "resources/bin",

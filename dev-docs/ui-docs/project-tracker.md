@@ -1,0 +1,408 @@
+# 进度跟踪器
+
+每次进行实质性的实现更改后，请更新此文件。
+
+## 当前阶段
+
+- Round 13 Electron Productization And Release Readiness 已按 13.1 -> 13.7 完成当前 Windows x64 可自动/本机可验证部分；第三方 license 明细、干净 model store 首启双模型安装复测、Windows unsigned version resource 决策、GPU 长任务取消 smoke、翻译批处理 blocker 修复、翻译模型失败降级 smoke、Secret storage 保存/替换/删除 smoke、最终自动验证基线、最新 installer/portable 复测和截图/E2E baseline 已完成。当前剩余 release blocker 是 macOS arm64 dmg smoke。
+
+## 当前目标
+
+- Round 13 只承接产品化和发布准备：打包形态、安装包/便携包 smoke、打包后 daemon lifecycle、诊断 polish、隐私/redaction 验证、真实外部 Provider smoke、真实文件路径/GPU/超时场景验证，以及可重复执行的发布检查清单。Round 13 不再新增核心业务能力或改变 daemon/UI 主 contract。
+
+## 完成的
+
+- Round 13 13.1 release inventory：已盘点当前 Electron build 输出、Go daemon resolver、Python CLI/worker resolver、Windows FFmpeg/aria2/whisper.cpp runtime 下载路径、模型/config/job/log/secret/userData 存储路径和禁止打包内容；确认主要 gap 是 packaged resolver 尚未使用 `process.resourcesPath`、Python 仍依赖系统 `uv/python/PATH`、job/log root 仍可能落到相对 `.fast-sub/jobs`，以及 `electron-builder` scripts 尚未建立。已创建 `THIRD_PARTY_NOTICES.md` 初始 license policy，组件标记为 `bundle-ok` / `download-only` / `manual-user-install` / `blocked` / `needs-review`；13.2 需要继续生成 npm/Python transitive license 明细并验证 package 内容。
+- Round 13 13.2 packaged app build pipeline：已新增 `electron-builder` 配置和 scripts：`prepare:python-runtime`、`prepare:release-resources`、`clean:release`、`smoke:packaged`、`package:dir`、`package`；`prepare:python-runtime` 用 uv managed CPython 3.11 构造 app 私有 `desktop/resources/python/win32-x64/` 并安装 `fast-sub[local-asr,local-translate]`，验证 `fast-sub.exe`、`fast-sub-worker-faster-whisper.exe` 和 faster-whisper/ctranslate2/sentencepiece import。`prepare:release-resources` 会用 workspace-local Go cache 构建 `fast-sub-go.exe` 到 `desktop/resources/bin/win32-x64/`，并默认拒绝缺 app 私有 Python runtime。Electron main packaged resolver 现在优先从 `process.resourcesPath/bin/<platform>-<arch>/fast-sub-go(.exe)` 启动 daemon，并在打包态将 daemon cwd 设为 `app.getPath("userData")`，让相对 `.fast-sub/jobs` 落入 userData；main process 会注入 app 私有 `FAST_SUB_PYTHON_CLI`、`FAST_SUB_STT_WORKER_COMMAND` 和 PATH。
+- Round 13 Windows artifact 通过：`npm run package:dir`、`npm run package` 已生成干净的 `dist-release/win-unpacked`、`FastSub-Desktop-0.13.0-windows-x64.exe`、`FastSub-Desktop-0.13.0-windows-x64.zip` 和 blockmap；`npm run smoke:packaged` 验证 packaged app 启动、packaged daemon ready、daemon health、401/auth config baseline、ASAR 外 Go/Python executables、packaged Python CLI/worker/import checks、daemon repair、SSE disconnect 和 `events_lost` replay。最终 RC installer 已静默安装、已安装 app repair smoke、静默卸载通过；最终 portable zip 已解压到独立目录并通过 `FAST_SUB_PACKAGED_ROOT` packaged smoke。Windows artifact 当前按 unsigned 版本发布，保留 icon/version resource，`Get-AuthenticodeSignature` 对 app exe 和 installer 均为 `NotSigned`。
+- Round 13 Python Provider 依赖动作修复：本地 Faster Whisper 和本地 NLLB 的 Python 依赖已随 app 私有 runtime 打包；Provider 页不再把这类依赖当作可下载项处理，按钮文案改为“重新检查内置运行时”，main process 对 `local-faster-whisper` / `local-nllb-ct2` 执行 daemon repair + static provider check。`local-whisper-cpp` 仍保留 native binary 下载安装。按钮失败时 UI 会显示“依赖检查失败”，不再静默无反应。验证：`npm run typecheck`、`npm test -- App.test.tsx -t provider`、`npm run package`、`npm run smoke:packaged`。
+- Round 13 队列视图收口：任务队列现在过滤 `model_install` job，模型安装进度继续只在模型管理页和 Provider 卡片展示，不再混入转写/翻译任务的全部、正在生成、已完成、失败列表。验证：`npm run typecheck`、`npm test -- App.test.tsx -t "hides model install jobs"`。
+- Round 13 packaged Python dependency check 修复：Electron main 现在向自管 daemon 注入 `FAST_SUB_PYTHON`，显式指向 app 私有 `python.exe`；Go provider static check 会优先用该 Python 验证 `faster_whisper`、`ctranslate2` 和 `sentencepiece`，避免 packaged app 误用系统 Python/uv 后继续显示“缺少依赖”。验证：`go test ./internal/providers`、`npm run typecheck`、`npm test -- App.test.tsx -t provider`、打包内 `fast-sub-go.exe providers test local-faster-whisper --json` 返回 `status=available`、`npm run package`、`npm run smoke:packaged`。
+- Round 13 本地 worker 缺失卡顿修复：Go provider static check 不再把 PATH 上的 `uv` 当作可用 worker，也不再隐式执行 `uv run --extra local-asr/local-translate ...` 做依赖探测；没有 app 私有 Python、显式 worker command 或系统 Python 时会快速返回 `missing_dependency`，避免桌面 Provider 列表刷新卡在本地 Faster Whisper/NLLB 检查。验证：`go test ./internal/providers`。
+- Round 13 打包态运行时边界收口：Electron packaged daemon 现在注入 `FAST_SUB_PACKAGED_RUNTIME_ONLY=1`、app 私有 FFmpeg bin 目录和 whisper.cpp bin 目录；Go 侧 STT worker、翻译 CLI、FFmpeg 和 whisper.cpp resolver 在该模式下禁止回退到系统 `uv`、全局 `fast-sub`、系统 Python、系统 FFmpeg 或系统 whisper.cpp，缺 app 私有运行时时快速返回结构化缺依赖错误。Electron packaged 环境检查也不再用系统 FFmpeg/whisper.cpp 作为可用依据。验证：`go test ./internal/providers ./internal/jobs ./internal/worker ./internal/ffmpeg ./internal/runtime/whispercpp`、`npm run typecheck`。
+- Round 13 installer/setup 体验修复：Windows installer 构建已改用 electron-builder 支持的顶层 `compression=store`，降低包含大量 app 私有 Python 小文件时的安装包构建/解包等待；首次启动环境检查页的“本地 Worker”不再错误依赖默认 ASR 模型 ready 状态，`local-faster-whisper` 只要不是 `missing_dependency` 就显示 worker 已就绪，模型缺失继续由“默认 ASR 模型未准备”卡片单独阻断/引导下载。验证：`npm run typecheck`、`npm test -- App.test.tsx -t "blocks generation actions when the ASR model is missing"`、`npx electron-builder --dir --publish=never`。
+- Round 13 首次启动体验和默认语言修复：首次启动环境检查页现在只因本地服务/FFmpeg 未就绪阻塞进入主界面，默认 ASR 模型缺失不再卡住首次进入，用户可先进入主界面再按提示下载模型；`system` 界面语言现在读取 `navigator.language`，中文系统默认中文，非中文系统默认英文。验证：`npm run typecheck`、`npm test -- App.test.tsx -t "system language|blocks generation actions when the ASR model is missing|walks from setup"`。
+- Round 13 安装后首次启动卡顿和默认模型下载反馈修复：renderer 启动数据加载不再等待 `listProviders()` 完成，环境/配置/模型/任务先更新首屏，Provider 静态检查后台刷新，减少安装后首次启动等待；setup 页点击“下载默认模型”后会立即把按钮切到“正在下载”并展示进度，queued/running 模型安装 job 不再被随后的 `loadBaseData()` 立刻刷回缺失状态。验证：`npm run typecheck`、`npm test -- App.test.tsx -t "default model download feedback|system language|blocks generation actions when the ASR model is missing|walks from setup"`。
+- Round 13 模型下载失败可诊断性修复：模型安装锁过期后自动清理重试，桌面模型安装使用较短 stale-lock 恢复窗口；Hugging Face 下载源会自动追加 ModelScope 镜像 fallback；模型安装 job 写入 `logs/system.log` 并通过实时日志事件暴露下载源尝试和失败原因，模型管理卡片显示错误、操作建议、结构化诊断和最近日志。setup 页避免在模型列表尚未返回时误判默认 ASR 缺失；主流程缺模型页点击“下载默认模型”后也会立刻显示“正在下载”、进度百分比和进度条，并把模型安装进度文案从通用“正在生成字幕”修正为“正在下载模型/正在准备模型/校验模型”等模型语义；renderer 测试同步等待后台加载的 jobs/provider 状态，覆盖首屏非阻塞加载后的真实时序。验证：`go test ./internal/models ./internal/jobs`、`cd desktop && npm run typecheck`、`cd desktop && npm test`。
+- Round 13 首启并发下载卡死修复：FFmpeg aria2 下载现在检测“文件大小已达到 Content-Length 但 aria2 未及时退出”的状态，5 秒后按完整文件继续解压安装，并对 120 秒无进展下载加超时失败，避免环境检查停在 104 MB / 104 MB；FFmpeg 安装完成后的 daemon repair 现在会等待当前 queued/running/canceling job 结束，避免打断正在下载的 ASR 模型安装 job。setup 页在 FFmpeg 安装期间禁用默认 ASR 模型下载入口，避免首次启动同时拉取两个大依赖。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "default model|walks from setup|blocks generation|system language"`、`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm test`。
+- Round 13 packaged native dependency smoke：新增 `npm run smoke:native-deps`，以 packaged `dist-release/win-unpacked/Fast Sub.exe` 和隔离 `desktop/test-results/round13-native-deps/*` userData 验证 FFmpeg/FFprobe 首装、aria2 自动准备、禁用 aria2 后普通 HTTPS fallback，以及 whisper.cpp Windows x64 binary 首装。真实网络 smoke 于 2026-05-19 通过：FFmpeg+aria2、FFmpeg no-aria2 fallback、whisper.cpp 均 `available=true`；普通 HTTPS fallback 慢网约 22 分钟，测试等待预算放宽到 30 分钟。验证：`npm run typecheck`、`npm run package:dir`、`npm run smoke:native-deps`、`npm run smoke:native-deps -- whisper-cpp`、`npm run smoke:packaged`。
+- Round 13 packaged daemon SSE smoke：`npm run smoke:packaged` 现在除 packaged app/daemon/Python runtime baseline 外，还会在隔离 `desktop/test-results/round13-packaged-daemon` job root 创建一个受控失败 job，验证 `/v1/jobs/{id}/events` SSE 可中断、终态 job 可通过 REST 重新查询，以及裁剪 event log 后 `Last-Event-ID` replay gap 返回 `events_lost`。该 smoke 不运行真实模型、真实 ffmpeg、真实 whisper.cpp 或 GPU。验证：`npm run smoke:packaged`。
+- Round 13 packaged daemon repair smoke：`npm run smoke:packaged` 现在会以 `FAST_SUB_SMOKE_DAEMON_REPAIR=1` 启动 packaged `Fast Sub.exe`，通过 Electron main 的 `DaemonProcessManager` 从 `process.resourcesPath` 定位 app 内 `fast-sub-go.exe`，在隔离 userData 下启动自管 daemon，再执行 `repair()` 并验证 repair 前后 health=200、pid 变化和 owned session。验证：`npm run typecheck`、`npm run package:dir`、`npm run smoke:packaged`。
+- Round 13 Windows installer smoke：`FastSub-Desktop-0.13.0-windows-x64.exe` 静默安装到 `desktop/test-results/round13-installer/Fast Sub`，已安装 app 以 `FAST_SUB_SMOKE_DAEMON_REPAIR=1` 通过 daemon ready/repair smoke，随后 `Uninstall Fast Sub.exe /S` 静默卸载且安装目录移除。验证记录见 `desktop-tests/round13-release-smoke.md`。
+- Round 13 relocatable Python command 和退出清理修复：真实长任务退出 smoke 暴露旧安装包的 `fast-sub-worker-faster-whisper.exe` launcher 会继续启动构建目录下的 `desktop/resources/python/win32-x64/python.exe`，退出 app 后残留 `fast-sub.exe` / `python.exe`。Electron packaged runtime 现在给 daemon 注入 `python.exe -m fast_sub.app` 和 `python.exe -m fast_sub_workers.faster_whisper`，避免 Windows console script launcher 的绝对解释器路径；`src/fast_sub/app.py` 补齐 `python -m fast_sub.app` entrypoint。新安装包真实本地 Faster Whisper 长任务运行中确认 worker 子 Python 来自安装目录，退出 app 后立即和 8 秒后复查均无 Fast Sub daemon/worker/Python/native 残留。验证：`npm run typecheck`、`go test ./internal/providers ./internal/worker ./internal/jobs`、`npm run prepare:python-runtime`、`npm run package`、`npm run smoke:packaged`、真实长任务退出复查。
+- Round 13 13.4 real provider/file smoke：Windows x64 packaged resources 已完成本地 Faster Whisper 原字幕、whisper.cpp native ASR、本地 NLLB SRT/TXT 翻译、单 job 双语字幕、FFmpeg burn-in、中文/日文/韩文/空格路径，以及本机 loopback OpenAI-compatible STT/chat smoke。默认 ASR blocker 通过。干净 model store 首启双模型安装已用隔离 `FAST_SUB_MODEL_STORE_DIR=desktop/test-results/round13-clean-model-store-20260519` 复测通过，`whisper-small` 和 `nllb-200-distilled-600m-ct2-int8` 均从空 store 安装并 verify。GPU 长任务取消 smoke 已在 Windows installed package 上通过：覆盖退出/取消清理和应用内取消两条路径；应用内取消后 app/daemon 保持运行但 packaged worker 退出，立即和 8 秒后均无 packaged Python/GPU compute 进程回弹。真实 OpenAI/Bing/Google external record 按用户决策 `DEFER`。验证记录见 `desktop-tests/round13-release-smoke.md`。
+- Round 13 13.5 诊断隐私 polish：设置 -> 诊断页不再显示静态 sample log，不再出现 `credential=` / `api_key=` 示例文本；改为展示当前环境 health、platform、daemon/FFmpeg/model readiness、warnings 和 redacted log tail。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "shows task queue and settings entrances"`、`cd desktop && npm run build`（Vitest/build 因 Windows sandbox/esbuild 访问限制提升权限后通过）。
+- Round 13 13.6 screenshot/E2E baseline：`desktop-tests/pics/round13/README.md` 已同步为 PASS，10 张发布截图已捕获：首次启动环境检查、主界面空状态、文件已选、真实 job 运行中、完成页、失败详情、模型管理、Provider 设置、诊断页和 English UI smoke。`desktop-tests/round13-release-smoke.md` 中 R13-E2E-001 到 R13-E2E-003 已标记 PASS。
+- Round 13 13.7 release checklist：新增并更新 `desktop-tests/round13-release-checklist.md`，汇总版本、分支、Windows artifacts、自动验证、手动 smoke、隐私/secret 策略、安装清理说明和剩余 release blockers。当前 Windows x64 unsigned RC 主路径已通过；第三方 license 明细、干净 model store 首启安装、Windows unsigned version resource 决策、翻译模型失败降级、Secret storage CRUD、最终自动验证基线、最新 installer/portable 复测和截图 baseline 已完成；macOS arm64 仍是跨机器 blocker/待复测项。
+- Round 13 第三方 license 明细最终化：新增 `desktop/scripts/generate-license-inventory.mjs`，从 `desktop/package-lock.json`、packaged app 私有 Python `*.dist-info/METADATA` 和 `go.mod` 生成 `desktop-tests/licenses/npm-licenses.json`、`python-licenses.json`、`go-licenses.md` 和 `license-summary.json`。当前汇总 618 records，0 `needs-review`，0 `blocked`；`sentencepiece` 因 wheel metadata 缺 license 字段，使用 upstream Apache-2.0 evidence override；`typing_extensions` 使用 PSF-2.0。`THIRD_PARTY_NOTICES.md` 已同步 generated report 路径、package content scan 和 bundle/download/manual/blocked policy。真实 OpenAI/Bing/Google external record 按用户决策标记为 `DEFER`，不作为本地桌面发布 blocker。
+- Round 13 Windows icon/signing/version resource 决策：新增 `desktop/build/icon.png` 源图和 `desktop/build/icon.ico` Windows 多尺寸图标，`desktop/package.json` 的 `win.icon` 指向 `build/icon.ico`；Windows artifacts 当前按 unsigned internal test build 处理，不购买/配置代码签名证书。`win.signAndEditExecutable=true`，保持未签名但允许 electron-builder 写入 icon/version resource；`Get-AuthenticodeSignature` 确认 packaged `Fast Sub.exe` 为 `NotSigned`，VersionInfo 显示 ProductName/FileDescription/CompanyName `Fast Sub`、FileVersion `0.13.0`、ProductVersion `0.13.0.0`。验证：`cd desktop && npm run package:dir`。
+- Round 13 翻译批处理 blocker 修复：用户实测长翻译任务逐条提交导致机器卡顿，已将该问题纳入 Round 13 发布前 blocker。Go daemon translation bridge 现在默认对 `local-nllb-ct2` 传 `--batch-size 32`，对 `api-openai-chat` 传 `--batch-size 16`，对 `web-bing/web-google` 保持 `--batch-size 1`；显式 `batch_size` 仍可覆盖。Python NLLB provider 在 batch 失败时递归拆半降级到单条，避免大 batch 失败时整批 cue 丢失。验证：`go test ./internal/jobs`、`UV_CACHE_DIR=.uv-cache PYTHONPATH=src uv run pytest tests/test_translate.py -q`。
+- Round 13 最终 Windows RC 收口：新增 `desktop/scripts/smoke-translation-model-failure.mjs` 和 `npm run smoke:translation-model-failure`，用 packaged daemon + 空 `FAST_SUB_MODEL_STORE_DIR` 验证本地 NLLB 翻译模型缺失时 `translate_srt` 以 `missing_model` 失败，原字幕生成仍由默认 ASR smoke 覆盖且不依赖翻译模型。Provider 页补齐 API key 删除入口，Electron main 删除 safeStorage secret record 并把对应 Provider key 状态恢复为 missing；renderer 测试覆盖保存、替换、删除，确认 raw secret 保存/替换后不留在页面文本。最终自动验证基线已刷新：`go test ./...`、`npm run typecheck`、`npm test`、`npm run build`、`npm run smoke`、`npm run package`、`npm run smoke:packaged`、`npm run smoke:translation-model-failure`；最新 installer/portable 复测通过。
+- 已创建 `desktop-tests/round13-release-smoke.md`，作为 Round 13 打包形态、真实 Provider、真实文件、诊断和隐私 smoke 的记录模板。
+- 已创建 `dev-docs/ui-docs/specs/round13-electron-productization-release.md`，明确 Round 13 的目标、非目标、分支建议、输入状态、13.1 到 13.7 实现单元、打包/真实 Provider/诊断/发布检查清单和验收标准。
+- Round 12 环境依赖补齐：Electron main process 在环境检查中会真实检测 `ffmpeg/ffprobe`，缺失时在 Windows 后台自动下载 gyan.dev FFmpeg essentials zip，解压到 app `userData/native-binaries/ffmpeg/bin`，并在自管 Go daemon 启动环境中 prepend 该目录；renderer 只展示 `ffmpegReady`、安装进度、简短安装日志和失败重试入口，不直接运行安装逻辑。下载和 staging 使用独立临时文件，避免旧安装进程锁住 zip 后阻塞重试。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`。
+- Round 12 FFmpeg 下载加速补齐：环境依赖安装器优先使用 app 私有 aria2，其次系统 `aria2c`，缺失时先下载 aria2 到 `userData/native-binaries/aria2/bin`，再用 `aria2c -x16 -s16` 加速下载 FFmpeg；aria2 准备失败时自动回退普通 HTTPS 下载，并在安装日志中显示当前阶段。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`，并用 HEAD 检查 aria2 GitHub release URL 返回 200。
+- Round 12 FFmpeg 包管理器 fallback：环境检查页在 FFmpeg 缺失时提供显式的 Scoop、Winget、Chocolatey 安装按钮；renderer 不执行 shell，main process 只允许固定白名单命令：`scoop install ffmpeg`、`winget install --id Gyan.FFmpeg --exact --source winget --accept-package-agreements --accept-source-agreements`、`choco install ffmpeg -y`。安装后重新检查 FFmpeg 并重启自管 daemon。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`。
+- Round 12 FFmpeg 安装日志修复：安装日志不再只保留最近 8 行；阶段日志最多保留 80 行，重复下载进度会压缩更新同一条，避免 aria2 启用/失败等关键开头日志被普通下载进度刷掉。验证：`cd desktop && npm run typecheck`。
+- Round 12 aria2 bootstrap 修复：aria2 自动准备阶段如果 Node fetch 下载 GitHub release 失败，会回退到受控 PowerShell `Invoke-WebRequest` 下载，再继续解压发布到 app 私有目录；当前本机已将验证通过的 `aria2c.exe` 安装到 `AppData/Roaming/fast-sub-desktop/native-binaries/aria2/bin`。验证：`aria2c.exe --version`、`cd desktop && npm run typecheck`、`cd desktop && npm run build`。
+- Round 12 aria2 解压参数修复：PowerShell `Expand-Archive` 和 `Invoke-WebRequest` 调用不再依赖 `$args[0]/$args[1]`，改为显式 `param(...)` 传参，修复 Electron 运行时 `LiteralPath` 为空导致 aria2 准备失败的问题。验证：本地 param 解压 aria2 zip 成功、`cd desktop && npm run typecheck`、`cd desktop && npm run build`。
+- Round 12 ffprobe 可见性修复：确认 Gyan FFmpeg essentials 包发布时同时包含 `ffmpeg.exe`、`ffprobe.exe` 和 `ffplay.exe`；任务创建如果仍遇到 daemon 返回 `missing_dependency` 且消息包含 `ffmpeg/ffprobe`，Electron main 会确认私有 FFmpeg 可用、重启自管 daemon 并重试一次，修复安装后旧 daemon PATH 未更新导致 `ffprobe was not found on PATH` 的失败。验证：私有 bin 下 `ffprobe -version`、`ffmpeg -version` 可运行，`cd desktop && npm run typecheck`、`cd desktop && npm run build`。
+- Round 12 daemon FFmpeg PATH 同步前移：创建 `transcribe` 或 `burn_in` 任务前，Electron main 会先确认私有 `ffmpeg/ffprobe` 可用，并确保自管 daemon 至少重启过一次，使新 PATH 在 job 执行前生效；修复 `missing_dependency` 发生在异步 job 执行阶段时，创建接口 catch 不到的问题。验证：`cd desktop && npm run typecheck`、`cd desktop && npm run build`。
+- Round 12 Windows daemon PATH/进程树修复：Electron 启动 daemon 的环境现在同时写入 `Path` 和 `PATH`，避免 Windows/Go 子进程读取到未注入 FFmpeg 私有目录的 PATH；自管 daemon 停止时对 ready pid 执行 `taskkill /T /F`，避免 dev 模式 `go run` 只杀父进程而遗留旧 daemon 子进程继续处理任务。验证：`cd desktop && npm run typecheck`、`cd desktop && npm run build`。
+- Round 12 QA 表 DQA-047 修复：历史/任务队列页补齐 English i18n，状态 tab、近期任务说明、任务详情状态/进度/日志/配置基础文案切换英文后不再残留中文；`desktop-tests/README.md` 已同步为 Round 12 核心表 `PASS=54 / RETEST=0 / DEFER=0`。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 transient secret_ref 收口：daemon 新增受 token 保护的 `/v1/secrets`，Electron main 创建 API job 或 live Provider check 前从 safeStorage 读取 key 并注册短 TTL 一次性 `secret_ref`；daemon 消费后只放入当前内存请求 `Extra`，不写 request/job/events/log，自管 daemon 启动环境不再注入全部 Provider secret。验证：`go test ./internal/daemon`、`cd desktop && npm run typecheck`。
+- Round 12 secret_ref review 收口：已将 live Provider check 的临时 secret env 限制到对应 OpenAI-compatible Provider 的明确 alias 集合，避免把同一个 secret 回答给任意 `API_KEY/SECRET/TOKEN` 环境变量名；`secret_ref` 重复使用现在返回 `secret_ref_consumed`，与 daemon API contract 一致。验证：`go test ./internal/daemon ./internal/providers ./internal/jobs`。
+- Round 12 主流程 Provider 下拉收口：字幕生成详细设置里的“转写方式”只展示当前 `enabled && available` 的 STT Provider，不再显示不可点击的缺依赖/缺模型 Provider；如果配置仍指向旧的不可用 Provider，UI 会显示第一个可用 Provider，开始任务时继续走既有配置修复逻辑。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "repairs stale incompatible ASR provider"`。
+- Round 12 API Provider 可用性收紧：OpenAI 等 API Provider 只有 live connection check 成功后才算主流程可运行；保存 API key 或静态配置可用不再允许设为默认，也不会出现在字幕生成“转写方式”的可用候选中，避免未验证 Provider 直接进入任务后 401 失败。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "updates provider settings mock controls|repairs stale incompatible ASR provider"`。
+- Round 12 任务队列选择交互修复：任务列表单击改为选择任务，双击进入详情；支持 Ctrl 单项切换、Shift/Ctrl+Shift 范围多选；“全选所有项”作用于当前筛选下的全部任务，包括因最近 40 条渲染限制而隐藏的更早记录，批量取消/删除也按完整选中集合执行。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "shows task queue and settings entrances|selects all filtered queue jobs including hidden rows|deletes a failed queue job"`。
+- Round 12 任务队列 Shift 多选细节修复：任务卡片禁用文本选择，并在 Shift 鼠标按下时阻止浏览器原生选区，确保 Shift 只用于连续选择任务项，不会把范围内标题、chip 或状态文字高亮成文本选区。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "selects all filtered queue jobs including hidden rows"`。
+- Round 12 主流程烧录视频开关补齐：通用设置/详细设置中的 `burnInVideo` 不再只是配置字段；主流程 `transcribe` 成功后会使用生成的字幕路径自动追加对应 `burn_in` job，批量任务会为每个转写结果创建烧录任务，最终完成页展示 `.burned.mp4` 输出。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "automatically creates a burn-in job|walks from setup"`。
+- Round 12 翻译 Provider 配置入口修复：所有“配置翻译 Provider”入口改为带目标跳转，进入服务商页后直接滚到翻译 Provider 区域；普通左侧“服务商”入口仍保持常规进入，不再让用户误以为跳到了转写 Provider 配置。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "blocks translate tool jobs|blocks translated subtitle output selection until"`。
+- Round 12 API/Web 翻译就绪判断修复：翻译 readiness 按 Provider 类型判断，API/Web Provider 只要求自身可运行；本地 NLLB 才要求兼容翻译模型 ready，避免 OpenAI 兼容翻译 API 已连接检查通过但仍被本地翻译模型缺失误判为未配置。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "allows API translation provider|blocks translated subtitle output selection until|blocks translate tool jobs"`。
+- Round 12 默认翻译 API 连通检查补齐：应用启动加载配置后会对当前默认 API 翻译 Provider 自动执行一次 live connection check，并按 provider/base URL/model/key alias 记住本轮结果；如果用户在当前会话中把 API 翻译 Provider 设为默认或修改配置，也会自动触发一次检查。设置页会同步显示后台检查状态，用户不再需要每次进入服务商页后手动点击“连接检查”。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "runs the .*API translation provider live check"`。
+- Round 12 翻译配置阻断提示清理：当用户完成翻译 Provider 配置后，旧的“当前翻译 Provider 或翻译模型未配置好”warning 会自动消失，不再停留在已可用的 Provider 卡片上造成误导。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "blocks translated subtitle output selection until|allows API translation provider"`。
+- Round 12 生成中/任务详情进度同步修复：SSE snapshot/progress 会同步更新 `activeJobRef`、当前详情状态和任务列表摘要；从任务列表双击打开运行中任务详情时会订阅该任务事件，后续进度只刷新详情数据，不再把页面强制切回“正在生成”。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "does not jump back from the running queue|keeps running task detail progress synchronized"`。
+- Round 12 Provider 卡片模型安装入口修复：本地 Provider 缺模型时，服务商页的“先安装模型”按钮会直接调用现有 Go `model_install` job 安装当前兼容模型，不再只是不可操作的配置阻断提示；模型下载仍保留在设置页上下文，不跳转到生成页。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "installs a missing local translation model from the provider card|keeps model install progress inside the model management tab"`。
+- Round 12 模型下载慢网超时修复：Go native-http downloader 不再对整次模型下载设置 60 秒 `http.Client.Timeout`，改为只限制连接、TLS 和响应头等待；慢速大文件下载不会在读取 body 时被总超时中断，取消仍由 job context 控制。验证：`go test ./internal/downloads ./internal/models ./internal/jobs`。
+- Round 12 whisper.cpp 依赖自动安装补齐：服务商页 `local-whisper-cpp` 缺 native binary 时，“先安装依赖”会通过 Electron main 从官方 `ggml-org/whisper.cpp` GitHub release 下载 Windows x64 预编译包，解压到 app 私有 `native-binaries/whisper-cpp/bin`，并重启自管 daemon 让新 PATH 生效；renderer 只发起受控 IPC，不直接执行 shell 或下载逻辑。验证：`cd desktop && npm run typecheck`、`go test ./internal/providers ./internal/runtime/whispercpp`、`cd desktop && npm test -- App.test.tsx -t "installs a missing whisper.cpp provider dependency"`。
+- Round 12 最终回归收口：修复 Go STT worker 测试环境 allowlist、纯文本翻译本地 NLLB 测试 fixture，以及 renderer 测试中已过时的任务列表单击/远程 Provider 确认预期；当前 `go test ./...`、`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`、`cd desktop && npm run smoke` 均通过。未完成项仅剩 Round 13 打包形态和真实外部 Provider smoke。
+- Round 12 文档同步：按当前实现更新 Round 12 spec、QA 表和 tracker，明确真实 `DaemonFastSubClient`、`model_install`、主流程转写+翻译、`translate_srt` 文本兼容、`burn_in`、config 持久化、safeStorage secret alias、一次性 `secret_ref`、API provider 独立配置、web 翻译超时、Windows 子进程树取消和 FFmpeg/FFprobe 自动修复。验证：文档同步。
+- Round 12 UI 回归修复：任务详情/失败详情页的顶部应用菜单返回箭头固定回到字幕生成主界面；页内“返回任务列表”仍只返回任务列表，两个返回入口语义分离，避免从历史记录或后台任务详情返回时走错位置。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "uses the app menu back button"`。
+- 已修复主字幕生成的媒体筛选回归：`添加视频`、`添加文件夹`、浏览器 folder input fallback 和拖拽入口统一只接收 `.mp4/.mov/.mkv/.wav/.m4a/.mp3`，并跳过 `.DS_Store`、`Thumbs.db`、`desktop.ini` 等系统文件，避免字幕文件或隐藏文件进入批量任务。
+- 已优化大批量添加文件体验：媒体导入会先进入“正在整理文件”状态并显示转圈反馈，随后后台筛选可用媒体；已添加列表只渲染前 40 个预览，其余文件保留在任务数组中但折叠显示数量，避免大量文件让 renderer 看起来卡死。
+- 已移除主字幕生成流程中的远程/API Provider 二次确认弹窗；选择远程转写或翻译 Provider 后直接创建任务并向 daemon 传递显式确认标记，避免批量生成前被大弹窗打断，远程上传风险仍保留在 Provider 配置与状态提示中。
+- 已创建 `dev-docs/ui-docs/project-overview.md`，将项目范围收窄为 Fast Sub Electron 桌面客户端。
+- 已创建 `dev-docs/ui-docs/architecture.md`，定义 Electron main/preload/renderer、`FastSubClient`、mock client、daemon client 和页面边界。
+- 已创建 `dev-docs/ui-docs/code-standards.md`，定义 Electron 客户端代码标准、TypeScript、Electron、React/UI、client、IPC、存储、隐私和测试规则。
+- 已创建 `dev-docs/ui-docs/ai-workflow-rules.md`，定义 AI 编码代理在 Electron 应用开发中的工作方式。
+- 已创建 `dev-docs/ui-docs/ui-context.md`，从 prototype 中提取调色板、排版、圆角、状态色和 AI/provider 强调色 token。
+- 已确认主线 Round 8 到 Round 10.5 已完成，`dev-docs/ui-docs` 后续只规划 Electron 相关 Round 11、Round 12 和 Round 13。
+- 已在 `dev-docs/ui-docs/project-overview.md` 中同步后续三轮安排。
+- 已创建 `dev-docs/ui-docs/specs/round11-electron-mock-first-shell.md`，作为 Round 11 Electron Mock-first Shell 的可执行 spec。
+- 已细化 Round 11 spec，补充 implementation units、electron-vite 风格骨架、typed contract、job event contract、mock scenario matrix、路径 fixture、安全边界和 Electron smoke 验证。
+- 已完成 11.1：创建 `desktop/` Electron/Vite/React/TypeScript 骨架，包含 `desktop/main`、`desktop/preload`、`desktop/renderer`、`desktop/shared` 和 `desktop/test`。
+- 已完成 11.2：定义 `FastSubClient` MVP contract、`EnvironmentStatus`、`ModelStatus`、`ProviderStatus`、`ConfigViewModel`、job、event、result、log 和 `UiError` 类型；实现 `MockFastSubClient` 和 deterministic scenarios。
+- 已完成 daemon SSE 到 UI `JobEvent` mapping fixture 和测试，覆盖 `created/queued/started/progress/log/warning/completed/failed/canceled/interrupted/events_lost/heartbeat`，并验证 token、Authorization、API key 和 raw envelope 不泄露。
+- 已完成 11.3：落地首次启动、环境检查、添加媒体、添加文件夹、默认输出、详细设置折叠、创建 mock job、进度、成功结果、打开字幕和打开输出文件夹 mock 入口。
+- 已完成 11.4：落地任务队列、任务详情、失败/取消/重试/删除入口、redacted logs，以及设置页通用、模型管理、API 服务、Provider、诊断和 Benchmark tab。
+- 已完成 11.5：配置 Electron `contextIsolation: true`、`nodeIntegration: false`、基础 CSP、preload allowlist API、安全 smoke、renderer flow 测试、远程 provider 阻断确认和诊断 redaction。
+- 已修复 dev 模式空白窗口：当 electron-vite 未向 main process 注入 `ELECTRON_RENDERER_URL` 时，main process 会在未打包模式 fallback 到 `http://localhost:5173`，并记录 renderer load failure 诊断；dev CSP 允许 Vite/React refresh 所需的 localhost 和 websocket，生产 CSP 仍保持严格。
+- 已更新 `.gitignore`，忽略 `desktop/node_modules/`、`desktop/dist/`、`desktop/dist-electron/`、`desktop/out/`、`desktop/.vite/`、`desktop/coverage/`、`desktop/test-results/` 和 `desktop/playwright-report/`。
+- 已生成独立 `desktop/package-lock.json`，Round 11 使用 npm 管理 Electron 依赖。
+- 已从 `dev-docs/ui-docs/prototype` 导出 30 张 Round 11 原型视觉参考图，输出到 `dev-docs/ui-docs/prototype/reference/round11/`，并生成 `README.md` 索引。
+- 已新增 `dev-docs/ui-docs/prototype/export-artboards.mjs`，可通过本地 Vite 原型服务和 Chrome DevTools Protocol 重新导出 artboard PNG。
+- 已按 `dev-docs/ui-docs/prototype/reference/round11/` 视觉参考重做 renderer 主 UI：首次启动、空状态拖拽区、添加文件、详细设置、生成中、完成页、任务队列、设置页均改为原型窗口式布局；移除普通主界面的常驻左侧导航。
+- 已新增隐藏调试入口：右下角隐形按钮和 `Ctrl+D` 可打开调试面板，用于切换 mock 场景和主要页面状态，方便逐屏对照原型测试。
+- 已修正 Windows 适配：原型中的 macOS 三圆点和 `Fast Sub` 标题不再作为 renderer 内部伪窗口绘制；Electron 使用原生窗口标题栏，隐藏默认 File/Edit/View 菜单栏，内容区不再窗口套窗口。
+- 已移除首次启动检查页残留的顶部页面工具条，避免在 Windows 原生标题栏下出现空白横条。
+- 已修正 dev 模式文件选择：`添加视频` 现在通过隐藏的原生 `<input type="file">` 触发 Windows 系统文件选择器，不依赖 preload/IPC；Electron main 的 `dialog.showOpenDialog` 仍保留给文件夹选择和后续真实路径 adapter。
+- 已将 `添加文件夹` 同步改为隐藏的原生 folder input，通过 Chromium/Electron 的 `webkitdirectory` 触发 Windows 文件夹选择，并在 mock UI 中展示选中文件夹内的媒体文件。
+- 已将主界面输出位置的 `修改` 改为可交互目录选择入口，使用隐藏的原生 folder input 触发 Windows 路径选择，并在 mock UI 中回显选中的输出目录名。
+- 已将用户可见导航修正为固定应用菜单栏：进入主界面后固定显示 `←`、`→`、`窗口`、`帮助`，`窗口` 只包含 `字幕生成`、`翻译SRT`、`字幕烧录`；设置页、队列页和子功能不再重复渲染顶栏 tab。
+- 已将固定应用菜单栏与页面状态条对齐到同一顶栏高度，左侧菜单不再另占一行，右侧状态 chip 保持在同一水平线上。
+- 已修复固定应用菜单栏换行问题：`窗口`、`帮助` 保持单行显示，菜单背景不再撑出额外块状区域。
+- 已移除顶栏中的页面说明和页面级返回按钮：`任务详情`、`设置`、`翻译字幕`、`字幕烧录` 等不再显示在固定菜单栏旁，返回/前进统一使用全局 `←` / `→`。
+- 已收紧固定应用菜单栏高度，从页面标题条节奏改为更窄的菜单栏节奏。
+- 已将任务列表 tab 改为可点击筛选：`正在生成`、`已完成`、`失败` 会切换对应任务列表内容。
+- 已统一窗口功能页的设置入口：字幕生成、翻译SRT、字幕烧录在左下角显示齿轮 `设置`，字幕生成右下角不再重复显示 `设置`。
+- 已将顶部 `帮助` 从跳转诊断页改为预留文档菜单，先显示空链接位 `Fast Sub Document`，后续再接真实文档地址。
+- 已将任务详情 tab 改为可点击切换：运行中详情支持 `进度`、`日志`、`详情`，失败详情支持 `问题`、`日志`、`配置`。
+- 已修复帮助菜单文档入口换行问题，`Fast Sub Document` 保持单行显示。
+- 已修复已添加文件列表的 `移除` 行为，点击后会从当前列表删除文件并更新数量，删空时回到空状态。
+- 已实现详细设置中的输出内容、输出冲突、词级时间戳和保留临时文件交互，点击后会更新当前 mock 配置和选中态。
+- 已修复完成页结果卡片的 `文件夹` 按钮，点击后会通过 mock open path 打开输出目录。
+- 已为 mock 打开路径操作增加可见反馈，点击 `文件夹` 或 `打开字幕` 后会显示已模拟打开的路径提示。
+- 已增强 mock 打开路径提示样式：提示居中显示，字号/阴影/色彩更醒目，并区分成功与失败状态。
+- 已实现设置 / 通用页的主要选项交互：输出内容、文件冲突策略、默认转写方式、设备和词级时间戳会写入 mock 配置并更新选中态。
+- 已补全设置 / 通用页语言选项的本地 UI 状态，`跟随系统`、`简体中文`、`English` 可以切换选中态。
+- 已为翻译SRT和字幕烧录工具接入本地文件选择：选择 SRT、选择视频、选择字幕会打开文件选择器并回显选中文件名。
+- 已收紧固定应用菜单栏左侧留白，让 `←`、`→`、`窗口`、`帮助` 更靠近窗口左侧。
+- 已在缺少默认 ASR 模型的空状态提示中增加 `去下载模型` 入口，直接跳转到设置 / 模型管理页，避免用户只能阅读阻断提示。
+- 已修复 Round 11 审阅中剩余 6 个缺口：取消任务会停止订阅并保持取消态，缺 ASR 模型安装后可恢复本地转写，队列详情支持重试/删除/取消，主界面拖拽文件可进入已添加状态，翻译SRT/字幕烧录具备 mock 选择和完成/失败流，smoke 会真实启动 Electron 并验证 renderer/preload allowlist。
+- 已完成 Round 11 二次审阅收口：`events_lost` 使用当前 active job 重新同步，mock 场景补齐模型安装中/安装失败，翻译SRT和字幕烧录通过 `FastSubClient.createJob()` 创建 mock 任务，输出冲突策略会写入配置，媒体/文件夹/输出目录选择优先走 preload allowlist，诊断页只展示脱敏的产品级示例信息。
+- 已将 `desktop/renderer/src/App.tsx` 重构为轻量入口，实际 shell 迁移到 `desktop/renderer/src/app/AppShell.tsx`，为后续继续拆分页面和组件留下明确边界。
+- 已继续拆分 `desktop/renderer/src/app/AppShell.tsx`：抽出 `types.ts`、`fixtures.ts`、`components.tsx`、`renderScreen.tsx` 和 `screens/` 下的 setup/main/queue/settings/tools 页面模块；当前 app 目录内单文件均低于 500 行，最大文件为 `AppShell.tsx` 429 行。
+- 已补充 renderer 测试覆盖：preload allowlist 文件/目录选择、`events_lost` 重同步、模型安装中/失败场景、翻译SRT/字幕烧录任务创建、缺 ASR 模型阻断与模型管理跳转、设置和详细设置选项交互。
+- 已修复 Round 11 对照审阅剩余缺口：失败任务改为 `MockFastSubClient` 中的真实 job，队列失败详情可真正删除；默认 ASR 安装失败场景会阻断主转写并显示重试；取消任务进入 `canceling` 状态再完成取消；输出冲突 `另存为` 在目录选择取消时不会继续创建任务；任务队列 tab 数字改为根据 mock job 动态计算。
+- 已补齐设置页剩余 mock 交互：API 服务启用、上传前确认和连接测试具有本地状态反馈；Provider 刷新会调用 `FastSubClient.testProvider()` 的 mock 静态检查；Provider 状态从 contract enum 映射为用户可读文案，避免显示 `missing_api_key`、`disabled` 等内部状态码。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`。
+- 已修复输出冲突与远程上传确认的状态串用问题：`startJob()` 现在区分 `conflictResolved` 和 `remoteUploadConfirmed`，用户处理同名文件冲突后仍会看到远程 provider 上传确认弹窗；新增回归测试覆盖冲突 + 远程 provider 组合场景。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`。
+- 已通过验证：
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`
+  - `cd desktop && npm run build`
+  - `cd desktop && npm run smoke`
+- 已创建 `dev-docs/ui-docs/specs/round12-electron-daemon-integration.md`，将 Round 12 定位为桌面版发布前核心功能闭环：真实 daemon client、独立 `model_install` job、真实转写、翻译 SRT、字幕烧录、配置写入和 main process secret storage。
+- 已根据 Round 12 审阅建议细化 spec：初步拆分 12.1 到 12.8，并要求先完成 daemon API contract 和 fake fixtures，避免 Electron adapter 猜测新增 job/config/secret API。
+- 已在 Round 12 spec 中明确 fetch-based SSE、Windows 进程清理限制、Python CLI bridge 安全/编码规则、配置 atomic write、keytar 风险和 safeStorage fallback、真实手动 smoke 要求。
+- 已按二次审阅调整 Round 12 spec：将 config/secret 提前到 12.4，明确真实 job 使用保存后的配置，补充 `createModelInstallJob()` 语义、CLI resolver、transient secret reference，以及 12.8 前 mock/fake daemon 的开发保留规则。
+- 已更新 `dev-docs/go-docs/specs/daemon-api.md`，新增 Round 12 planned extensions：`model_install`、`translate_srt`、`burn_in`、model verify、job result shape、config boundary、secret boundary 和 fake daemon fixture 要求。
+- 已按第三次审阅收口 Round 12 文档：配置边界固定为 daemon `GET/PATCH /v1/config`，`secret_ref` 不得原样持久化，`FastSubClient` 类型变更写入 spec，并明确 12.1 contract 未完成前不创建真实 adapter、不切 UI 默认模式。
+- 已补齐 Round 12 contract 细节：`GET /v1/config` / `PATCH /v1/config` 的 view model、merge patch 和 validation error shape；`secret_ref` 的生成、消费、TTL、错误码和清理规则；fake daemon fixtures 和手动 smoke 测试资产位置。
+- 已完成 12.1/12.2/12.3 的 Electron 侧基础实现：新增 `DaemonFastSubClient` renderer-facing facade、preload typed allowlist、main process daemon lifecycle、ready JSON 读取、token 内存持有、REST envelope 映射和 fetch-based SSE 订阅/取消/resync。
+- 已新增 Round 12 fake daemon fixtures：`desktop/test/fixtures/daemon/round12/` 覆盖 `model_install`、`translate_srt`、`burn_in`、config view、secret_ref 错误词表和 redaction。
+- 已扩展 `FastSubClient` contract：`JobKind` 增加 `model_install`，`ModelStatus.installJobId`，`createModelInstallJob(modelId)`；`MockFastSubClient` 和 renderer 模型管理入口已改为独立模型安装 job 语义。
+- 已完成 12.4 的基础 adapter：main process 增加 Electron `safeStorage` secret store fallback 和 transient secret reference map；renderer 仍只看到 alias/masked/status，不接触 raw secret。
+- 已完成 Go daemon 的最小 Round 12 API 扩展：`POST /v1/jobs` 接受 `model_install`、`translate_srt`、`burn_in`，新增 `GET/PATCH /v1/config` 和 `POST /v1/models/{model_id}/verify`。
+- 已接入 Go daemon Round 12 job bridge：`model_install` 复用现有 Go model installer 并通过 job/SSE/cancel/result/logs/delete 展示进度；`translate_srt` 已使用受控 Python CLI bridge；`burn_in` 当前仍使用受控 placeholder bridge，真实 ffmpeg bridge 仍需后续完善。
+- 已修复 Electron dev 启动找不到 `fast-sub-go.exe` 的问题：未打包模式下如果找不到显式二进制，会从仓库根目录用 `go run ./cmd/fast-sub-go` 启动本地 daemon；初始化列表请求在 daemon 不可用时返回空状态，由环境检查页显示可恢复服务错误，避免 main process 连续输出 IPC handler 错误。
+- 已新增 dev-only daemon transport log：设置 `FAST_SUB_DEBUG_DAEMON=1`，或创建 `desktop/local/daemon-debug.json` 后，Electron main process 会输出/写入 redacted daemon spawn/ready、REST method/path/status、SSE connect/event/error 摘要；日志不包含 token、Authorization、raw secret 或完整 request body。示例配置见 `desktop/daemon-debug.example.json`。
+- 已修复 Desktop 真实转写请求的 source 输出目录推导：当配置为“与源视频相同目录”时，renderer 会用真实输入文件父目录作为 `outputDirectory`，避免把 mock fixture 输出目录带入 daemon 请求；同时在 dev-only transport log 中增加 `job.request` 摘要，记录 job type、input/output path、inputExists、provider/model/language 和失败事件中的 daemon error 摘要，方便定位 Desktop 与 Go 直测参数差异。
+- 已修复完成页仍显示 Round 11 占位结果的问题：`main-done` 现在从当前 `activeJob.result` 渲染输出文件名、耗时/摘要、打开字幕路径和输出文件夹，不再固定显示 `a b.srt`、`sample-lecture.srt` 和失败占位项。
+- 已修复 Go daemon `completed` SSE 事件到 UI 结果的字段映射：完成事件现在读取真实 `output_path`、推导 `outputFolder`，并用 `elapsed_sec` 生成耗时文案，避免因只识别旧 fixture 的 `subtitle_path` 而回退到占位 `a b.srt`。
+- 已修复失败任务详情页仍显示 Round 11 占位错误的问题：`queue-failed` 现在读取当前 `activeJob.error` 的真实 title/message/action/code/details/diagnostic；日志和配置 tab 也改为当前任务摘要，不再固定显示 `media_extract_failed`、`extracting_audio` 或 `meeting.mp4` 占位日志。
+- 已接通真实输出冲突确认流程：daemon job 因 `output_exists` 失败且 UI 配置为 `ask` 时，renderer 会显示覆盖/跳过/另存为确认；用户确认覆盖后，Electron main process 会在下一次 `POST /v1/jobs` 中传递 `options.overwrite=true`，Go job runner 仅在该显式选项存在时允许覆盖已有输出。
+- 已修复输出冲突弹窗目标路径显示错误：最小 `created/queued` SSE 事件不再用 Round 11 fallback snapshot 覆盖真实 job title/path；`output_exists` 错误会从 daemon message 中提取真实 `output_path` 到 `error.details.output_path`，弹窗优先显示该路径。
+- 已修复真实 job 默认输出目录仍可能使用 mock fixture 目录的问题：如果用户没有明确选择自定义输出目录，`C:\Users\Example\Videos` 和 `mock-output://` 这类 mock 默认值不会传给 daemon，renderer 会改用输入媒体所在目录。
+- 已修复输出冲突“另存为”语义：按钮现在打开系统保存文件对话框，让用户为字幕选择新的 `.srt` 文件名；renderer 将选择到的完整文件路径作为 `CreateJobRequest.outputPath` 传给 main process，并由 daemon client 直接作为 `output_path` 使用，不再把“另存为”当成换目录。
+- 已修复拖拽媒体文件时仍只拿到文件名的问题：preload 通过 Electron `webUtils.getPathForFile(file)` 暴露 allowlist 方法，renderer 的拖拽和 fallback 文件选择会优先使用真实本地路径，从而按输入媒体所在目录生成输出路径。
+- 已修复 OpenAI-compatible Provider 校验过度依赖 API Key 的问题：Go provider static check 对 `localhost`、`127.0.0.1`、`::1` 和 `*.localhost` Base URL 允许 key 可选；单个 API Provider 的“连接检查”会真实请求配置的 `/models` 端点，用返回码判断本机服务是否需要 key，避免 LM Studio 等本机服务被错误标记为 `missing_api_key`；同时兼容旧 `openai-default` 凭据别名到 `FAST_SUB_OPENAI_API_KEY`，Electron main 启动 daemon 时会注入安全存储中的新旧别名但不暴露给 renderer。
+- 已修复 API Provider 连接检查读取旧配置的问题：非默认 API Provider 的 Base URL / 模型编辑也会写入 daemon config，点击“连接检查”前会先同步当前表单草稿，避免 UI 显示 `127.0.0.1` 但 daemon 仍按旧远程配置返回 `Missing API key`。
+- 已修复 API Provider 连接检查结果只停留在 Provider 页局部状态的问题：`FastSubClient.testProvider()` 返回的 live check 结果现在会同步回 AppShell 全局 provider 列表，通用页默认翻译 Provider 下拉会使用“API 可连通即可用”的状态，不再继续显示旧的 `Missing API key`。
+- 已移除生成中页面的 Round 11 占位等待列表：`接下来` 区域现在从真实 `jobs` 中渲染等待/运行任务，底部任务计数也改为当前 job 在真实列表中的位置和总数；没有真实等待任务时不显示占位文件名。
+- 已修复主界面“添加文件夹”仍使用 Round 11 占位文件的问题：新增 main/preload allowlist `selectMediaFolder()`，由 Electron main process 选择目录并枚举真实媒体文件路径返回 renderer；renderer 不再用 `seedFiles` 拼接目录。
+- 已修复文件夹批量生成只创建一个真实 daemon job 的问题：renderer 现在会为每个媒体文件分别调用 `FastSubClient.createJob()`，每个 request 只包含一个 `input_path`，后续文件会真实进入 daemon job 队列并可在生成中页面的“接下来”显示。
+- 新增桌面端 Round 12 快速回归脚本 `npm run test:round12`：串行执行 typecheck、Round 12 相关 Vitest 和 preload/main smoke；需要更完整验证时可运行 `npm run test:round12 -- --full` 追加 desktop build。
+- 新增 `desktop-tests/` 手动反馈专项排查记录：`README.md` 归纳 mock/占位残留、真实 job 未贯通、路径来源错误、输出冲突、错误展示、批量队列和隐私边界等问题类型；`pics/` 保存 Electron offscreen 复现截图，`capture-round12-pages.mjs` 可重新生成关键页面截图。
+- 已按第一轮页面排查继续修复占位数据风险：`startJob()`、`MainFiles`、远程确认弹窗不再在空文件时 fallback 到 `seedFiles`；生成中“接下来”只展示本次 batch job ids，不再混入全局历史/mock 队列；`MockFastSubClient` 成功事件不再硬编码 `a b.srt`。
+- 已同步 `dev-docs/go-docs/specs/daemon-api.md`，将 Round 12 扩展从 planned 更新为当前接入边界，并记录 placeholder/降级路径。
+- 已通过验证：
+  - `go test ./...`（首次 sandbox 访问 Go build cache 被拒，提权重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（首次 sandbox 解析 Vitest config 被拒，提权重跑通过）
+  - `cd desktop && npm run build`
+  - `cd desktop && npm run smoke`
+- 追加验证：
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（sandbox 解析 Vitest config 被拒，提权重重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（完成页真实 job result 渲染修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（Go daemon completed event `output_path` 映射修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（失败详情真实 error/log/config 渲染修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（输出冲突确认和 request contract 修改后重跑通过）
+  - `go test ./...`（新增 `validateOutput` 显式 overwrite 测试后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（输出冲突目标路径和 SSE snapshot 合并修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（默认输出目录去 mock fixture 修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（输出冲突“另存为”改为保存字幕文件路径后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（拖拽文件真实路径解析修复后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（生成中等待任务列表改为真实 jobs 数据后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（添加文件夹改为真实媒体文件列表后重跑通过）
+  - `cd desktop && npm run typecheck`
+  - `cd desktop && npm test`（文件夹批量生成每个媒体文件创建独立 job 后重跑通过）
+  - `cd desktop && npm run test:round12`
+  - `node desktop-tests\capture-round12-pages.mjs`
+  - `cd desktop && npm run test:round12`（desktop-tests 第一轮排查修复和新增 batch 队列测试后重跑通过）
+
+## 进行中
+
+- Round 13 规划阶段：先做 release inventory 和 packaging decision，再进入打包 pipeline、打包形态 smoke、真实 Provider smoke、诊断 polish 和发布检查清单。
+
+## 接下来
+
+- 13.4：按 `dev-docs/ui-docs/specs/round13-electron-productization-release.md` 继续真实 Provider/file smoke；需要真实模型下载、本地兼容 OpenAI API endpoint、真实小媒体/SRT/TXT 路径验证，并把结果写入 `desktop-tests/round13-release-smoke.md`。
+- 13.4 到 13.7：按 `dev-docs/ui-docs/specs/round13-electron-productization-release.md` 依次执行真实 Provider/file smoke、诊断隐私 polish、截图/E2E 基线和发布检查清单，并把真实环境结果写入 `desktop-tests/round13-release-smoke.md`。
+
+## 决策清单
+
+### 已确定
+
+- 后续 UI 实现轮次：Round 11 做 Electron mock-first shell，Round 12 接入 Go daemon，Round 13 做产品化与发布准备。
+- Round 11 spec 路径：`dev-docs/ui-docs/specs/round11-electron-mock-first-shell.md`。
+- Round 8 到 Round 10.5 已完成，不再把 Go/Python 主线迁移任务混入 `dev-docs/ui-docs` 的后续 UI 计划。
+- Electron 规划入口：使用 `dev-docs/ui-docs/project-overview.md`，不再使用 `dev-docs/ui-docs/README.md`。
+- 文档阅读顺序：`project-overview` -> `architecture` -> `code-standards` -> `ui-context` -> `ai-workflow-rules` -> `project-tracker`。
+- 实现策略：mock-first，先完整跑通 UI 流程，再接真实 daemon API。
+- Client 边界：所有后端访问通过 `FastSubClient`，renderer 不直接访问 daemon、Python worker、ffmpeg、模型下载器或 provider runtime。
+- 默认翻译模型：首次启动默认准备 NLLB；如果 NLLB 安装失败，不阻断主转写流程，UI 提供稍后处理和诊断入口。
+- 配置策略：用户设置通过 daemon `GET/PATCH /v1/config` 持久化到 Fast Sub 配置文件；API key 和 provider secret 只保存到 Electron main process 管理的 `safeStorage` + 本地加密 secret store，配置文件只保留 alias、环境变量名、masked 状态或 secret store reference。
+- Benchmark：第一版保留在设置 / 诊断后面的规划入口，不进入主流程。
+- Daemon client 测试：使用 fake HTTP/SSE server 和 contract fixtures，不启动真实 daemon。
+- Round 11 Electron 应用目录：使用 `desktop/`。
+- Round 11 文档/原型整理分支可以继续使用 `codex/ui-prototype`；生产 Electron 实现分支从 `master` 切出 `codex/fast-sub-desktop-mock-shell`。
+- Round 11 实现使用单分支推进，不拆并行 worktree；11.1 到 11.5 可作为阶段提交，合并前按用户要求 squash 或保留。
+- Round 11 UI 状态管理：使用 React state，不引入 Zustand/Jotai。
+- Round 11 组件策略：使用自定义组件，基于 prototype 和 `dev-docs/ui-docs/ui-context.md` token 整理。
+- Round 11 安全存储：只实现 mock 安全存储，不选定真实 OS keychain 依赖。
+- Round 11 任务事件：不实现真实 SSE，只在 mock client 中模拟 job event/progress。
+- Round 11 默认 ASR：使用 `whisper-small` 占位。
+- Round 11 默认翻译模型：使用 NLLB 占位，失败不阻断主转写流程。
+- Round 11 实现单元：11.1 Electron/Vite 骨架，11.2 contract 和 mock fixtures，11.3 首次启动和主界面核心流，11.4 任务队列和设置入口，11.5 安全和测试收口。
+- Round 11 job event contract：`snapshot`、`progress`、`log_tail`、`succeeded`、`failed`、`canceled`、`events_lost`。
+- Round 11 mock scenarios 必须可控、可复现，不使用随机失败作为默认行为。
+- 用户可见导航采用固定应用菜单栏方案，而不是恢复 Electron/Windows 系统菜单、复刻 macOS chrome，或只依赖隐藏调试 tab。
+- 固定应用菜单栏在首次启动检查阶段隐藏；进入主界面后提供 `←`、`→`、`窗口` 和 `帮助`，其中 `窗口` 菜单只包含 `字幕生成`、`翻译SRT`、`字幕烧录`。
+- 隐藏调试面板继续保留全页面 mock 状态跳转，但只作为开发测试工具。
+- Round 12 模型安装走独立 `model_install` job，通过同一套 job/SSE/取消/失败/结果模型展示进度。
+- Round 12 真实翻译 SRT 和字幕烧录通过 Go daemon 新增 job type 接入；本轮允许 Go daemon 受控调用现有 `fast-sub` Python CLI，后续再逐步 Go 原生化。
+- Round 12 API key 和 provider secret 使用 Electron main process 管理的 secret storage；当前实现采用 Electron `safeStorage` + 本地加密 secret store。`keytar`/OS keychain 只作为后续打包和跨平台验证方向，不作为当前默认路径。
+- Round 12 SSE 固定使用 main process fetch-based SSE，不使用 renderer 原生 `EventSource`。
+- Round 12 实现顺序：12.1 daemon API contract，12.2 daemon lifecycle，12.3 REST/SSE client，12.4 config/secret 基础 adapter，12.5 transcribe，12.6 model_install，12.7 translate/burn bridge，12.8 UI 回归收口。
+- Round 12 `model_install` 应新增 `createModelInstallJob(modelId): Promise<JobDetail>`；旧 `installModel(modelId)` 只保留兼容语义，返回带 install job id 的 installing 状态。
+- Round 12 secret 从 Electron 到 daemon 使用 main-controlled transient secret channel：Electron main 读取 safeStorage 后调用 daemon `/v1/secrets` 获取短 TTL 一次性 `secret_ref`，API job/live Provider check 只携带引用；daemon 消费后仅写入当前内存请求，不持久化 raw secret 或原始 ref。
+- Round 12 Python CLI bridge 必须定义 CLI resolver：显式配置、环境变量、开发环境 `uv run fast-sub`、PATH `fast-sub`、打包内置入口；缺失时返回结构化 missing runtime 错误。
+- Round 12 Python CLI bridge 必须使用参数白名单、`exec.CommandContext`、环境变量 scrub、UTF-8/replacement 解码、JSON/log 分离和 redacted logs。
+- Round 12 配置写入必须 validate、atomic write、schema version、损坏配置恢复，并防止 masked key 被当作 raw key 写回。
+- Round 12 Fast Sub runtime 配置统一通过 daemon `GET /v1/config` 和 `PATCH /v1/config` 管理；Electron 本地只保存窗口状态、debug/mock 偏好等纯 UI 偏好。
+- Round 12 `secret_ref` 不得原样持久化到 job metadata、events、logs、stdout、stderr 或 renderer state；需要落盘时只能写入脱敏占位。
+- 生产模式不能因 daemon 失败静默切 mock；mock/fake daemon 只能通过明确开发/测试入口启用。
+- Round 12 配置读写真实落地，普通设置通过 daemon config API 写入 Fast Sub runtime 配置。
+- Round 13 spec 路径：`dev-docs/ui-docs/specs/round13-electron-productization-release.md`。
+- Round 13 smoke 记录路径：`desktop-tests/round13-release-smoke.md`。
+- Round 13 只做产品化和发布准备，不新增核心业务能力，不改变 daemon/UI 主 contract。
+- Round 13 发布平台包括 Windows 和 macOS；Windows 第一版同时做 x64 installer 和 portable zip，macOS 第一版只做 arm64 dmg。
+- Round 13 默认打包工具确定为 `electron-builder`；原因是需要跨平台 artifact、installer/portable/dmg/zip target、`extraResources` 打包 Go/Python/native binaries，以及后续 Windows signing、macOS signing/notarization 标准入口。
+- Round 13 Go daemon 作为平台二进制随包分发；Electron main 在打包态从 app resources 下的平台目录定位 `fast-sub-go(.exe)`。
+- Round 13 普通用户不需要系统 Python、uv 或全局 `fast-sub` CLI；本轮采用 app 私有 Python runtime + Python CLI bridge/worker 随包分发，不在本轮全量迁移 STT/translation 到 Go。
+- Round 13 模型不随包分发；首次启动根据本地环境安装默认转写模型和默认翻译模型，安装成功后才标记本地转写/本地翻译就绪。
+- Round 13 默认 ASR 模型优先安装小模型，不做复杂硬件推荐；默认翻译模型使用当前默认 NLLB manifest。
+- Round 13 Provider smoke 分级：默认本地 ASR Provider、默认本地翻译 Provider 和本地兼容 OpenAI API 作为 release blocker；真实 OpenAI、Bing、Google 作为外部服务记录项，失败不默认阻塞本地桌面发布。
+- Round 13 macOS 验收必须在 macOS host 或 macOS CI runner 上完成；Windows 上的配置检查不能作为 macOS artifact 验收。
+- Round 13 所有可执行 runtime 必须位于 ASAR 外，macOS arm64 还必须验证可执行权限、quarantine 风险和取消/退出/repair 后的子进程清理。
+- Round 13 license/notice 不只列清单，还要给每个组件明确 `bundle-ok`、`download-only`、`manual-user-install`、`blocked` 或 `needs-review` 结论；`blocked` 组件不得进入发布包。
+- Round 13 实现顺序：13.1 release inventory，13.2 packaging pipeline，13.3 packaged daemon/dependency smoke，13.4 real provider/file smoke，13.5 diagnostics/privacy polish，13.6 release E2E/screenshot baseline，13.7 release checklist。
+- Round 13 手动真实 smoke 结果应整理到 `desktop-tests`，真实网络、真实模型和 GPU 压力测试不进入默认 CI。
+- Round 13 可以接受第一版未签名内部试用包，但必须在发布记录中明确安装风险、安全软件误报风险和用户提示。
+
+### 实现前必须确认
+
+- 默认小型 ASR 真实 manifest id。
+- 当前默认 NLLB manifest id、磁盘占用提示和安装失败文案。
+
+## 架构决策
+
+- Electron 应用只负责 UI、用户交互、daemon 生命周期管理、安全桥和 client adapter。
+- Renderer 只能通过 `FastSubClient` 访问后端能力。
+- 先实现 `MockFastSubClient` 跑通完整 UI，再接入 `DaemonFastSubClient`。
+- `DaemonFastSubClient` 的真实 REST/SSE、token、配置文件同步逻辑放在 main/preload controlled client 中；renderer 只使用 typed facade。
+- Go daemon、Python worker、ffmpeg、whisper.cpp 和远程 API 都是 Electron 应用边界外的能力。
+- 普通主界面不得暴露 daemon、SSE、job id、JSON envelope、worker 或 provider runtime 细节。
+- 默认本地处理，远程 provider 必须显式确认上传内容。
+- API key 和 provider secret 必须使用安全存储，不进入 renderer state 或 localStorage。
+- 默认不引入数据库、外部消息队列、WebSocket、高级调度或 worker pool；aria2 仅作为 Windows FFmpeg 自动安装的受控下载加速器，不进入普通任务调度或模型下载默认路径。
+
+## 会议记录
+
+- 用户明确：Round 8 到 Round 10.5 已经完成，`dev-docs/ui-docs` 后续主要从 Round 11 开始。
+- 后续安排收敛为三轮：Round 11 Electron Mock-first Shell，Round 12 Electron 接入 Go Daemon，Round 13 产品化与发布准备。
+- 用户明确：`dev-docs/ui-docs` 中的文档应聚焦 Electron 应用，而不是整个 Fast Sub 项目。
+- `dev-docs/ui-docs/prototype/v2` 是当前 UI 信息架构和状态设计的主要参考。
+- 原型覆盖五大区域：首次启动 / 环境检查、主界面 / 一键生成字幕、子功能、任务队列、设置。
+- Electron 实现策略采用 mock-first：先完整跑通 UI 状态和流程，再接真实 daemon API。
+- 后续实现前需要先完成剩余技术选择，重点是真实安全存储、真实 SSE client、配置文件 adapter 和默认模型 manifest 细节。
+- 用户明确：Round 11 spec 创建后需要同步更新 `dev-docs/ui-docs/project-tracker.md`，不作为可选项。
+- 已根据 GitHub 调查和审查建议细化 Round 11 spec：参考 electron-vite-react 的目录骨架、Electron 官方 contextBridge/contextIsolation 安全建议、类型化 IPC/schema 思路、本地 AI 桌面应用的 daemon/client 分层和可复现 mock 场景。
+- Round 11 审阅反馈：顶部栏必须固定且不重复；菜单项位置保持为 `←`、`→`、`窗口`、`帮助`，`窗口` 只承载字幕生成、翻译SRT、字幕烧录三个页面入口。
+- Round 11 审阅反馈：缺少默认 ASR 模型时，全局状态必须显示本地转写未就绪，并阻断添加媒体、选择输出路径和开始生成等后续任务操作；隐藏调试面板切换页面也不能绕过该状态。
+- Round 11 审阅反馈修复：需要补齐任务取消/重试/删除、拖拽添加、翻译SRT/字幕烧录 mock 流和真实 Electron smoke；当前实现仍保持 mock-first，不接真实 daemon、真实网络、模型下载、ffmpeg、Python worker 或 provider runtime。
+- Round 11 review 收口修复：去除用户可见 `daemon` 文案，API 服务设置将 `Base URL` 产品化为高级服务地址；任务队列的进行中/等待中示例改为来自 `MockFastSubClient` 的 job 数据，列表计数、筛选和详情入口共用同一 mock contract。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`、`cd desktop && npm run smoke`。
+- Round 12 审阅反馈：当前 spec 范围较大，必须拆成 12.1 到 12.8；实现前先补 daemon API contract 和 fake fixtures，避免 Electron adapter 猜测新增 job/config/secret API。
+- Round 12 审阅反馈：SSE 采用 fetch-based SSE 以支持 Authorization header、AbortController、Last-Event-ID、heartbeat timeout、退避重连和 fatal error 分类。
+- Round 12 审阅反馈：`keytar` 是 native module 且上游已归档，仍可作为首选，但必须记录 Electron ABI 风险和 `safeStorage` fallback；Linux `basic_text` 不可静默当作安全存储。
+- Round 12 二次审阅反馈：Goals 不应写死 keytar，应改成 main process 管理的 secret storage；Workstream 顺序应与 12.1-12.8 对齐；transient secret channel 必须在 daemon API contract 中明确；12.8 验收时才切真实 daemon 为默认。
+- Round 12 三次审阅反馈：配置边界必须二选一，最终确定为 daemon config API；`secret_ref` 不能作为可重放秘密引用落盘；`FastSubClient` 类型变更必须显式写入；12.1 未完成前不得创建真实 adapter 或切默认模式。
+- Round 12 四次审阅反馈：config API shape 和 `secret_ref` 生成/消费契约必须在 12.1 前定死；fake daemon fixtures 和手动 smoke 资产需要明确推荐位置。
+- Round 12 UI 回归修复：文件夹批量添加后 `startJob()` 已保留整批创建出的 job id，不再把 `activeBatchJobIds` 覆盖为首个任务；生成页会显示真实批量进度如 `任务 1 / 3`，并列出后续等待任务。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：批量任务中的单个 job 成功时不再立即跳转“字幕生成完成”；生成页会切到下一条等待/运行任务并继续订阅，只有整批全部成功后才进入完成页。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：批量任务完成页已改为展示整批字幕结果列表，完成数量和结果卡片来自本批所有成功 job，不再只显示最后一个/当前一个任务。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：生成页“后台运行”按钮已接入任务历史，并默认打开“正在生成”筛选；该筛选现在同时展示 running/canceling 和 queued 任务，便于查看整批后台任务。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：点击“后台运行”后进入任务历史的运行中筛选，后续 job snapshot/progress/succeeded/failed/canceled 事件只更新任务数据，不再默认把页面拉回生成页或完成页。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 体验修复：生成页进度显示增加 smooth display progress 层；真实 daemon 进度仍作为事实值，UI 在低于真实进度时快速追赶，进度停滞时缓慢预估前进，未完成前封顶到 97%，避免卡住或提前显示 100%。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：结果页“打开字幕/文件夹”已从模拟打开改为 Electron main process 调用 `shell.openPath` 真实打开本机路径，renderer 只接收成功/失败布尔结果。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：真实打开字幕/文件夹成功后不再显示底部 toast，仅打开失败时保留错误提示。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：“打开字幕”路径映射改为优先使用 daemon `subtitle_path`；若结果误给视频路径，结果页会按 job 输出目录和输入文件名兜底推导字幕文件，避免打开原视频。验证：`cd desktop && npm test -- App.test.tsx daemonEventMapping.test.ts`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：任务历史卡片增加完成时间、语言、provider、模型和输出目录摘要；已完成任务卡片可点击进入任务详情，详情页展示完成状态和基础配置。验证：`cd desktop && npm test -- App.test.tsx daemonEventMapping.test.ts`、`cd desktop && npm run typecheck`。
+- Round 12 UI 体验修复：任务历史卡片摘要改为标签形式；列表不再展示完整输出路径，完成时间格式化到秒，详细输出目录仅保留在任务详情中。验证：`cd desktop && npm test -- App.test.tsx daemonEventMapping.test.ts`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：翻译 SRT 工具页接入真实翻译环境 readiness gate；当翻译 Provider 或默认翻译模型未准备好时禁用“开始翻译”，显示“翻译环境未准备好”并提供“配置翻译 Provider”入口，避免继续走 mock 翻译成功状态。验证：`cd desktop && npm test -- App.test.tsx daemonEventMapping.test.ts`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：设置 / 通用页补齐原型中的字体风格切换、输出格式和翻译目标语言；`outputFormat` 与 `targetLanguage` 已进入 `ConfigViewModel`、daemon config API mapping 和 job create request，字体风格作为 renderer UI 偏好处理。验证：`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`、`cd desktop && npm run typecheck`、`go test ./...`。
+- Round 12 UI 回归修复：设置 / 通用页“输出内容”切换接入真实 daemon config 字段 `output_type`，不再被 config API 返回值重置为原字幕；Go config view、PATCH validate/merge 和 daemon API 文档同步更新。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`、`go test ./...`。
+- Round 12 UI 回归修复：设置 / 通用页“默认转写 Provider”和“默认翻译 Provider”由本地/远程分段控件改为下拉框，选项直接来自 daemon/mock 返回的 provider 列表并按 STT/translation capability 过滤，选择后写回对应默认 provider 配置。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`。
+- Round 12 设置重规划：移除独立“API 服务”用户入口，Provider 页按“转写 Provider / 翻译 Provider”组织，并在 provider 卡片中承载默认选择、模型、设备、词级时间戳、Base URL、模型名、密钥状态、隐私和上传风险信息；模型管理页改为“转写模型 / 翻译模型”分组，展示用途、兼容 Provider、推荐场景、默认状态和下载/重试/设默认操作。Go provider registry 补齐 `local-nllb-ct2`、`web-bing`、`web-google`、`api-openai-chat` 翻译 metadata；`translate_srt` 已从 placeholder 改为受控 Python CLI bridge，覆盖参数白名单、env scrub、JSON/log 分离和 redacted errors，测试使用 fake CLI。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`、`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./...`。
+- Round 12 UI 回归修复：模型管理页下载模型不再复用全局字幕生成 `activeJob` 导航；`model_install` job 现在在设置 / 模型管理 tab 内独立订阅并显示卡片内下载进度，完成后重新同步 `listModels()`，不会跳转到“正在生成字幕”页面。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`。
+- Round 12 模型管理补齐移除能力：`FastSubClient` 新增 `removeModel(modelId)`，mock、preload、main daemon client 和 Go daemon `DELETE /v1/models/{model_id}` 已同步；模型卡片对已安装/安装中/失败模型显示“移除”，renderer 只传 model id，不传 raw path，daemon 只删除受控 model store 内的对应目录并返回 missing 状态。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx mockClient.test.ts daemonEventMapping.test.ts`、`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./...`。
+- Round 12 UI 回归修复：Provider 页卡片级模型、设备、词级时间戳、语言和 API 字段改为独立草稿状态；当前默认 Provider 的修改会写入 daemon config，非默认 Provider 的修改不会串到其它卡片，设为默认时再应用该卡片草稿。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：Provider 页 API 卡片补齐可编辑密钥输入和“保存密钥”操作；保存通过 preload/main allowlist 进入 Electron main process safeStorage secret store，配置只回写 alias/masked 状态，不把 raw API key 写入 daemon config、日志或 renderer 全局状态。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：Provider 页 API provider 不再显示本地模型下拉；OpenAI 转写/翻译 API 只保留 API key、Base URL 和 provider 模型名配置，避免把本地 NLLB/Whisper 模型误认为 API 模型。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：Provider 页每个“静态检查”按钮增加卡片级反馈；点击后显示“检查中”，完成后显示“静态检查通过”或具体不可用状态，刷新全部状态也会同步写入每张卡反馈。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：daemon config PATCH 改为在当前 daemon session 内叠加到已更新的 config view，修复通用设置中“输出内容 / 输出格式 / 文件已存在时”连续修改互相重置的问题；桌面测试覆盖三组分段控件互不影响。验证：`go test ./internal/daemon`、`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 调整：Provider 页两个 OpenAI API provider 的配置区改为完整表单样式，包含快速填充提供方、API Key、API 模型下拉和 Base URL；不再混入本地模型列表，密钥仍通过 main process safeStorage 保存。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 调整：Provider 页 OpenAI API 表单进一步贴合当前设置页紧凑控件风格，去掉“快速填充提供方”，API Key 输入与显示/隐藏按钮同一行，输入框字号和高度回归现有表单规格。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 调整：Provider 页 OpenAI API Key 的显示/隐藏按钮移动到输入框右侧同一行；API 模型字段由下拉改为自由输入框，以支持 OpenAI-compatible provider 的自定义模型名。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 调整：Provider 页 OpenAI API 表单输入宽度与普通 Provider 配置控件对齐，模型、Base URL 和 API Key 行不再使用过长输入框。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 调整：Provider 页 OpenAI API 的模型和 Base URL 输入框宽度与 API Key 主输入框对齐，避免同一表单内控件长短不一致。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 调整：Provider 页 OpenAI API 的模型、Base URL 和 API Key 输入框高度统一到当前设置页表单规格，避免模型/Base URL 看起来过扁。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：Provider 页未配置或不可用的 Provider 禁止设为默认；“设为默认”按钮仅在 provider `enabled=true` 且 `state=available` 时启用，缺密钥、缺模型、缺依赖、配置错误和停用状态会显示阻断原因。验证：`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm run typecheck`。
+- Round 12 UI 调整：设置 / 通用页分组顺序调整为“界面 / 转写 / 翻译 / 默认参数”，将输出内容、字幕语言、输出格式和文件冲突策略统一收口到最后的默认参数区域。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 UI 调整：输出内容移除“烧录视频”互斥选项，改为独立 `burnInVideo` 布尔开关；桌面 config 通过 daemon `burn_in_video` 字段读写，兼容旧 `output_type=burned_video` 时会映射为“原字幕 + 烧录视频开启”。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`、`go test ./internal/daemon`。
+- Round 12 UI 回归修复：当翻译环境未准备好时，设置页和主界面详细设置中选择“翻译字幕 / 双语字幕”会被阻断并提示先配置翻译模型；开始生成时也增加兜底检查，避免未配置翻译模型时进入需要翻译的字幕生成流程。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 UI 回归修复：翻译输出 readiness gate 从“只检查翻译模型”扩展为同时检查当前默认翻译 Provider 是否 `enabled && available`；当默认 Provider 是未配置密钥的 API Provider 时，选择“翻译字幕 / 双语字幕”会提示先配置翻译 Provider，不再静默切换。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 UI 调整：主界面空状态下方摘要从输出位置/格式改为显示原语言、目标语言和输出内容；烧录视频作为输出内容后缀展示，减少次要路径信息占用首屏。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 UI 调整：主界面空状态的原语言、目标语言和输出内容改为快速下拉框；选择“翻译字幕 / 双语字幕”时复用翻译 Provider/模型 readiness gate，不合法会保留原值并提示先配置翻译 Provider。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 UI 调整：主界面空状态快速下拉框改为轻量虚线框样式，尺寸贴近文字高度，降低黑色实线表单控件在首屏的突兀感。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 UI 调整：主界面空状态快速下拉框的 option 样式同步项目纸张底色、文字颜色和字号，减弱原生下拉列表与 Fast Sub 视觉风格的割裂。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 UI 调整：主界面空状态快速选择从原生 select 改为自绘下拉，展开菜单使用纸张背景、虚线边框和圆角，避免 Windows 原生蓝色高亮和白底下拉破坏页面风格。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 UI 调整：主界面空状态快速选择按钮的展开指示从向下符号改为向右箭头，匹配右侧弹出菜单的方向。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 主流程翻译闭环：Desktop 主流程在输出内容为“翻译字幕/双语字幕”时会把默认翻译 Provider、翻译模型和上传确认状态随 `transcribe` job 一起发送给 daemon；Go daemon 的 `transcribe` runner 会先生成内部临时原始 SRT，再在同一个用户可见 job 内调用受控 `translate_srt` bridge 输出翻译或双语字幕，远程翻译仍要求显式字幕文本上传确认。同步更新 `dev-docs/go-docs/specs/daemon-api.md`、`dev-docs/ui-docs/architecture.md` 和 Round 12 spec。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./...`、`cd desktop && npm run typecheck`、`cd desktop && npm test`、`cd desktop && npm run build`。
+- Round 12 翻译 bridge 诊断修复：Go `translate_srt` bridge 兼容 Python CLI 的 JSON error envelope，能从 stdout 解析 `ok:false/error` 并映射为结构化 daemon error；修复真实主流程翻译失败时 UI 只显示空的 `translation CLI failed:`、丢失缺依赖/缺模型/provider 错误正文的问题。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./...`、`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 Provider readiness 修复：`local-nllb-ct2` 静态检查补齐 Python 翻译依赖检测，会在 daemon 使用的 Python/uv 环境中验证 `ctranslate2` 和 `sentencepiece`；缺依赖时 `/v1/providers` 返回 `missing_dependency`，主界面和设置页已有的翻译 readiness gate 会提前阻断“翻译字幕 / 双语字幕”。已修复开发环境 `uv run fast-sub` 未加载 `local-translate` extra 的问题，翻译 bridge 改为 `uv run --extra local-translate fast-sub ...`，并为子进程默认提供 `.uv-cache`。同步更新 `dev-docs/go-docs/specs/daemon-api.md`。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/providers ./internal/daemon ./internal/jobs`、`$env:UV_CACHE_DIR='.uv-cache'; uv run --extra local-translate python -c "import ctranslate2, sentencepiece"`。
+- Round 12 Provider readiness 修复：`local-faster-whisper` 静态检查补齐 Python ASR 依赖检测，会在 daemon 使用的 Python/uv 环境中验证 `faster_whisper`；缺依赖时 `/v1/providers` 返回 `missing_dependency`，避免 job 创建后才在 `transcribing` 阶段报 `Python package 'faster-whisper' is not installed.`。已修复开发环境 worker 未加载 `local-asr` extra 的问题，默认 worker 启动改为 `uv run --extra local-asr fast-sub-worker-faster-whisper`，并为子进程默认提供 `.uv-cache`。同步更新 `dev-docs/go-docs/specs/daemon-api.md`。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/worker ./internal/providers ./internal/jobs`、`$env:UV_CACHE_DIR='.uv-cache'; uv run --extra local-asr python -c "import faster_whisper"`、通过 daemon REST 创建 `output_type=bilingual_srt` job，`local_tests/media/light/en-podcast-1m.wav` 成功输出 `local_tests/media/light/en-podcast-1m.bilingual.round12.srt`。
+- Round 12 配置持久化修复：Electron 自管 daemon 启动时为 `FAST_SUB_GO_CONFIG` 指向应用 userData 下的 `fast-sub-go.toml`；daemon `PATCH /v1/config` 现在在 validate/merge 后把非敏感 config view 写回配置文件，启动时重新读取 UI 默认语言、目标语言、输出内容、输出格式、默认 Provider/模型、设备、词级时间戳等字段。主界面快捷设置和主流程详细设置均改为走 `updateConfig`，不再只改 renderer state；raw API key 仍只走 main process secret storage，不写入配置文件。同步更新 `dev-docs/go-docs/specs/daemon-api.md`。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./...`、`cd desktop && npm run typecheck`、`cd desktop && npm test`。
+- Round 12 UI 回归修复：翻译已有 SRT 工具页的“翻译方式”不再使用“本地 / 网页 / API”硬编码分段控件，改为直接展示设置中的翻译 Provider 下拉列表，选项来自 daemon/mock provider registry，并通过 `updateConfig({ translationProvider })` 写回同一份持久化配置。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 子工具真实化：桌面 `ToolBurnIn` 和 `ToolTranslate` 选择/拖拽文件后传递真实本机路径，不再使用 `mock-input://` 或本地假完成卡片；`startToolJob("burn_in" / "translate_srt")` 会进入真实 job 订阅/生成中/完成或失败页。Go daemon `burn_in` 从 placeholder 改为真实 ffmpeg bridge，使用白名单参数、临时输出、context cancel、redacted stderr tail 和真实 `.burned.mp4` 输出。同步更新 `dev-docs/go-docs/specs/daemon-api.md`。
+- Round 12 UI 清理：字幕烧录工具页移除尚未接入真实参数的“字号 / 编码 preset”mock 控件，避免用户以为这些设置会影响真实 ffmpeg burn-in job。
+- Round 12 字幕烧录修复：真实 ffmpeg burn-in 使用 `.fast-sub-tmp-*` 临时输出时显式传入 `-f mp4`，不再依赖临时文件扩展名推断 muxer，修复 Windows 下 `Unable to choose an output format` / `Invalid argument` 失败。
+- Round 12 UI 回归修复：生成中页面标题、右上角状态 chip 和进度卡阶段文案按 job type 显示；`burn_in` 显示“正在烧录字幕”，`translate_srt` 显示“正在翻译字幕”，普通转写保持“正在生成字幕”，避免子工具任务复用主流程固定文案。
+- Round 12 UI 清理：翻译 SRT 工具页移除未接入真实错误记录的“查看错误记录”按钮，同时去掉该按钮触发本地假失败态的入口；真实失败统一通过 daemon job 失败页展示。
+- Round 12 UI 回归修复：设置 / 通用页语言切换从仅更新选中态改为真实接入 renderer i18n provider；主菜单、首次启动、主字幕流程、生成中/完成页、翻译 SRT、字幕烧录和通用设置主要文案已支持 English，默认 `跟随系统` 仍保持中文 fallback，避免影响现有中文默认流程。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`、`cd desktop && npm test`。
+- Round 12 i18n 可扩展性修复：renderer i18n 从中文原文 key 改为英文语义 key，`zh`/`en` 文案表均挂在英文 key 下；组件内状态 label map 也改为英文 key，daemon/job 返回的中文阶段文案通过 runtime text 映射单独处理，便于后续扩展更多语言。验证：`rg -n 't\("[\p{Han}]' desktop\renderer\src\app`、i18n key 覆盖脚本、`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 UI 回归修复：daemon result/output path 映射、job 创建响应合并和完成页展示增加 mojibake 兜底；当 job/result 文件名包含 Unicode replacement 字符时，会优先用本次请求的原始输入文件名和任务类型重建 `.srt/.translated.srt/.burned.mp4` 输出路径，避免中文文件名在结果页显示为乱码。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 Windows 编码修复：Go daemon 启动受控 Python 翻译 CLI 和 faster-whisper worker 时强制注入 `PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8:replace` 和 `PYTHONLEGACYWINDOWSSTDIO=0`；Python CLI JSON 输出改为直接按 UTF-8 写 stdout，避免 Windows GBK 控制台导致 `UnicodeEncodeError` 并把原始翻译错误二次污染为 provider unavailable。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/jobs ./internal/worker`、`$env:UV_CACHE_DIR='.uv-cache'; $env:PYTHONPATH='src'; uv run pytest tests\test_cli_helpers.py`。
+- Round 12 UI/配置兼容修复：主流程转写 readiness 改为同时校验默认 ASR Provider `enabled && available`、默认模型 ready 且与 Provider 兼容；当配置文件遗留 `local-whisper-cpp` 缺依赖或 whisper.cpp 模型配到 Faster Whisper 时，创建 job 前会自动修正为可用的兼容组合并写回 daemon config。设置页和详细设置会禁用不可用 Provider，并过滤不兼容 ASR 模型；兼容但缺失的默认模型仍保持阻断提示，不静默切换。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 翻译中间文件清理：Python `translate` 在 `--no-resume` 模式下不再向字幕输出目录写入 `*.translate-progress.json` checkpoint，并会清理同名遗留 progress 文件；Electron/daemon 主流程继续使用 `--no-resume`，因此不会在用户视频目录保留 raw/progress JSON。CLI 手动 `--resume` 仍保留断点续传能力。验证：`$env:UV_CACHE_DIR='.uv-cache'; $env:PYTHONPATH='src'; uv run pytest tests\test_cli_translate.py -q`。
+- Round 12 faster-whisper 空分段修复：Python faster-whisper worker 在 VAD 开启且首次返回空 segments 时，会自动关闭 VAD 重试一次；若重试仍为空才返回 `EMPTY_SEGMENTS`。这覆盖部分视频/音频被 VAD 误判为静音导致 daemon job 失败的问题，正常有分段路径不受影响。验证：`$env:UV_CACHE_DIR='.uv-cache'; $env:PYTHONPATH='src'; uv run pytest tests\test_faster_whisper_worker.py -q`。
+- Round 12 UI 回归修复：生成中页面将当前任务标题和进度卡固定在主可视区域，“接下来”队列改为独立限高滚动列表；批量任务很多时不会再把主生成进度挤出屏幕。验证：`cd desktop && npm run typecheck`。
+- Round 12 UI 回归修复：批量任务全部完成时，完成页会按本批 job id 补拉所有任务详情再展示，修复通过文件夹添加多任务后完成页只显示当前订阅任务的问题；任务队列列表改为默认只展示最近 40 条记录，并始终保留运行/排队任务，超过上限的旧记录只显示隐藏提示，降低历史页面噪音。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 文件夹导入策略：设置 / 通用页新增“扫描子文件夹”和“最多添加文件数”配置，默认不扫描子文件夹、默认最多 100 个文件；Electron main 的文件夹选择、renderer `webkitdirectory` fallback 和 daemon config API 统一读取该持久配置，递归模式会跳过 `.git`、`node_modules`、`dist` 等非媒体工作目录并硬性封顶 500。同步更新 `dev-docs/go-docs/specs/daemon-api.md`。验证：`cd desktop && npm run typecheck`、`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/config ./internal/daemon`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 BYOK 修复：Provider 页 API Key 输入改为“保存/替换密钥”语义，不再把 `api_key_alias` 当作可显示密钥；OpenAI-compatible 默认 alias 后续按 Provider 拆分，旧 `FAST_SUB_OPENAI_API_KEY` 仅保留为兼容 fallback。Electron main process 保存 key 到 safeStorage 后会重启自管 daemon，并在启动 env 中注入解密后的受控 env 变量，同时兼容 `OPENAI_API_KEY` 给 Python/OpenAI-compatible bridge 使用；renderer、配置文件、日志和事件仍不接触 raw secret。同步更新 `dev-docs/go-docs/specs/daemon-api.md`。
+- Round 12 启动体验修复：环境检查页改为首次 onboarding gate；用户完成首次环境检查并进入主界面后写入本地完成标记，后续启动直接进入字幕生成主界面，同时后台执行环境/config/model/provider/job 刷新并通过右上角状态 chip 更新就绪状态。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 API Provider 配置隔离修复：`api-openai-transcription` 和 `api-openai-chat` 不再共用 `openai_compatible` 的 Base URL、模型名和密钥 alias；daemon config 新增并持久化 `api_providers` provider-id keyed map，Electron Provider 页按 provider id 读写独立草稿和 PATCH，safeStorage alias 默认拆为 `FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY` / `FAST_SUB_OPENAI_CHAT_API_KEY`，Python 翻译 bridge 只从 chat provider 的 alias 注入 `OPENAI_API_KEY`。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/config ./internal/daemon ./internal/providers ./internal/jobs`、`cd desktop && npm run typecheck`。
+- Round 12 OpenAI-compatible live check 修复：`api-openai-transcription` 和 `api-openai-chat` 的“连接检查”不再因未配置 API key 提前失败；daemon 会先请求配置的 `/v1/models`，无 key 时不发送 Authorization，2xx 即认为 Provider 可用，只有 401/403 才返回 `missing_api_key`。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/providers ./internal/daemon ./internal/config`、`cd desktop && npm run typecheck`。
+- Round 12 错误脱敏修复：Go daemon 的错误 redaction 从“命中 secret/token 字样就整句脱敏”改为字段级脱敏；普通文件名如 `Secret_*.mp4` 不再导致失败页只显示 `[redacted]`，Authorization、Bearer token、API key、token/secret 字段值仍会被脱敏。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/errors ./internal/jobs ./internal/worker ./internal/runtime/openai ./internal/daemon`。
+- Round 12 UI 回归修复：点击“后台运行”进入任务队列后，如果 API/远程转写任务很快成功、失败或取消，队列页会同步切到“已完成/失败”对应筛选并保留任务卡片，不再停留在空的“正在生成”筛选里让任务看起来消失。验证：`cd desktop && npm test -- App.test.tsx -t "keeps a background job visible"`、`cd desktop && npm run typecheck`。
+- Round 12 faster-whisper 兼容修复：Python faster-whisper worker 在用户显式关闭 VAD 且新版 faster-whisper 返回 `No clip timestamps found` 时，会自动打开 VAD 重试一次，避免任务直接失败；正常 `vad=off` 成功路径保持不变。验证：`$env:UV_CACHE_DIR='.uv-cache'; $env:PYTHONPATH='src'; uv run pytest tests\test_faster_whisper_worker.py -q`。
+- Round 12 UI 回归修复：批量任务中某个 job 失败或取消时，生成页会记录该失败状态并继续订阅本批下一条 queued/running 任务；只有整批都进入终态后才进入完成/失败视图，避免单个失败卡住整批队列。验证：`cd desktop && npm test -- App.test.tsx -t "continues a folder batch when one job fails"`、`cd desktop && npm run typecheck`。
+- Round 12 空转写结果修复：Go daemon 将 faster-whisper `EMPTY_SEGMENTS` 视为“未检测到语音”的空字幕成功结果，写出空 SRT 并附加 warning；主流程翻译/双语输出遇到空转写时跳过翻译并写出空目标字幕，避免无语音文件导致批量任务失败。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/worker ./internal/subtitle ./internal/jobs`。
+- Round 12 UI 回归修复：任务详情/失败详情页增加明确的“返回任务列表”按钮，不再只依赖顶部历史栈箭头，避免从通知、后台队列或直接详情态进入时没有可见返回路径。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "continues a folder batch when one job fails"`。
+- Round 12 启动体验修复：主界面不再因默认 ASR 模型/Provider 未就绪而立即切换成大面积缺模型阻断态；空状态保持正常拖拽和添加入口，仅通过右上角状态 chip 提示“本地转写未就绪”，真正开始生成时再进入缺模型引导页。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "keeps the main screen usable when the ASR model is not ready"`。
+- Round 12 UI 回归修复：任务详情页不再用路由参数强行覆盖真实 job 状态；如果从陈旧的失败详情路由进入一个已完成任务，会按 `activeJob.status=succeeded` 显示完成进度/日志/详情，不再同时出现“已完成”和“已失败”或兜底 `job_failed`。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "uses the actual job status when rendering a stale failed detail route"`。
+- Round 12 UI 回归修复：失败任务详情的“重试任务”改为使用当前 job detail 的单个输入路径直接创建新 job，不再先写入整批 `files` 状态后读取旧批次，避免文件夹批量任务中重试单个失败项时重新提交整批文件。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "retries only the selected failed job from a folder batch"`。
+- Round 12 UI 回归修复：远程/API Provider 上传确认弹窗增加最大高度和内部可滚动上传内容列表，底部取消/确认按钮固定保留在弹窗可视区域内，避免批量文件名过多时无法点击“确定”；弹窗只预览前 24 个文件并显示剩余数量，避免超长文件名列表造成明显布局卡顿。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "keeps the remote upload confirmation actions visible for large batches"`。
+- Round 12 UI 回归修复：主界面底部状态不再硬编码“无进行中的任务”，会根据 daemon/mock 队列和当前订阅 job 统计 queued/running/canceling 任务；任务切到后台后回到字幕生成首页会显示“正在进行 N 个任务”和“查看进行中”。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "does not jump back from the running queue when background jobs emit progress"`。
+- Round 12 UI/contract 回归修复：daemon job snapshot 和 renderer 本地合并逻辑统一将 `succeeded` 任务的 `progressPercent` 归一为 100；历史列表、任务详情和完成页不再显示已完成任务停在 93% 等中间进度。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- daemonEventMapping.test.ts -t "normalizes succeeded job snapshots to 100 percent"`。
+- Round 12 OpenAI-compatible 翻译兼容修复：Python `api-openai-chat` client 兼容 `message.content` 数组和旧式 `choices[0].text` 返回；单条 cue 翻译解析补齐纯文本、单字段 JSON 和单字符串数组兜底，降低本地 LM 不严格返回 JSON 时触发 “All translation cues failed” 的概率。验证：`$env:UV_CACHE_DIR='.uv-cache'; $env:PYTHONPATH='src'; uv run pytest tests\test_translate.py -q`。
+- Round 12 UI 回归修复：主流程“详细设置”移除 `ASR 模型` 任务级选择，仅保留“转写方式”；ASR 模型继续在设置 / Provider 页按 Provider 配置，避免单次任务设置和 Provider 默认模型相互混淆。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 OpenAI-compatible 转写执行修复：daemon `api-openai-transcription` job 不再在创建真实转写请求前强制要求 API key；未配置 key 时 runtime 会省略 `Authorization` header，兼容端点返回 2xx 即按可用处理，只有 401/403 且未发送 key 才映射为 `missing_api_key`。同步更新 `dev-docs/go-docs/specs/daemon-api.md`。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/runtime/openai ./internal/jobs`。
+- Round 12 OpenAI-compatible Provider 规则收口：`api-openai-transcription` / `api-openai-chat` 静态检查不再因为未配置 key 标红，是否需要认证统一由 live `/v1/models` 或真实 job 请求决定；本地兼容 API 无 key 可连通即视为可用，401/403 才进入 `missing_api_key`。默认 secret alias 按 Provider 拆分为 `FAST_SUB_OPENAI_TRANSCRIPTION_API_KEY` / `FAST_SUB_OPENAI_CHAT_API_KEY`，旧 `FAST_SUB_OPENAI_API_KEY` 仅作为兼容 fallback，避免转写和翻译 API 配置互相串线。同步更新 `dev-docs/go-docs/specs/daemon-api.md`。
+- Round 12 翻译工具兼容修复：桌面“翻译字幕 / 文本”工具支持选择/拖入 `.srt`、`.txt`、`.text`、`.md`、`.markdown`；Go `translate_srt` bridge 对纯文本输入使用 job 临时目录生成内部 SRT，翻译完成后写出 `*.translated.txt`，不在用户目录保留中间 SRT。同步更新 `dev-docs/go-docs/specs/daemon-api.md`。验证：`go test ./internal/jobs`、`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "selects files in translate and burn-in tools"`。
+- Round 12 UI/请求回归修复：翻译任务不再把全局 NLLB 默认模型混入 API/网页翻译 Provider；Desktop 创建请求时仅 `local-nllb-ct2` 携带 NLLB 模型，`api-openai-chat` 使用对应 API Provider 的模型配置，网页 Provider 不传模型。队列/历史卡片也会隐藏与当前翻译 Provider 不匹配的旧 NLLB 模型标签，避免 OpenAI 兼容翻译 API 下显示 NLLB；翻译 readiness 只检查当前配置的翻译 Provider，不再跨 Provider 兜底。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx -t "blocks translate tool jobs when the translation environment is not ready|blocks translated subtitle output selection until the translation model is configured"`。
+- Round 12 UI 回归修复：翻译字幕 / 文本工具页“原语言”下拉补齐日语、韩语；主流程详细设置和通用设置中的字幕语言下拉也同步支持 `ja/ko`，与主界面快捷语言选择和 Provider 语言能力保持一致。验证：`cd desktop && npm run typecheck`。
+- Round 12 翻译输出修复：Python 翻译服务在保存每个 cue 的翻译文本前会清理 OpenAI-compatible provider 回显的原文段落，确保“翻译字幕 / 文本”只输出目标语言；只有用户选择“双语字幕”时才由渲染层组合原文和译文。验证：`$env:UV_CACHE_DIR='.uv-cache'; $env:PYTHONPATH='src'; uv run pytest tests\test_translate.py -q`、`$env:UV_CACHE_DIR='.uv-cache'; $env:PYTHONPATH='src'; uv run pytest tests\test_cli_translate.py -q`。
+- Round 12 NLLB 纯文本排版修复：Go `translate_srt` bridge 对 `.txt/.md` 输入改为按原始物理行生成内部临时 SRT cue，并在翻译完成后按原始空行和行序回填 `.translated.txt`；避免 NLLB 将多行段落合并为一个 cue 后压扁排版或输出超长重复行。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/jobs`。
+- Round 12 纯文本翻译约束补强：`.txt/.md` 回写阶段会把单个翻译 cue 内 provider 返回的多行内容压回同一物理行，继续保留“输入一行 -> 输出一行”的约束；空行仍按原样保留。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/jobs`。
+- Round 12 队列状态兜底修复：Electron daemon client 在 `listJobs/getJob` 映射时，如果 job 仍报 `queued/running/canceling` 但 `finished_at` 已写入或真实输出文件已落盘，会将其归一为 `succeeded/100%/已完成`；修复翻译任务文件已生成但队列仍停在“正在翻译中/95%”的状态漂移。验证：`cd desktop && npm run typecheck`。
+- Round 12 网页翻译卡死修复：Python `web-bing/web-google` 翻译调用新增受控 timeout 路径，web provider 会在独立 Python 子进程中执行第三方 `translators` 调用，超时后返回结构化 `provider_failed` 而不是无限阻塞；Go `translate_srt` bridge 现在显式向 `fast-sub translate` 透传 `--timeout`，避免 daemon job 永久卡在 35% translating。同步修正网页翻译错误映射，不再把 provider 超时误报为 `missing_dependency`。验证：`python -m compileall src\fast_sub\clients\web_translation.py src\fast_sub\translation\service.py tests\test_translate.py`、`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/jobs`、`$env:UV_CACHE_DIR='.uv-cache'; $env:PYTHONPATH='src'; uv run pytest tests\test_translate.py`。
+- Round 12 网页翻译总时长兜底：Go `translate_srt` bridge 对 `web-google/web-bing` 增加 3 分钟整任务硬超时，超时后直接以结构化 `provider_unavailable` 失败退出，不再只靠 heartbeat 持续挂住；翻译工具页同步增加“网页翻译更适合小文件”的提醒，建议大文件改用本地或 API 翻译。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/jobs`、`cd desktop && npm run typecheck`。
+- Round 12 翻译工具页视觉收口：将“网页翻译更适合小文件”从单独的高对比警告面板收敛为“翻译 Provider”下方的轻量说明，仅在 `web-google/web-bing` 选中时显示，减少页面压迫感并保留使用建议。验证：`cd desktop && npm run typecheck`。
+- Round 12 翻译工具页排版修复：网页翻译的小文件提醒改为受控宽度的 provider 内联说明，和下拉控件同列布局并限制在字段列宽内，避免说明文字横向顶出到旁边的目标语言控件区域。验证：`cd desktop && npm run typecheck`。
+- Round 12 Windows 取消链路修复：本地 subprocess runner 在 Windows 上改为为已启动 worker 创建 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` job object，并在任务取消时先释放 job object 再补 `taskkill /T /F` 兜底，确保 faster-whisper / GPU 本地模型及其子进程树不会在用户中断任务后继续残留占用显存。补充 Windows 回归测试，验证取消父进程后子进程也会退出。验证：`$env:GOCACHE=(Join-Path (Get-Location) '.gocache'); go test ./internal/procutil ./internal/worker ./internal/jobs`。
+- Round 12 QA 表 TODO 收口：修复 `desktop-tests/README.md` 中 DQA-048 至 DQA-051。设置 / 模型 / Provider / 诊断 / Benchmark / 翻译工具补齐英文 i18n 覆盖，队列详情中文兜底改为英文兜底；历史列表加入当前列表全选/多选，可取消选中运行任务和删除选中终态记录；任务详情 Logs tab 接入 daemon `getJobLogs(jobId)` 并对运行中任务轮询刷新；任务详情 Settings tab 的输出目录改为可点击路径按钮并调用系统打开目录。QA 表对应条目已从 `TODO` 改为 `RETEST`，等待真实桌面流程复测。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 QA 表 TODO 收口：修复 `desktop-tests/README.md` 中 DQA-052 至 DQA-054。通用设置默认 Provider 下拉补齐自绘列表样式和禁用项处理；主流程详细设置的 Provider option 改为 provider id i18n 映射，避免 English 模式显示中文 provider.name；环境检测页的内存/磁盘和 daemon runtime 文案接入 runtime text 翻译。QA 表对应条目已从 `TODO` 改为 `RETEST`。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。
+- Round 12 QA 追补收口：已完成任务在 daemon snapshot 和详情页统一显示 `100%`；生成中页面只展示前 8 个等待任务并折叠剩余数量，避免批量队列把主进度挤出视野；OpenAI-compatible API Provider 的 UI readiness 与默认设置改为以 live 连接检查/2xx 连通性为准，本地兼容 API 不再被“缺 API key”硬阻断；主流程 readiness fallback 只会自动选择本地/native Provider，不会在缺模型时静默切到 API/Web 上传路径。验证：`cd desktop && npm run typecheck`、`cd desktop && npm test`、`go test ./internal/providers ./internal/runtime/openai ./internal/jobs ./internal/procutil`。
+- Round 12 安全审查修复：远程/API Provider 的字幕生成、翻译工具和失败重试不再自动写入上传确认标志，必须经过 `RemoteConfirmDialog` 显式确认后才会向 daemon 发送 `remote_upload_confirmed` / `translation_upload_confirmed`；本地 faster-whisper STT worker 子进程改为白名单环境变量，避免继承 daemon/main process 中的 API key、ready token 或 Authorization。验证：`go test ./internal/worker`、`cd desktop && npm run typecheck`、`cd desktop && npm test -- App.test.tsx`。

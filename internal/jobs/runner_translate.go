@@ -434,6 +434,9 @@ func (r DefaultRunner) resolveTranslateCLI(provider string) (string, []string, *
 		}
 		return parts[0], parts[1:], nil
 	}
+	if r.env("FAST_SUB_PACKAGED_RUNTIME_ONLY") == "1" {
+		return "", nil, fserrors.New(fserrors.CodeMissingDependency, "translating", "App-private Python CLI is not configured.", "Reinstall Fast Sub or repair the packaged runtime.", nil)
+	}
 	if path, err := exec.LookPath("fast-sub"); err == nil {
 		return path, nil, nil
 	}

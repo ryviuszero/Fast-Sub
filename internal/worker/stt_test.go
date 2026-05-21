@@ -157,6 +157,14 @@ func TestSTTWorkerEnvScrubsSecrets(t *testing.T) {
 	}
 }
 
+func TestResolveCommandPackagedRuntimeDoesNotUsePATHFallback(t *testing.T) {
+	t.Setenv("FAST_SUB_PACKAGED_RUNTIME_ONLY", "1")
+	_, _, appErr := Runner{}.resolveCommand()
+	if appErr == nil || appErr.Code != "missing_worker" {
+		t.Fatalf("appErr = %#v", appErr)
+	}
+}
+
 func TestRunSTTTreatsEmptySegmentsAsEmptySubtitle(t *testing.T) {
 	command := fakeWorkerBinary(t, `package main
 import (

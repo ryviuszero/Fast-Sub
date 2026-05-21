@@ -134,11 +134,10 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   }, [client]);
 
   const loadBaseData = useCallback(async () => {
-    const [envResult, cfgResult, modelsResult, providersResult, jobsResult] = await Promise.allSettled([
+    const [envResult, cfgResult, modelsResult, jobsResult] = await Promise.allSettled([
       client.getEnvironmentStatus(),
       client.getConfig(),
       client.listModels(),
-      client.listProviders(),
       client.listJobs()
     ]);
     const fallbackEnv: EnvironmentStatus = {
@@ -168,14 +167,15 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     const env = envResult.status === "fulfilled" ? envResult.value : fallbackEnv;
     const cfg = cfgResult.status === "fulfilled" ? cfgResult.value : defaultConfig;
     const modelList = modelsResult.status === "fulfilled" ? modelsResult.value : [];
-    const providerList = providersResult.status === "fulfilled" ? providersResult.value : [];
     const jobList = jobsResult.status === "fulfilled" ? jobsResult.value : [];
     setEnvironment(env);
     setConfig(cfg);
     setModels(modelList);
-    setProviders(providerList);
     setJobs(jobList);
-    void autoCheckDefaultTranslationProvider(cfg, providerList);
+    void client.listProviders().then((providerList) => {
+      setProviders(providerList);
+      void autoCheckDefaultTranslationProvider(cfg, providerList);
+    }).catch(() => undefined);
   }, [autoCheckDefaultTranslationProvider, client]);
 
   useEffect(() => {
@@ -482,6 +482,14 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
         return existing ? { ...current, [modelId]: { ...existing, ...event.progress, statusLabel: "下载中" } } : current;
       });
       setModels((current) => current.map((model) => model.id === modelId ? { ...model, state: "installing", progressPercent: event.progress?.progressPercent ?? model.progressPercent } : model));
+      return;
+    }
+    if (event.type === "log_tail" && event.logs) {
+      const logs = event.logs;
+      setModelInstallJobs((current) => {
+        const existing = current[modelId];
+        return existing ? { ...current, [modelId]: { ...existing, logs: [...existing.logs, ...logs].slice(-20) } } : current;
+      });
       return;
     }
     if (event.type === "succeeded") {
@@ -957,6 +965,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
             if (job.status === "queued" || job.status === "running" || job.status === "canceling") {
               const unsubscribe = client.subscribeJobEvents(job.id, { onEvent: (event) => void updateModelInstallFromEvent(id, event) });
               modelInstallUnsubscribeRef.current.set(id, unsubscribe);
+              return;
             }
             await loadBaseData();
           },

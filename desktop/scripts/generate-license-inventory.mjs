@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 
 const desktopRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repoRoot = resolve(desktopRoot, "..");
@@ -87,7 +87,7 @@ function packageFromDistInfo(distInfoPath) {
       license: "UNKNOWN",
       scope: "runtime",
       policy: "needs-review",
-      source: metadataPath
+      source: repoRelative(metadataPath)
     };
   }
   const headers = parseMetadataHeaders(raw);
@@ -100,7 +100,7 @@ function packageFromDistInfo(distInfoPath) {
     license,
     scope: "runtime",
     policy: pythonPolicy(name, license),
-    source: metadataPath,
+    source: repoRelative(metadataPath),
     evidence: override?.evidence
   };
 }
@@ -222,6 +222,10 @@ function stringValue(value) {
 function platformArch() {
   if (process.platform === "win32" && process.arch === "x64") return "win32-x64";
   return `${process.platform}-${process.arch}`;
+}
+
+function repoRelative(path) {
+  return relative(repoRoot, path).replace(/\\/g, "/");
 }
 
 function writeJSON(path, value) {

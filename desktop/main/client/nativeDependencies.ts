@@ -167,8 +167,8 @@ async function checkFFmpegAvailable(): Promise<NativeDependencyStatus> {
   const binDir = ffmpegBinDirectory();
   const env = prependNativeDependencyPath({ ...process.env });
   const [ffmpeg, ffprobe] = await Promise.all([
-    canRun(join(binDir, "ffmpeg.exe"), env).then((ok) => ok || canRun("ffmpeg", env)),
-    canRun(join(binDir, "ffprobe.exe"), env).then((ok) => ok || canRun("ffprobe", env))
+    canRun(join(binDir, "ffmpeg.exe"), env).then((ok) => ok || (!app.isPackaged && canRun("ffmpeg", env))),
+    canRun(join(binDir, "ffprobe.exe"), env).then((ok) => ok || (!app.isPackaged && canRun("ffprobe", env)))
   ]);
   return {
     available: ffmpeg && ffprobe,
@@ -186,7 +186,7 @@ async function checkWhisperCPPAvailable(): Promise<NativeDependencyStatus> {
   const env = prependNativeDependencyPath({ ...process.env });
   const executable = await findWhisperCPPExecutable(binDir);
   const bundled = executable ? await canRun(executable, env, ["--help"]) : false;
-  const pathBinary = bundled ? true : await canRun("whisper-cli", env, ["--help"]);
+  const pathBinary = bundled ? true : !app.isPackaged && await canRun("whisper-cli", env, ["--help"]);
   return {
     available: bundled || pathBinary,
     installedNow: false,
@@ -465,6 +465,18 @@ async function downloadFileWithAria2(url: string, target: string, aria2Path: str
   const total = await remoteContentLength(url);
   await rm(target, { force: true }).catch(() => undefined);
   await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let completedAt = 0;
+    let lastSize = 0;
+    let lastChangedAt = Date.now();
+    const settle = (fn: () => void): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearInterval(timer);
+      fn();
+    };
     const child = spawn(aria2Path, [
       "--allow-overwrite=true",
       "--auto-file-renaming=false",
@@ -483,6 +495,26 @@ async function downloadFileWithAria2(url: string, target: string, aria2Path: str
     const timer = setInterval(() => {
       void stat(target).then((info) => {
         pushLog(`aria2 正在下载 FFmpeg：${formatBytes(info.size)}${total > 0 ? ` / ${formatBytes(total)}` : ""}`, downloadProgress(20, 65, info.size, total));
+        if (info.size !== lastSize) {
+          lastSize = info.size;
+          lastChangedAt = Date.now();
+        }
+        if (total > 0 && info.size >= total) {
+          if (completedAt === 0) {
+            completedAt = Date.now();
+            pushLog("FFmpeg 下载文件已完整，正在等待 aria2 结束。", 66);
+          }
+          if (Date.now() - completedAt > 5000) {
+            pushLog("aria2 未及时退出，已按完整下载文件继续安装。", 67);
+            child.kill();
+            settle(resolve);
+          }
+          return;
+        }
+        if (Date.now() - lastChangedAt > 120000) {
+          child.kill();
+          settle(() => reject(new Error("FFmpeg aria2 download stalled for more than 120 seconds.")));
+        }
       }).catch(() => undefined);
     }, 1000);
     let stderr = "";
@@ -491,16 +523,25 @@ async function downloadFileWithAria2(url: string, target: string, aria2Path: str
       stderr = `${stderr}${chunk}`.slice(-2000);
     });
     child.once("error", (error) => {
-      clearInterval(timer);
-      reject(error);
+      settle(() => reject(error));
     });
     child.once("exit", (code) => {
-      clearInterval(timer);
-      if (code === 0) {
-        resolve();
+      if (settled) {
         return;
       }
-      reject(new Error(redactSecretText(stderr || `aria2 exited with code ${code}`)));
+      if (code === 0) {
+        settle(resolve);
+        return;
+      }
+      void stat(target).then((info) => {
+        if (total > 0 && info.size >= total) {
+          settle(resolve);
+          return;
+        }
+        settle(() => reject(new Error(redactSecretText(stderr || `aria2 exited with code ${code}`))));
+      }).catch(() => {
+        settle(() => reject(new Error(redactSecretText(stderr || `aria2 exited with code ${code}`))));
+      });
     });
   });
   const info = await stat(target);

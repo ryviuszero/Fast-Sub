@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -117,11 +118,34 @@ func (m *Manager) eventStore(id string) (*events.Store, error) {
 }
 
 func (m *Manager) appendEvent(id, eventType string, data any) {
+	if eventType == events.TypeLog {
+		m.appendSystemLog(id, data)
+	}
 	store, err := m.eventStore(id)
 	if err != nil {
 		return
 	}
 	_, _ = store.Append(eventType, sanitizeAny(data))
+}
+
+func (m *Manager) appendSystemLog(id string, data any) {
+	record, ok := data.(map[string]any)
+	if !ok {
+		return
+	}
+	logDir := filepath.Join(m.jobDir(id), "logs")
+	if err := os.MkdirAll(logDir, 0o700); err != nil {
+		return
+	}
+	file, err := os.OpenFile(filepath.Join(logDir, "system.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	timestamp, _ := record["time"].(string)
+	level, _ := record["level"].(string)
+	message, _ := record["message"].(string)
+	_, _ = fmt.Fprintf(file, "%s [%s] %s\n", timestamp, level, fserrors.Redact(message))
 }
 
 func (m *Manager) jobDir(id string) string {

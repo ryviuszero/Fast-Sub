@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../renderer/src/App";
 import { MainGenerating } from "../renderer/src/app/screens/main";
 import { QueueDetail } from "../renderer/src/app/screens/queue";
@@ -7,10 +7,21 @@ import { MockFastSubClient } from "../renderer/src/client/MockFastSubClient";
 import { baseModels, baseProviders, createSeedJob, defaultConfig } from "../renderer/src/client/mockFixtures";
 import type { ConfigViewModel, CreateJobRequest, JobDetail, JobEventHandlers, JobSummary, ModelStatus, ProviderStatus, UiError } from "../shared/contracts/types";
 
+beforeEach(() => {
+  setNavigatorLanguage("zh-CN");
+});
+
 afterEach(() => {
   window.localStorage.clear();
   cleanup();
 });
+
+function setNavigatorLanguage(language: string) {
+  Object.defineProperty(window.navigator, "language", {
+    value: language,
+    configurable: true
+  });
+}
 
 async function chooseVideo(name = "a b.mp4") {
   await Promise.resolve();
@@ -39,6 +50,12 @@ function chooseProviderDropdownOption(label: string, option: string | RegExp) {
   fireEvent.click(within(screen.getByRole("listbox")).getByRole("option", { name: option }));
 }
 
+async function chooseProviderDropdownOptionAsync(label: string, option: string | RegExp) {
+  fireEvent.click(screen.getByLabelText(label));
+  const listbox = screen.getByRole("listbox");
+  fireEvent.click(await within(listbox).findByRole("option", { name: option }));
+}
+
 function progressCardPercent(): number {
   const text = document.querySelector(".progress-card strong")?.textContent ?? "0%";
   return Number(text.replace("%", ""));
@@ -64,6 +81,12 @@ describe("Fast Sub renderer flow", () => {
     expect(document.body.textContent).not.toContain("mock-1");
     expect(document.body.textContent).not.toContain("SSE");
     expect(document.body.textContent).not.toContain("Authorization");
+  });
+
+  it("uses the system language for the default interface language", async () => {
+    setNavigatorLanguage("en-US");
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Environment check" })).toBeInTheDocument();
   });
 
   it("automatically creates a burn-in job after transcription when burn-in is enabled", async () => {
@@ -265,7 +288,8 @@ describe("Fast Sub renderer flow", () => {
     fireEvent.click(screen.getByRole("button", { name: /服务商/ }));
     expect(await screen.findByRole("heading", { name: "转写方式" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "翻译 Provider" })).toBeInTheDocument();
-    expect(screen.getAllByText("可用").length).toBeGreaterThan(0);
+    expect(await screen.findByText("OpenAI 音频转写 API")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("可用").length).toBeGreaterThan(0));
     expect(screen.queryByText("missing_api_key")).not.toBeInTheDocument();
     const openAiCard = screen.getByText("OpenAI 音频转写 API").closest("article") as HTMLElement;
     expect(within(openAiCard).getByRole("button", { name: "设为默认" })).toBeDisabled();
@@ -346,7 +370,7 @@ describe("Fast Sub renderer flow", () => {
     render(<App />);
     await enterMainScreen();
     fireEvent.click(screen.getByRole("button", { name: /历史记录|查看进行中/ }));
-    fireEvent.doubleClick(screen.getByText("sample-meeting.mp4"));
+    fireEvent.doubleClick(await screen.findByText("sample-meeting.mp4"));
     expect(screen.getByRole("heading", { name: "sample-meeting.mp4" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "日志" }));
     expect(screen.getByText("任务：sample-meeting.mp4", { exact: false })).toBeInTheDocument();
@@ -360,7 +384,7 @@ describe("Fast Sub renderer flow", () => {
     render(<App />);
     await enterMainScreen();
     fireEvent.click(screen.getByRole("button", { name: /历史记录|查看进行中/ }));
-    fireEvent.doubleClick(screen.getByText("sample-meeting.mp4"));
+    fireEvent.doubleClick(await screen.findByText("sample-meeting.mp4"));
     expect(screen.getByRole("heading", { name: "sample-meeting.mp4" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
     expect(await screen.findByRole("heading", { name: "拖拽视频到这里" })).toBeInTheDocument();
@@ -581,6 +605,7 @@ describe("Fast Sub renderer flow", () => {
     };
     render(<App client={new CaptureClient("jobSuccess")} />);
     await enterMainScreen();
+    await screen.findByText("翻译就绪");
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
     fireEvent.click(screen.getByRole("button", { name: "翻译字幕" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "翻译字幕" })).toHaveClass("on"));
@@ -1095,8 +1120,60 @@ describe("Fast Sub renderer flow", () => {
     render(<App client={new MissingASRClient("setupReady")} />);
     const enterButton = await screen.findByRole("button", { name: "进入主界面" });
     await screen.findByText("默认 ASR 模型未准备");
-    expect(enterButton).toBeDisabled();
+    const workerRow = screen.getByText("本地 Worker").closest(".check-row") as HTMLElement;
+    await waitFor(() => expect(within(workerRow).getByText("已就绪")).toBeInTheDocument());
+    expect(enterButton).toBeEnabled();
     expect(screen.getByRole("button", { name: "下载默认模型" })).toBeInTheDocument();
+    fireEvent.click(enterButton);
+    expect(await screen.findByRole("heading", { name: "拖拽视频到这里" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "添加视频" }));
+    await chooseVideo();
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    expect(await screen.findByRole("heading", { name: "还不能生成字幕" })).toBeInTheDocument();
+  });
+
+  it("shows immediate default model download feedback on the setup page", async () => {
+    class SlowDefaultModelClient extends MockFastSubClient {
+      async listModels(): Promise<ModelStatus[]> {
+        return (await super.listModels()).map((model) => model.kind === "asr" ? { ...model, state: "missing" } : model);
+      }
+
+      async createModelInstallJob(modelId: string): Promise<JobDetail> {
+        const job = await super.createModelInstallJob(modelId);
+        return { ...job, status: "queued", statusLabel: "等待中", progressPercent: 0, stageLabel: "等待下载" };
+      }
+    }
+
+    render(<App client={new SlowDefaultModelClient("setupReady")} />);
+    await screen.findByText("默认 ASR 模型未准备");
+    fireEvent.click(screen.getByRole("button", { name: "下载默认模型" }));
+    expect(await screen.findByRole("button", { name: "正在下载" })).toBeDisabled();
+    expect(screen.getByText(/正在下载 \d+%/)).toBeInTheDocument();
+  });
+
+  it("shows default model download feedback on the missing model page", async () => {
+    class SlowDefaultModelClient extends MockFastSubClient {
+      async listModels(): Promise<ModelStatus[]> {
+        return (await super.listModels()).map((model) => model.kind === "asr" ? { ...model, state: "missing" } : model);
+      }
+
+      async createModelInstallJob(modelId: string): Promise<JobDetail> {
+        const job = await super.createModelInstallJob(modelId);
+        return { ...job, status: "queued", statusLabel: "等待中", progressPercent: 0, stageLabel: "等待下载" };
+      }
+    }
+
+    render(<App client={new SlowDefaultModelClient("setupReady")} />);
+    const enterButton = await screen.findByRole("button", { name: "进入主界面" });
+    await screen.findByText("默认 ASR 模型未准备");
+    fireEvent.click(enterButton);
+    fireEvent.click(screen.getByRole("button", { name: "添加视频" }));
+    await chooseVideo();
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    expect(await screen.findByRole("heading", { name: "还不能生成字幕" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "下载默认模型" }));
+    expect(await screen.findByRole("button", { name: "正在下载" })).toBeDisabled();
+    expect(screen.getByRole("status", { name: /下载进度/ })).toHaveTextContent("%");
   });
 
   it("accepts media files dropped onto the main drop zone", async () => {
@@ -1153,7 +1230,7 @@ describe("Fast Sub renderer flow", () => {
     render(<App />);
     await enterMainScreen();
     fireEvent.click(screen.getByRole("button", { name: /历史记录|查看进行中/ }));
-    fireEvent.doubleClick(screen.getByText("raw-cam.mov"));
+    fireEvent.doubleClick(await screen.findByText("raw-cam.mov"));
     expect(await screen.findByRole("heading", { name: "raw-cam.mov" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "删除记录" }));
     expect(await screen.findByText("失败 0")).toBeInTheDocument();
@@ -1225,6 +1302,7 @@ describe("Fast Sub renderer flow", () => {
   it("selects files in translate and burn-in tools", async () => {
     render(<App />);
     await enterMainScreen();
+    await screen.findByText("翻译就绪");
     fireEvent.click(screen.getByRole("menuitem", { name: "翻译SRT" }));
     fireEvent.click(screen.getByRole("button", { name: "选择文件" }));
     fireEvent.change(screen.getByLabelText("选择字幕或文本文件"), { target: { files: [new File(["hello"], "demo.txt", { type: "text/plain" })] } });
@@ -1389,7 +1467,7 @@ describe("Fast Sub renderer flow", () => {
     render(<App client={new AutoCheckedAfterDefaultClient("setupReady")} />);
     await enterMainScreen();
     fireEvent.click(await screen.findByRole("button", { name: "设置" }));
-    chooseProviderDropdownOption("默认翻译 Provider", /OpenAI 兼容翻译 API/);
+    await chooseProviderDropdownOptionAsync("默认翻译 Provider", /OpenAI 兼容翻译 API/);
     await waitFor(() => expect(checks).toEqual([{ providerId: "api-openai-chat", mode: "live" }]));
 
     fireEvent.click(screen.getByRole("button", { name: /服务商/ }));

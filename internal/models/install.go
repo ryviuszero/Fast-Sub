@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -121,7 +122,11 @@ func (s Store) Install(ctx context.Context, entry ManifestEntry, opts InstallOpt
 		}
 		partPath := target + ".part"
 		var lastErr error
+		var attemptErrors []string
 		for _, candidate := range file.downloadURLs() {
+			if opts.Log != nil {
+				opts.Log("info", fmt.Sprintf("Downloading %s from %s", file.Path, sourceLabel(candidate)))
+			}
 			result, err := backend.Download(ctx, DownloadRequest{
 				URL:      candidate,
 				PartPath: partPath,
@@ -140,17 +145,23 @@ func (s Store) Install(ctx context.Context, entry ManifestEntry, opts InstallOpt
 			})
 			if err != nil {
 				lastErr = err
+				attemptErrors = append(attemptErrors, fmt.Sprintf("%s: %s", sourceLabel(candidate), err.Error()))
+				if opts.Log != nil {
+					opts.Log("warning", fmt.Sprintf("Download from %s failed: %s", sourceLabel(candidate), err.Error()))
+				}
 				continue
 			}
 			actual, err := sha256File(partPath)
 			if err != nil {
 				lastErr = err
+				attemptErrors = append(attemptErrors, fmt.Sprintf("%s: sha256 read failed: %s", sourceLabel(candidate), err.Error()))
 				continue
 			}
 			if actual != file.SHA256 {
 				_ = os.Remove(partPath)
 				_ = os.Remove(partPath + ".meta.json")
 				lastErr = fmt.Errorf("downloaded sha256 mismatch for %s: expected %s, got %s", file.Path, file.SHA256, actual)
+				attemptErrors = append(attemptErrors, fmt.Sprintf("%s: %s", sourceLabel(candidate), lastErr.Error()))
 				continue
 			}
 			if opts.Progress != nil {
@@ -168,13 +179,20 @@ func (s Store) Install(ctx context.Context, entry ManifestEntry, opts InstallOpt
 			}
 			if err := os.Rename(partPath, target); err != nil {
 				lastErr = fmt.Errorf("publish downloaded file: %w", err)
+				attemptErrors = append(attemptErrors, fmt.Sprintf("%s: %s", sourceLabel(candidate), lastErr.Error()))
 				continue
+			}
+			if opts.Log != nil {
+				opts.Log("info", fmt.Sprintf("Downloaded and verified %s from %s", file.Path, sourceLabel(candidate)))
 			}
 			downloadResults = append(downloadResults, result)
 			lastErr = nil
 			break
 		}
 		if lastErr != nil {
+			if len(attemptErrors) > 0 {
+				return InstallResult{}, classifyInstallError(command, fmt.Errorf("all download sources failed for %s: %s", file.Path, strings.Join(attemptErrors, "; ")))
+			}
 			return InstallResult{}, classifyInstallError(command, lastErr)
 		}
 	}
@@ -317,9 +335,26 @@ func (s Store) acquireLock(entry ManifestEntry, stale time.Duration) (func(), er
 		return s.acquireLock(entry, stale)
 	}
 	if statErr == nil && time.Since(info.ModTime()) > stale {
-		return nil, fmt.Errorf("stale model install lock detected: %s", lockPath)
+		if removeErr := os.Remove(lockPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			return nil, fmt.Errorf("remove stale model install lock: %w", removeErr)
+		}
+		return s.acquireLock(entry, stale)
 	}
 	return nil, fmt.Errorf("model install lock is held for %s", entry.ID)
+}
+
+func sourceLabel(value string) string {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Host == "" {
+		return downloads.RedactURL(value)
+	}
+	if strings.Contains(strings.ToLower(parsed.Host), "huggingface.co") {
+		return "Hugging Face"
+	}
+	if strings.Contains(strings.ToLower(parsed.Host), "modelscope.cn") {
+		return "ModelScope"
+	}
+	return parsed.Host
 }
 
 func readLockPID(lockPath string) int {

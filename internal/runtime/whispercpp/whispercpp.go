@@ -162,6 +162,11 @@ func DiscoverBinary(cliCommand, managedBinaryDir string) (string, *fserrors.AppE
 		candidates = append(candidates, cliCommand)
 	} else if env := os.Getenv("FAST_SUB_WHISPER_CPP_COMMAND"); env != "" {
 		candidates = append(candidates, env)
+	} else if os.Getenv("FAST_SUB_PACKAGED_RUNTIME_ONLY") == "1" {
+		candidates = append(candidates, managedBinaryCandidates(os.Getenv("FAST_SUB_WHISPER_CPP_BIN_DIR"))...)
+		if managedBinaryDir != "" {
+			candidates = append(candidates, managedBinaryCandidates(managedBinaryDir)...)
+		}
 	} else {
 		candidates = append(candidates, "whisper-cli", "main", "whisper-cpp")
 		if managedBinaryDir != "" {
@@ -493,6 +498,9 @@ func finite(value float64) bool {
 }
 
 func managedBinaryCandidates(dir string) []string {
+	if strings.TrimSpace(dir) == "" {
+		return nil
+	}
 	name := "whisper-cli"
 	if runtime.GOOS == "windows" {
 		name += ".exe"

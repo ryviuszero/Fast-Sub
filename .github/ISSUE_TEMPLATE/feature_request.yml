@@ -1,0 +1,52 @@
+name: Feature request
+description: Suggest a product, provider, platform, or workflow improvement.
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem should this solve?
+      placeholder: I want to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you want.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Desktop app
+        - Windows packaging
+        - macOS packaging
+        - Go daemon / API
+        - Python CLI
+        - Local ASR provider
+        - Local translation provider
+        - Remote API provider
+        - Documentation
+        - Tests / release validation
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or alternative designs have you considered?
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Note privacy, offline, platform, model size, or compatibility requirements.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy expectations
+      options:
+        - label: This feature should preserve local-first behavior by default.
+        - label: This feature may upload media or subtitle text only with explicit user selection and confirmation.

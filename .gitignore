@@ -25,8 +25,8 @@ tests/test_bench_assets.py
 .gocache-release/
 .gomodcache/
 fast-sub-go.toml
-ui-docs/prototype/node_modules/
-ui-docs/prototype/dist/
+dev-docs/ui-docs/prototype/node_modules/
+dev-docs/ui-docs/prototype/dist/
 desktop/node_modules/
 desktop/dist/
 desktop/dist-electron/

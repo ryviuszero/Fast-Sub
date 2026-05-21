@@ -219,6 +219,9 @@ func (r Runner) resolveCommand() (string, []string, *fserrors.AppError) {
 		}
 		return path, parts[1:], nil
 	}
+	if os.Getenv("FAST_SUB_PACKAGED_RUNTIME_ONLY") == "1" {
+		return "", nil, fserrors.New(fserrors.CodeMissingWorker, "transcribing", "App-private STT worker command is not configured.", "Reinstall Fast Sub or repair the packaged runtime.", nil)
+	}
 	if path, err := exec.LookPath("uv"); err == nil {
 		return path, []string{"run", "--extra", "local-asr", "fast-sub-worker-faster-whisper"}, nil
 	}

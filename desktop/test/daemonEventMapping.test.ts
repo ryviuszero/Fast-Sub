@@ -104,6 +104,23 @@ describe("daemon event mapping fixture", () => {
     expect(mapped.job.progressPercent).toBe(100);
   });
 
+  it("maps model install progress to model download copy", () => {
+    const mapped = mapDaemonEventToJobEvent({
+      event: "progress",
+      data: {
+        stage: "installing_model",
+        percent: 45,
+        current_file: "whisper-small"
+      }
+    });
+    expect(mapped?.type).toBe("progress");
+    if (mapped?.type !== "progress") {
+      throw new Error("expected progress event");
+    }
+    expect(mapped.progress?.stageLabel).toBe("正在下载模型");
+    expect(mapped.progress?.currentFile).toBe("whisper-small");
+  });
+
   it("extracts output_exists target path into error details", () => {
     const mapped = mapDaemonEventToJobEvent({
       event: "failed",

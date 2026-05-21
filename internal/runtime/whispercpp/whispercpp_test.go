@@ -111,6 +111,45 @@ func TestDiscoverBinaryMissing(t *testing.T) {
 	}
 }
 
+func TestDiscoverBinaryPackagedRuntimeUsesAppPrivateDir(t *testing.T) {
+	t.Setenv("FAST_SUB_PACKAGED_RUNTIME_ONLY", "1")
+	t.Setenv("PATH", t.TempDir())
+	binDir := t.TempDir()
+	t.Setenv("FAST_SUB_WHISPER_CPP_BIN_DIR", binDir)
+	name := "whisper-cli"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	want := filepath.Join(binDir, name)
+	if err := os.WriteFile(want, []byte("fake"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got, appErr := DiscoverBinary("", "")
+	if appErr != nil {
+		t.Fatal(appErr)
+	}
+	if got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+}
+
+func TestDiscoverBinaryPackagedRuntimeDoesNotUsePATHFallback(t *testing.T) {
+	t.Setenv("FAST_SUB_PACKAGED_RUNTIME_ONLY", "1")
+	pathDir := t.TempDir()
+	name := "whisper-cli"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(pathDir, name), []byte("fake"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", pathDir)
+	_, appErr := DiscoverBinary("", "")
+	if appErr == nil || appErr.Code != "missing_dependency" {
+		t.Fatalf("appErr = %#v", appErr)
+	}
+}
+
 func TestParsersRejectInvalidOutput(t *testing.T) {
 	if _, _, err := ParseJSON([]byte(`{"transcription":[{"start":2,"end":1,"text":"bad"}]}`)); err == nil {
 		t.Fatal("expected invalid JSON segment error")

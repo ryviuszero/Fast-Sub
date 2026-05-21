@@ -1,0 +1,15 @@
+title: Fast Sub Help
+description: Local-first subtitle generation and translation help.
+baseurl: ""
+url: ""
+markdown: kramdown
+theme: null
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+  - scope:
+      path: "help"
+    values:
+      section: Help

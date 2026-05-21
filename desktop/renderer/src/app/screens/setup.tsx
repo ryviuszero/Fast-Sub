@@ -2,13 +2,20 @@ import type { RenderProps } from "../types";
 import { CheckItem, Chrome, Divider } from "../components";
 import { useRuntimeText, useT } from "../i18n";
 
-export function SetupCheck({ environment, models, setScreen, installModel, repairDaemon, installFFmpegWithPackageManager }: RenderProps) {
+export function SetupCheck(props: RenderProps) {
+  const { environment, models, setScreen, installModel, repairDaemon, installFFmpegWithPackageManager } = props;
   const t = useT();
   const rt = useRuntimeText();
   const disconnected = environment?.health === "disconnected";
   const ffmpegInstalling = Boolean(environment?.ffmpegInstalling);
   const ffmpegMissing = environment ? !environment.ffmpegReady && !ffmpegInstalling : false;
   const asr = models.find((model) => model.id === "whisper-small");
+  const asrModelKnownMissing = Boolean(asr && asr.state !== "ready");
+  const localWorkerStatus = localWorkerCheckStatus(props);
+  const asrInstallJob = asr ? props.modelInstallJobs[asr.id] : undefined;
+  const asrInstalling = asr?.state === "installing" || asrInstallJob?.status === "queued" || asrInstallJob?.status === "running";
+  const asrInstallBlocked = ffmpegInstalling;
+  const asrInstallProgress = Math.max(0, Math.min(100, asrInstallJob?.progressPercent ?? asr?.progressPercent ?? 0));
   const memory = environment?.memory ? rt(environment.memory) : t("16 GB available");
   const disk = environment?.disk ? rt(environment.disk) : t("240 GB available");
   const ffmpegProgress = Math.max(0, Math.min(100, environment?.ffmpegInstallProgressPercent ?? 0));
@@ -27,7 +34,7 @@ export function SetupCheck({ environment, models, setScreen, installModel, repai
           <Divider />
           <CheckItem label={t("Fast Sub service")} status={disconnected ? "failed" : "ready"} />
           <Divider />
-          <CheckItem label={t("Local worker")} status={environment?.localTranscriptionReady ? "ready" : "pending"} />
+          <CheckItem label={t("Local worker")} status={localWorkerStatus} />
           <Divider />
           <CheckItem label={t("Model storage directory")} status={environment?.modelDirectoryReady ? "ready" : "pending"} />
           <Divider />
@@ -62,19 +69,36 @@ export function SetupCheck({ environment, models, setScreen, installModel, repai
             </div>
           </section>
         )}
-        {asr?.state !== "ready" && (
+        {asrModelKnownMissing && (
           <section className="panel warn-panel">
             <h2>{t("Default ASR model not ready")}</h2>
             <p>{t("Local transcription available after download")}</p>
-            <button className="btn primary" onClick={() => void installModel("whisper-small")}>{t("Download default model")}</button>
+            {asrInstalling && <div className="progress accent"><i style={{ width: `${Math.max(8, asrInstallProgress)}%` }} /></div>}
+            {asrInstalling && <p className="caption no-margin">{t("Downloading")} {asrInstallProgress}%</p>}
+            {asrInstallBlocked && !asrInstalling && <p className="caption no-margin">{t("Wait for FFmpeg install")}</p>}
+            <button className="btn primary" disabled={asrInstalling || asrInstallBlocked} onClick={() => void installModel("whisper-small")}>{asrInstalling ? t("Downloading") : t("Download default model")}</button>
           </section>
         )}
         <div className="progress accent"><i style={{ width: disconnected || ffmpegMissing || ffmpegInstalling ? "45%" : "100%" }} /></div>
         <p className="center-text caption">{disconnected || ffmpegMissing || ffmpegInstalling ? t("Waiting for service repair") : t("Check complete 6 of 6")}</p>
-        <button className="btn primary setup-next" disabled={disconnected || ffmpegMissing || ffmpegInstalling || asr?.state !== "ready"} onClick={() => setScreen("setup-done")}>{t("Enter app")}</button>
+        <button className="btn primary setup-next" disabled={disconnected || ffmpegMissing || ffmpegInstalling} onClick={() => setScreen(asrModelKnownMissing ? "main-empty" : "setup-done")}>{t("Enter app")}</button>
       </main>
     </div>
   );
+}
+
+function localWorkerCheckStatus(props: RenderProps): "ready" | "checking" | "missing" {
+  if (!props.environment) {
+    return "checking";
+  }
+  if (props.environment.health === "disconnected" || !props.environment.daemonReady) {
+    return "checking";
+  }
+  const localFasterWhisper = props.providers.find((provider) => provider.id === "local-faster-whisper");
+  if (!localFasterWhisper) {
+    return props.environment.localTranscriptionReady ? "ready" : "checking";
+  }
+  return localFasterWhisper.state === "missing_dependency" ? "missing" : "ready";
 }
 
 export function SetupDone({ setScreen }: RenderProps) {

@@ -7,11 +7,11 @@ Fast Sub 是一个本地优先的视频和音频字幕工具。
 当前产品形态：
 
 ```text
-当前：Python v0 CLI
-下一步：Go 产品核心
-长期：Python 模型 worker / AI adapter
-后续：ffmpeg、whisper.cpp、CTranslate2、ONNX/TensorRT 等 native binary
-最后：CLI / daemon contract 稳定后再做桌面 UI 和 Web
+当前：Windows x64 Electron desktop release candidate
+已完成：Python v0 CLI、Go product core、Go daemon/job API、Electron UI Round 11-13
+当前发布形态：Windows x64 installer + portable zip，unsigned internal build
+待完成：macOS arm64 dmg 需要在 macOS release machine 上打包和 smoke
+长期：继续瘦身 app 私有 Python runtime，并评估 native worker / Go orchestration 边界
 ```
 
 主要用户目标：
@@ -24,7 +24,7 @@ Fast Sub 是一个本地优先的视频和音频字幕工具。
 
 ## 当前进度
 
-主线 Round 1 到 Round 10.5 基本完成：
+主线 Round 1 到 Round 13 当前状态：
 
 - 项目已重命名为 `fast-sub`，包路径为 `src/fast_sub`。
 - Python v0 CLI 可用。
@@ -42,46 +42,64 @@ Fast Sub 是一个本地优先的视频和音频字幕工具。
 - Round 9 Go transcribe/auto main path 已完成。
 - Round 10 Go product core before UI 已完成。
 - Round 10.5 Go daemon/job API gate 已完成。
+- Round 11 Electron mock-first shell 已完成。
+- Round 12 Electron 接入 Go daemon 已完成。
+- Round 13 Windows x64 产品化和发布准备已完成当前可验证范围。
+- Windows x64 installer / portable zip 已通过 packaged smoke、真实本地 Provider/file smoke、license inventory、截图 baseline 和发布 checklist。
+- macOS arm64 dmg 打包、权限、Gatekeeper、签名/公证和进程清理 smoke 仍需在 macOS arm64 release machine 上执行。
+- 当前文档整理分支已将历史计划和工程文档归档到 `dev-docs/`，并将用户帮助 / GitHub Pages 文档放到 `help-docs/`；根目录新增 `README.md`、`CHANGELOG.md`、`CONTRIBUTING.md` 和 `SECURITY.md`。
 
-`ui-docs` 当前进度：
+`dev-docs/ui-docs` 当前进度：
 
-- 已建立 Electron UI 规划入口：`ui-docs/project-overview.md`。
-- 已将 Electron 项目范围写入 `ui-docs/project-overview.md`。
-- 已将 Electron 应用架构写入 `ui-docs/architecture.md`。
-- 已从 prototype 提取 UI token 并写入 `ui-docs/ui-context.md`。
-- 已写入 Electron 客户端代码标准：`ui-docs/code-standards.md`。
-- 已写入 AI 编码代理工作规则：`ui-docs/ai-workflow-rules.md`。
-- 已建立 Electron 进度跟踪器：`ui-docs/project-tracker.md`。
-- `ui-docs/prototype/` 已覆盖首次启动、主界面、子功能、任务队列和设置等主要 UI 状态。
-- 已确认 `ui-docs` 后续实现从 Round 11 开始，收敛为 Round 11、Round 12 和 Round 13 三轮。
+- 已建立 Electron UI 规划入口：`dev-docs/ui-docs/project-overview.md`。
+- 已将 Electron 项目范围写入 `dev-docs/ui-docs/project-overview.md`。
+- 已将 Electron 应用架构写入 `dev-docs/ui-docs/architecture.md`。
+- 已从 prototype 提取 UI token 并写入 `dev-docs/ui-docs/ui-context.md`。
+- 已写入 Electron 客户端代码标准：`dev-docs/ui-docs/code-standards.md`。
+- 已写入 AI 编码代理工作规则：`dev-docs/ui-docs/ai-workflow-rules.md`。
+- 已建立 Electron 进度跟踪器：`dev-docs/ui-docs/project-tracker.md`。
+- `dev-docs/ui-docs/prototype/` 已覆盖首次启动、主界面、子功能、任务队列和设置等主要 UI 状态。
+- Round 11、Round 12、Round 13 的 Electron specs 已完成并保存在 `dev-docs/ui-docs/specs/`。
 
-后续 UI 阶段收敛为三轮：
+已完成 UI 阶段：
 
 ```text
 Round 11: Electron Mock-first Shell
 Round 12: Electron 接入 Go Daemon
-Round 13: 产品化与发布准备
+Round 13: 产品化与发布准备（Windows x64 已完成；macOS arm64 需跨机器 follow-up）
 ```
 
-Round 11 应基于 `ui-docs` 的上下文文档，先实现 Electron shell、mock client 和完整 mock-first UI 流程，不接真实 Go daemon。Round 12 再实现 `DaemonFastSubClient` 并接入 daemon 启动、健康检查、任务创建、进度订阅、取消和结果查看。Round 13 聚焦 Electron 打包、本地依赖检查、诊断、隐私提示、基础 smoke/E2E 和发布检查清单。
+Round 11 已完成 Electron shell、mock client 和完整 mock-first UI 流程。Round 12 已完成 `DaemonFastSubClient`、daemon 启动、健康检查、任务创建、进度订阅、取消和结果查看。Round 13 已完成 Windows x64 打包、本地依赖检查、诊断、隐私提示、基础 smoke/E2E 和发布检查清单；macOS arm64 打包和 smoke 单独在 macOS release machine 上继续。
 
 ## 关键文档
 
-- `ui-docs/prototype/desktop-ui-functional-plan.md`：桌面 UI 功能规划和原型范围。
-- `ui-docs/project-overview.md`：Electron 产品定义、目标、功能和范围。
-- `ui-docs/architecture.md`：Electron 应用结构、边界、存储模型和不变式。
-- `ui-docs/ui-context.md`：Electron UI 主题、颜色、排版和组件约定。
-- `ui-docs/code-standards.md`：Electron 实现规则和代码约定。
-- `ui-docs/ai-workflow-rules.md`：Electron 开发工作流、范围规则和交付方式。
-- `ui-docs/project-tracker.md`：Electron 当前阶段、决策清单、进度和下一步。
-- `FAST_SUB_PLAN.md`：整体产品和里程碑计划。
-- `FAST_SUB_GO_MIGRATION_PLAN.md`：Go 迁移路线图。。
-- `FAST_SUB_PARALLEL_ROUND7_75.md`：Python 分层清理计划。
-- `FAST_SUB_ROUND7_75_IMPLEMENTATION.md`：Round 7.75 已完成实现记录。
-- `FAST_SUB_ARCHITECTURE.md`：当前 Python 架构图。
-- `go-docs/project-standards.md`：Go 迁移阶段的项目标准和代码风格。
-- `docs/development.md`：Python 开发说明。
-- `docs/project-standards.md`：Python 包和代码风格标准。
+- `dev-docs/ui-docs/prototype/desktop-ui-functional-plan.md`：桌面 UI 功能规划和原型范围。
+- `dev-docs/ui-docs/project-overview.md`：Electron 产品定义、目标、功能和范围。
+- `dev-docs/ui-docs/architecture.md`：Electron 应用结构、边界、存储模型和不变式。
+- `dev-docs/ui-docs/ui-context.md`：Electron UI 主题、颜色、排版和组件约定。
+- `dev-docs/ui-docs/code-standards.md`：Electron 实现规则和代码约定。
+- `dev-docs/ui-docs/ai-workflow-rules.md`：Electron 开发工作流、范围规则和交付方式。
+- `dev-docs/ui-docs/project-tracker.md`：Electron 当前阶段、决策清单、进度和下一步。
+- `dev-docs/README.md`：项目文档入口和目录说明。
+- `dev-docs/current-status.md`：当前项目状态、发布状态和后续工作。
+- `help-docs/help/README.md`：用户帮助入口，覆盖安装、首次运行、生成字幕、翻译、双语、烧录、Provider、隐私和排障。
+- `README.md`：开源仓库入口和快速说明。
+- `CHANGELOG.md`：用户可读的版本变化记录。
+- `CONTRIBUTING.md`：贡献规则、范围约束和验证命令。
+- `SECURITY.md`：安全报告、隐私和 secret 处理规则。
+- `help-docs/privacy.md`：隐私和远程 Provider 使用说明。
+- `help-docs/troubleshooting.md`：用户排障入口。
+- `dev-docs/release/windows.md` / `dev-docs/release/macos.md`：平台发布说明。
+- `dev-docs/product/plan.md`：整体产品和里程碑计划。
+- `dev-docs/product/mvp.md` / `dev-docs/product/mvp.zh.md`：Fast Sub v0 MVP 英文/中文说明。
+- `dev-docs/product/go-migration-plan.md`：Go 迁移路线图。
+- `dev-docs/archive/python-rounds/round7-75.md`：Python 分层清理计划归档。
+- `dev-docs/archive/python-rounds/round7-75-implementation.md`：Round 7.75 已完成实现记录归档。
+- `dev-docs/architecture/python-architecture.md`：当前 Python 架构图。
+- `dev-docs/api/README.md`：API/reference 文档入口、生成规则和更新约束。
+- `dev-docs/go-docs/project-standards.md`：Go 迁移阶段的项目标准和代码风格。
+- `dev-docs/development.md`：Python 开发说明。
+- `dev-docs/project-standards.md`：Python 包和代码风格标准。
 
 ## 工作规则
 
@@ -99,18 +117,18 @@ Round 11 应基于 `ui-docs` 的上下文文档，先实现 Electron shell、moc
 
 在实现 Electron 应用或做任何架构决策前，按顺序阅读以下文件：
 
-1. `ui-docs/project-overview.md`：产品定义、目标、功能和范围。
-2. `ui-docs/architecture.md`：Electron 应用结构、边界、存储模型和不变式。
-3. `ui-docs/code-standards.md`：实现规则和代码约定。
-4. `ui-docs/ui-context.md`：主题、颜色、排版和组件约定。
-5. `ui-docs/ai-workflow-rules.md`：开发工作流、范围规则和交付方式。
-6. `ui-docs/project-tracker.md`：当前阶段、决策清单、进度和下一步。
+1. `dev-docs/ui-docs/project-overview.md`：产品定义、目标、功能和范围。
+2. `dev-docs/ui-docs/architecture.md`：Electron 应用结构、边界、存储模型和不变式。
+3. `dev-docs/ui-docs/code-standards.md`：实现规则和代码约定。
+4. `dev-docs/ui-docs/ui-context.md`：主题、颜色、排版和组件约定。
+5. `dev-docs/ui-docs/ai-workflow-rules.md`：开发工作流、范围规则和交付方式。
+6. `dev-docs/ui-docs/project-tracker.md`：当前阶段、决策清单、进度和下一步。
 
-每次进行有意义的 Electron 实现更改后，更新 `ui-docs/project-tracker.md`。
+每次进行有意义的 Electron 实现更改后，更新 `dev-docs/ui-docs/project-tracker.md`。
 
 如果实现更改了上下文文件中记录的架构、范围、UI 设计上下文或代码标准，先更新对应文档，再继续实现。
 
-后续 Electron 开发采用 specs-driven 方式推进。每个主要实现单元开始前，先确认对应 spec 或补充 spec；每个主要实现单元完成后，将进度、结果、未决问题和下一步同步更新到 `ui-docs/project-tracker.md`。
+后续 Electron 开发采用 specs-driven 方式推进。每个主要实现单元开始前，先确认对应 spec 或补充 spec；每个主要实现单元完成后，将进度、结果、未决问题和下一步同步更新到 `dev-docs/ui-docs/project-tracker.md`。
 
 ## 分支和合并风格
 
@@ -231,14 +249,14 @@ go test ./...
 
 Go 修改规则：
 
-- 修改 daemon API、event schema、job status、provider metadata 或 model metadata 时，同步更新 `go-docs/specs/daemon-api.md`、`ui-docs/architecture.md` 或相关 client contract 文档。
-- 修改 Electron 依赖的 JSON contract 时，同步更新 `ui-docs/project-tracker.md` 的会议记录或未解决问题。
+- 修改 daemon API、event schema、job status、provider metadata 或 model metadata 时，同步更新 `dev-docs/go-docs/specs/daemon-api.md`、`dev-docs/ui-docs/architecture.md` 或相关 client contract 文档。
+- 修改 Electron 依赖的 JSON contract 时，同步更新 `dev-docs/ui-docs/project-tracker.md` 的会议记录或未解决问题。
 - 保持 JSON stdout 纯净，日志和第三方输出不能混入 JSON。
 - 所有 secret、Authorization、ready token、signed URL 和 proxy credential 必须 redacted。
 
 ## 桌面 UI 和 Electron
 
-- 将 `ui-docs/project-overview.md` 作为 Electron 规划和实现顺序的入口文档。
+- 将 `dev-docs/ui-docs/project-overview.md` 作为 Electron 规划和实现顺序的入口文档。
 - Round 8 到 Round 10.5 已完成；Electron 相关后续实现从 Round 11 开始。
 - Round 11 做 Electron mock-first shell：项目骨架、`FastSubClient` MVP contract、`MockFastSubClient`、首次启动、主界面、任务队列和设置页 mock 流程。
 - Round 12 接入 Go daemon：`DaemonFastSubClient`、daemon 生命周期、健康检查、任务创建、事件订阅、取消、结果查看和异常恢复。

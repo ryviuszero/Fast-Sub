@@ -35,6 +35,7 @@ run("uv", [
   pythonVersion,
   "--install-dir",
   managedInstallDir,
+  "--no-bin",
   "--no-registry",
   "--managed-python"
 ]);

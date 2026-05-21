@@ -208,6 +208,19 @@ func TestResolveTranslateCLIAddsProviderExtraForUV(t *testing.T) {
 	}
 }
 
+func TestResolveTranslateCLIPackagedRuntimeDoesNotUsePATHFallback(t *testing.T) {
+	runner := DefaultRunner{Env: func(key string) string {
+		if key == "FAST_SUB_PACKAGED_RUNTIME_ONLY" {
+			return "1"
+		}
+		return ""
+	}}
+	_, _, appErr := runner.resolveTranslateCLI("local-nllb-ct2")
+	if appErr == nil || appErr.Code != "missing_dependency" {
+		t.Fatalf("appErr = %#v", appErr)
+	}
+}
+
 func TestTranslateEnvDefaultsUVCacheDir(t *testing.T) {
 	env := translateEnv("local-nllb-ct2", func(key string) string {
 		switch key {
