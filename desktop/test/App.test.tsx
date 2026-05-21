@@ -1284,6 +1284,7 @@ describe("Fast Sub renderer flow", () => {
   it("cancels the active job without later completing it", async () => {
     render(<App />);
     await enterMainScreen();
+    await waitForLocalReady();
     fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
     await chooseVideo();
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
@@ -1721,8 +1722,7 @@ describe("Fast Sub renderer flow", () => {
 
     expect(await screen.findByRole("heading", { name: "模型管理" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "正在生成字幕..." })).not.toBeInTheDocument();
-    expect((await screen.findByLabelText(/下载进度/)).textContent).toContain("33%");
-    expect(screen.getByLabelText(/下载进度/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText(/下载进度/).textContent).toContain("33%"));
   });
 
   it("installs a missing local translation model from the provider card", async () => {
