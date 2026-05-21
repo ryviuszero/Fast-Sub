@@ -987,6 +987,7 @@ describe("Fast Sub renderer flow", () => {
     }
     render(<App client={new DetailProgressClient("jobSuccess")} />);
     await enterMainScreen();
+    await screen.findByText("本地转写就绪");
     fireEvent.click(screen.getByRole("button", { name: "添加视频" }));
     await chooseVideo("detail-progress.mp4");
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
