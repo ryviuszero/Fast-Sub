@@ -2,26 +2,30 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
+import { packagedLayout } from "./release-platform.mjs";
 
 const desktopRoot = process.cwd();
-const unpackedRoot = process.env.FAST_SUB_PACKAGED_ROOT || join(desktopRoot, "dist-release", "win-unpacked");
-const appExe = join(unpackedRoot, "Fast Sub.exe");
+const layout = packagedLayout(desktopRoot);
 const smokeRoot = join(desktopRoot, "test-results", "round13-native-deps");
 const scenario = process.argv[2] || "all";
 
-if (!existsSync(appExe)) {
-  fail(`Missing packaged app executable: ${appExe}`);
+if (!existsSync(layout.appExecutable)) {
+  fail(`Missing packaged app executable: ${layout.appExecutable}`);
 }
 
-const scenarios = scenario === "all" ? ["ffmpeg", "ffmpeg-no-aria2", "whisper-cpp"] : [scenario];
+const defaultScenarios = process.platform === "win32" ? ["ffmpeg", "ffmpeg-no-aria2", "whisper-cpp"] : ["ffmpeg", "whisper-cpp"];
+const scenarios = scenario === "all" ? defaultScenarios : [scenario];
 const results = [];
 
 for (const item of scenarios) {
+  if (process.platform !== "win32" && item === "ffmpeg-no-aria2") {
+    fail(`${item} native dependency smoke is currently implemented for Windows only.`);
+  }
   const userData = join(smokeRoot, item);
   rmSync(userData, { recursive: true, force: true });
   mkdirSync(userData, { recursive: true });
   const checks = item.startsWith("ffmpeg") ? "ffmpeg" : item === "whisper-cpp" ? "whisper-cpp" : item;
-  const result = spawnSync(appExe, [], {
+  const result = spawnSync(layout.appExecutable, [], {
     cwd: desktopRoot,
     encoding: "utf8",
     shell: false,
@@ -30,6 +34,7 @@ for (const item of scenarios) {
       FAST_SUB_SMOKE_NATIVE_DEPS: "1",
       FAST_SUB_SMOKE_NATIVE_DEPS_CHECKS: checks,
       FAST_SUB_SMOKE_USER_DATA: resolve(userData),
+      ...(process.platform === "darwin" && item === "ffmpeg" ? { FAST_SUB_IGNORE_SYSTEM_FFMPEG: "1" } : {}),
       ...(item === "ffmpeg-no-aria2" ? { FAST_SUB_DISABLE_ARIA2_AUTO_INSTALL: "1" } : {})
     },
     timeout: 35 * 60 * 1000

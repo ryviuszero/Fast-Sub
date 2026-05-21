@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	fserrors "fast-sub/internal/errors"
@@ -42,11 +43,15 @@ func (r Runner) Probe(ctx context.Context, input string, timeout time.Duration) 
 
 	metadata, parseErr := parseProbeJSON(input, []byte(completed.Stdout))
 	if parseErr != nil {
+		action := "Check that ffprobe is installed correctly and returns JSON output."
+		if isNoAudioStreamError(parseErr) {
+			action = "Choose a media file that contains an audio track, or extract/provide an audio file directly."
+		}
 		return empty, fserrors.New(
 			fserrors.CodeFFprobeFailed,
 			"probe",
 			parseErr.Error(),
-			"Check that ffprobe is installed correctly and returns JSON output.",
+			action,
 			nil,
 		)
 	}
@@ -94,6 +99,10 @@ func parseProbeJSON(input string, rawJSON []byte) (media.Metadata, error) {
 		VideoStreams:        videoStreams,
 		SelectedAudioStream: audioStreams[0],
 	}, nil
+}
+
+func isNoAudioStreamError(err error) bool {
+	return err != nil && strings.HasPrefix(err.Error(), "no audio stream found in:")
 }
 
 func streamSummary(stream map[string]any) media.StreamSummary {

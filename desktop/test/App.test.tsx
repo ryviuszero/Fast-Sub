@@ -1,11 +1,13 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../renderer/src/App";
+import { I18nProvider } from "../renderer/src/app/i18n";
 import { MainGenerating } from "../renderer/src/app/screens/main";
 import { QueueDetail } from "../renderer/src/app/screens/queue";
+import { SettingsDiagnostics } from "../renderer/src/app/screens/settings";
 import { MockFastSubClient } from "../renderer/src/client/MockFastSubClient";
 import { baseModels, baseProviders, createSeedJob, defaultConfig } from "../renderer/src/client/mockFixtures";
-import type { ConfigViewModel, CreateJobRequest, JobDetail, JobEventHandlers, JobSummary, ModelStatus, ProviderStatus, UiError } from "../shared/contracts/types";
+import type { ConfigViewModel, CreateJobRequest, EnvironmentStatus, JobDetail, JobEventHandlers, JobSummary, LocalDataCleanupTarget, ModelStatus, ProviderStatus, UiError } from "../shared/contracts/types";
 
 beforeEach(() => {
   setNavigatorLanguage("zh-CN");
@@ -13,8 +15,27 @@ beforeEach(() => {
 
 afterEach(() => {
   window.localStorage.clear();
+  window.fastSubSystem = createDefaultSystemBridge();
   cleanup();
 });
+
+function createDefaultSystemBridge(): NonNullable<Window["fastSubSystem"]> {
+  return {
+    selectMediaFiles: async () => [],
+    selectMediaFolder: async () => [],
+    selectFolder: async () => null,
+    selectSubtitleOutputPath: async () => null,
+    getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
+    openPathMock: async () => true,
+    openExternalURL: async () => true,
+    getSecuritySnapshot: async () => ({
+      contextIsolation: true,
+      nodeIntegration: false,
+      csp: true,
+      exposesRawIpc: false
+    })
+  };
+}
 
 function setNavigatorLanguage(language: string) {
   Object.defineProperty(window.navigator, "language", {
@@ -38,6 +59,11 @@ async function chooseFolder() {
     new File(["mock"], "folder-b.wav", { type: "audio/wav" })
   ];
   fireEvent.change(input, { target: { files } });
+}
+
+async function waitForLocalReady() {
+  await screen.findByText("本地转写就绪");
+  await screen.findByText("翻译就绪");
 }
 
 function dropFileOn(label: string, file: File) {
@@ -89,6 +115,30 @@ describe("Fast Sub renderer flow", () => {
     expect(await screen.findByRole("heading", { name: "Environment check" })).toBeInTheDocument();
   });
 
+  it("opens the help document in the system browser", async () => {
+    const openExternalURL = vi.fn(async () => true);
+    window.fastSubSystem = {
+      selectMediaFiles: async () => [],
+      selectMediaFolder: async () => [],
+      selectFolder: async () => null,
+      selectSubtitleOutputPath: async () => null,
+      getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
+      openPathMock: async () => true,
+      openExternalURL,
+      getSecuritySnapshot: async () => ({
+        contextIsolation: true,
+        nodeIntegration: false,
+        csp: true,
+        exposesRawIpc: false
+      })
+    };
+    render(<App />);
+    await enterMainScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "帮助" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Fast Sub 文档" }));
+    expect(openExternalURL).toHaveBeenCalledWith("https://ryviuszero.github.io/Fast-Sub/");
+  });
+
   it("automatically creates a burn-in job after transcription when burn-in is enabled", async () => {
     const requests: CreateJobRequest[] = [];
     class BurnInEnabledClient extends MockFastSubClient {
@@ -103,6 +153,7 @@ describe("Fast Sub renderer flow", () => {
     }
     render(<App client={new BurnInEnabledClient("setupReady")} />);
     await enterMainScreen();
+    await waitForLocalReady();
     fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
     await chooseVideo("burn-me.mp4");
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
@@ -241,6 +292,7 @@ describe("Fast Sub renderer flow", () => {
   it("updates general settings options", async () => {
     render(<App />);
     await enterMainScreen();
+    await waitForLocalReady();
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
     fireEvent.click(screen.getByRole("button", { name: "简体中文" }));
     expect(screen.getByRole("button", { name: "简体中文" })).toHaveClass("on");
@@ -436,6 +488,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -463,6 +516,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -504,6 +558,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -536,6 +591,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -566,6 +622,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -596,6 +653,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -663,6 +721,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -736,6 +795,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -787,6 +847,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -846,6 +907,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -951,6 +1013,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -1014,6 +1077,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -1043,6 +1107,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -1199,6 +1264,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => file.name === "input.mp4" ? "F:\\game\\others\\input.mp4" : file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -1208,6 +1274,7 @@ describe("Fast Sub renderer flow", () => {
     };
     render(<App client={new CaptureClient("jobSuccess")} />);
     await enterMainScreen();
+    await waitForLocalReady();
     dropFileOn("拖拽视频到这里", new File(["drop"], "input.mp4", { type: "video/mp4" }));
     expect(await screen.findByText("input.mp4")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
@@ -1282,6 +1349,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => null,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -1291,6 +1359,7 @@ describe("Fast Sub renderer flow", () => {
     };
     render(<App />);
     await enterMainScreen();
+    await waitForLocalReady();
     fireEvent.click(screen.getByRole("button", { name: "添加视频" }));
     await chooseVideo();
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
@@ -1410,6 +1479,7 @@ describe("Fast Sub renderer flow", () => {
     }
     render(<App client={new APITranslationReadyClient("setupReady")} />);
     await enterMainScreen();
+    await waitForLocalReady();
     fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
     await chooseVideo("api-translate.mp4");
     fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
@@ -1524,6 +1594,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath,
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -1560,6 +1631,7 @@ describe("Fast Sub renderer flow", () => {
       selectSubtitleOutputPath: async () => "F:\\game\\others\\input-copy.srt",
       getPathForFile: (file) => (file as File & { path?: string }).path ?? file.name,
       openPathMock: async () => true,
+      openExternalURL: async () => true,
       getSecuritySnapshot: async () => ({
         contextIsolation: true,
         nodeIntegration: false,
@@ -1693,5 +1765,60 @@ describe("Fast Sub renderer flow", () => {
 
     await waitFor(() => expect(within(whisperSmall).getByText("未安装")).toBeInTheDocument());
     expect(within(whisperSmall).getByRole("button", { name: "下载" })).toBeInTheDocument();
+  });
+
+  it("clears local data from diagnostics with confirmation", async () => {
+    const cleaned: LocalDataCleanupTarget[] = [];
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const environment: EnvironmentStatus = {
+      health: "ok",
+      os: "darwin",
+      arch: "arm64",
+      memory: "16 GB",
+      disk: "240 GB",
+      localTranscriptionReady: true,
+      localTranslationReady: true,
+      ffmpegReady: true,
+      modelDirectoryReady: true,
+      daemonReady: true,
+      warnings: []
+    };
+    render(
+      <I18nProvider language="zh">
+        <SettingsDiagnostics
+          {...({
+            environment,
+            cleanupLocalData: async (target: LocalDataCleanupTarget) => {
+              cleaned.push(target);
+            }
+          } as Parameters<typeof SettingsDiagnostics>[0])}
+        />
+      </I18nProvider>
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "清理任务历史" }));
+    await waitFor(() => expect(cleaned).toEqual(["jobs"]));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("确认清理任务历史"));
+    expect(await screen.findByText("清理完成，已刷新本机状态。")).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
+  it("does not clear local data when diagnostics cleanup is canceled", async () => {
+    const cleaned: LocalDataCleanupTarget[] = [];
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(
+      <I18nProvider language="zh">
+        <SettingsDiagnostics
+          {...({
+            environment: null,
+            cleanupLocalData: async (target: LocalDataCleanupTarget) => {
+              cleaned.push(target);
+            }
+          } as Parameters<typeof SettingsDiagnostics>[0])}
+        />
+      </I18nProvider>
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "清理原生依赖" }));
+    expect(cleaned).toEqual([]);
+    confirm.mockRestore();
   });
 });

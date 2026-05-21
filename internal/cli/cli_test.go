@@ -199,6 +199,33 @@ func TestProbeJSONInvalidFFprobeJSON(t *testing.T) {
 	}
 }
 
+func TestProbeJSONNoAudioStreamActionHint(t *testing.T) {
+	ffprobe := fakeBinary(t, "ffprobe", fakeProbeBinary(noAudioProbeJSON()))
+	prependPath(t, ffprobe)
+	input := filepath.Join(t.TempDir(), "video-only.mp4")
+	if err := os.WriteFile(input, []byte("fake"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	code := cli.Run(context.Background(), cli.Config{
+		Args:   []string{"probe", input, "--json"},
+		Stdout: &stdout,
+	})
+	if code != 7 {
+		t.Fatalf("exit code = %d, stdout=%s", code, stdout.String())
+	}
+	payload := mustJSON(t, stdout.String())
+	errorPayload := payload["error"].(map[string]any)
+	if errorPayload["code"] != "ffprobe_failed" {
+		t.Fatalf("error code = %#v", errorPayload["code"])
+	}
+	actionHint := payload["action_hint"].(string)
+	if !strings.Contains(actionHint, "contains an audio track") {
+		t.Fatalf("action_hint = %#v", actionHint)
+	}
+}
+
 func TestExtractJSONSuccessWithFakeFFmpeg(t *testing.T) {
 	ffmpeg := fakeBinary(t, "ffmpeg", fakeFFmpegSuccessBinary())
 	prependPath(t, ffmpeg)
@@ -511,6 +538,21 @@ func validProbeJSON() string {
     }
   ],
   "format": {"duration": "1.250000", "format_name": "wav"}
+}`
+}
+
+func noAudioProbeJSON() string {
+	return `{
+  "streams": [
+    {
+      "index": 0,
+      "codec_name": "h264",
+      "codec_type": "video",
+      "width": 1920,
+      "height": 1080
+    }
+  ],
+  "format": {"duration": "1.250000", "format_name": "mov,mp4,m4a,3gp,3g2,mj2"}
 }`
 }
 

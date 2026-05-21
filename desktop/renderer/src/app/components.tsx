@@ -5,8 +5,13 @@ import { debugScreens, scenarioOptions } from "./fixtures";
 import { useT } from "./i18n";
 import type { MediaFile, Screen } from "./types";
 
+const HELP_DOCUMENT_URL = "https://ryviuszero.github.io/Fast-Sub/";
+
 export function AppMenu({ canGoBack, canGoForward, onBack, onForward, onNavigate }: { canGoBack: boolean; canGoForward: boolean; onBack: () => void; onForward: () => void; onNavigate: (screen: Screen) => void }) {
   const t = useT();
+  const openHelpDocument = () => {
+    void window.fastSubSystem?.openExternalURL(HELP_DOCUMENT_URL);
+  };
   return (
     <header className="app-menu" aria-label={t("Application menu")}>
       <button aria-label={t("Back")} className="menu-icon" disabled={!canGoBack} onClick={onBack}>←</button>
@@ -22,7 +27,7 @@ export function AppMenu({ canGoBack, canGoForward, onBack, onForward, onNavigate
       <div className="menu-popover">
         <button className="menu-label" type="button">{t("Help")}</button>
         <div className="menu-panel help-panel" role="menu">
-          <button role="menuitem" type="button">Fast Sub Document</button>
+          <button role="menuitem" type="button" onClick={openHelpDocument}>{t("Fast Sub Document")}</button>
         </div>
       </div>
     </header>

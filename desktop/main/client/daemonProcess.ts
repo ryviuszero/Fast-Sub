@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { redactSecretText } from "../../shared/privacy/redaction";
 import { daemonTransportLog } from "./transportLog";
-import { ffmpegBinDirectory, prependNativeDependencyPath, whisperCPPBinDirectory } from "./nativeDependencies";
+import { ffmpegBinDirectory, prependNativeDependencyPath, whisperCPPCommandPath, whisperCPPBinDirectory } from "./nativeDependencies";
 import { packagedDaemonPath, privatePythonRuntimeCommands, prependPathDirs } from "./runtimeResources";
 import { uiError } from "./uiError";
 
@@ -201,6 +201,10 @@ async function scrubbedEnv(): Promise<NodeJS.ProcessEnv> {
     env.FAST_SUB_PACKAGED_RUNTIME_ONLY = "1";
     env.FAST_SUB_FFMPEG_BIN_DIR = ffmpegBinDirectory();
     env.FAST_SUB_WHISPER_CPP_BIN_DIR = whisperCPPBinDirectory();
+    const whisperCPPCommand = whisperCPPCommandPath();
+    if (whisperCPPCommand) {
+      env.FAST_SUB_WHISPER_CPP_COMMAND = whisperCPPCommand;
+    }
   }
   const privatePython = privatePythonRuntimeCommands();
   if (privatePython.python) {

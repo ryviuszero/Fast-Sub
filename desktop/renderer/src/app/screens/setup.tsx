@@ -20,6 +20,7 @@ export function SetupCheck(props: RenderProps) {
   const disk = environment?.disk ? rt(environment.disk) : t("240 GB available");
   const ffmpegProgress = Math.max(0, Math.min(100, environment?.ffmpegInstallProgressPercent ?? 0));
   const ffmpegLogs = environment?.ffmpegInstallLogs ?? [];
+  const ffmpegPackageManagers = packageManagersForOS(environment?.os);
   return (
     <div className="wf">
       <main className="content-flow setup-flow">
@@ -53,9 +54,9 @@ export function SetupCheck(props: RenderProps) {
             <p>{t("FFmpeg auto install failed hint")}</p>
             <div className="row gap-8 wrap">
               <button className="btn primary" onClick={() => void repairDaemon()}>{t("Retry environment repair")}</button>
-              <button className="btn" onClick={() => void installFFmpegWithPackageManager("scoop")}>{t("Install with Scoop")}</button>
-              <button className="btn" onClick={() => void installFFmpegWithPackageManager("winget")}>{t("Install with Winget")}</button>
-              <button className="btn" onClick={() => void installFFmpegWithPackageManager("choco")}>{t("Install with Chocolatey")}</button>
+              {ffmpegPackageManagers.map((manager) => (
+                <button className="btn" key={manager.id} onClick={() => void installFFmpegWithPackageManager(manager.id)}>{t(manager.label)}</button>
+              ))}
             </div>
           </section>
         )}
@@ -85,6 +86,20 @@ export function SetupCheck(props: RenderProps) {
       </main>
     </div>
   );
+}
+
+function packageManagersForOS(os: string | undefined): Array<{ id: "scoop" | "winget" | "choco" | "brew"; label: string }> {
+  if (os === "darwin") {
+    return [{ id: "brew", label: "Install with Homebrew" }];
+  }
+  if (os === "win32" || !os) {
+    return [
+      { id: "scoop", label: "Install with Scoop" },
+      { id: "winget", label: "Install with Winget" },
+      { id: "choco", label: "Install with Chocolatey" }
+    ];
+  }
+  return [];
 }
 
 function localWorkerCheckStatus(props: RenderProps): "ready" | "checking" | "missing" {

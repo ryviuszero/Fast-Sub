@@ -1,6 +1,6 @@
 # Round 13 Release Checklist
 
-Status date: 2026-05-20
+Status date: 2026-05-21
 
 ## Release Scope
 
@@ -10,14 +10,16 @@ Status date: 2026-05-20
 - Baseline commit: `dc10f2e docs: plan round 13 release readiness`
 - Release platforms in scope: Windows x64 installer, Windows x64 portable zip, macOS arm64 dmg
 - Windows artifacts built: `desktop/dist-release/FastSub-Desktop-0.13.0-windows-x64.exe`, `desktop/dist-release/FastSub-Desktop-0.13.0-windows-x64.zip`
-- macOS artifact status: blocked on macOS arm64 host; package, smoke, signing/notarization, Gatekeeper and cleanup checks move to the macOS release machine follow-up and do not block merging the validated Windows RC branch.
+- macOS artifact built: `desktop/dist-release/FastSub-Desktop-0.13.0-macos-arm64.dmg`
+- macOS artifact status: preview build passed packaged runtime checks on macOS arm64; app is ad-hoc signed, not notarized, and Gatekeeper assessment is not passed. Release notes must document manual `xattr` + local ad-hoc `codesign` install steps.
 
 ## Automated Validation
 
 | Check | Status | Notes |
 | --- | --- | --- |
 | `go test ./...` | PASS | 2026-05-19 final baseline passed with workspace-local Go cache. |
-| `cd desktop && npm run typecheck` | PASS | 2026-05-19 final baseline passed after API key deletion and release smoke script changes. |
+| `go test ./...` macOS | PASS | 2026-05-21 macOS arm64 pass with workspace-local `GOCACHE=.gocache`; sandbox run failed on local port binding, elevated rerun passed. |
+| `cd desktop && npm run typecheck` | PASS | 2026-05-21 macOS arm64 pass after macOS packaging and native dependency installer updates. |
 | `cd desktop && npm test` | PASS | 2026-05-19 full Vitest suite passed: 4 files / 77 tests. Includes Provider API key save/replace/delete and raw secret non-display coverage. |
 | `cd desktop && npm run build` | PASS | 2026-05-19 final electron-vite build passed with escalation due Windows sandbox/esbuild config access. |
 | `cd desktop && npm run smoke` | PASS | 2026-05-19 renderer/preload/CSP smoke passed with escalation due Windows sandbox Electron cache/GPU restrictions. |
@@ -25,8 +27,9 @@ Status date: 2026-05-20
 | `cd desktop && npm run package` | PASS | Windows installer and portable zip regenerated 2026-05-19 as latest RC artifacts after API key deletion and translation model failure smoke additions. |
 | `cd desktop && npm run smoke:packaged` | PASS | Latest `win-unpacked` passed packaged app, daemon, Python runtime, daemon repair, SSE disconnect, and `events_lost` smoke. Latest portable zip extraction also passed with `FAST_SUB_PACKAGED_ROOT`. |
 | `cd desktop && npm run smoke:translation-model-failure` | PASS | Latest packaged daemon with isolated empty model store returns `missing_model` for local NLLB translation job; no real network/model/API used. |
-| `cd desktop && npm run smoke:native-deps` | PASS | Manual release smoke with real network downloads: FFmpeg + aria2 and HTTPS fallback passed. |
-| `cd desktop && npm run smoke:native-deps -- whisper-cpp` | PASS | Manual release smoke with real network download passed. |
+| macOS release script readiness | PASS | 2026-05-21 on macOS arm64: `prepare-python-runtime`, `package:dir`, `smoke:packaged`, `smoke:translation-model-failure`, and `package` passed after macOS symlink materialization fix. |
+| `cd desktop && npm run smoke:native-deps` | PASS | Manual release smoke with real network downloads: Windows FFmpeg + aria2 and HTTPS fallback passed; macOS FFmpeg/FFprobe app-private first install passed from GitHub gz binaries, and bundled whisper.cpp runtime was detected from the app bundle without Homebrew. |
+| `cd desktop && npm run smoke:native-deps -- whisper-cpp` | PASS | Windows download fallback passed earlier; macOS final package uses bundled `Contents/Resources/bin/darwin-arm64/whisper-cpp`. |
 
 ## Manual Smoke Summary
 
@@ -49,6 +52,10 @@ Status date: 2026-05-20
 | Translation model failure downgrade | PASS | Original ASR remains covered by default ASR smoke; local NLLB translation path fails fast with `missing_model` when the translation model store is empty. |
 | Secret storage CRUD | PASS | Provider API key save, replace, and delete are covered; renderer test confirms raw entered secrets do not remain visible after save/replace. |
 | Screenshot baseline | PASS | 10 GUI screenshots captured under `desktop-tests/pics/round13/`; manifest statuses updated to PASS. |
+| macOS packaged runtime smoke | PASS | 2026-05-21: final rebuilt `dist-release/mac-arm64/Fast Sub.app` passed packaged app, daemon, Python runtime, daemon repair, SSE disconnect, and `events_lost` smoke. |
+| macOS native dependency smoke | PASS | 2026-05-21: final rebuilt app downloaded `ffmpeg-darwin-arm64.gz` and `ffprobe-darwin-arm64.gz` into isolated app-private userData; bundled whisper.cpp runtime was available from `Contents/Resources/bin/darwin-arm64/whisper-cpp`. |
+| macOS translation model failure smoke | PASS | 2026-05-21: final packaged daemon returned expected `missing_model` for local NLLB translation with isolated empty model store. |
+| macOS DMG mount check | PASS | 2026-05-21: generated dmg mounted read-only at `/private/tmp/fast-sub-dmg-check`, contained `Fast Sub.app` and `/Applications` link, then detached cleanly. |
 
 ## Privacy And Security
 
@@ -62,13 +69,15 @@ Status date: 2026-05-20
 ## Distribution Notes
 
 - Go daemon and app private Python runtime are outside ASAR.
-- Python CLI bridge uses `python.exe -m fast_sub.app`.
-- Faster Whisper worker uses `python.exe -m fast_sub_workers.faster_whisper`.
+- Python CLI bridge uses app-private Python module entry: Windows `python.exe -m fast_sub.app`, macOS `python -m fast_sub.app`.
+- Faster Whisper worker uses app-private Python module entry: Windows `python.exe -m fast_sub_workers.faster_whisper`, macOS `python -m fast_sub_workers.faster_whisper`.
 - Models are not bundled; model downloads are user/model-store managed.
-- FFmpeg, aria2, and whisper.cpp native binary are app private userData downloads, not bundled.
+- FFmpeg/FFprobe are app private userData downloads, not bundled. On Windows FFmpeg downloads from gyan.dev; on macOS FFmpeg/FFprobe downloads from GitHub `ffmpeg-static` gz assets when no complete app-private or system Homebrew/local install is available. macOS and other non-Windows platforms only reuse a system `aria2c`; if absent they fall back to ordinary HTTPS download.
+- whisper.cpp native runtime is bundled with release resources. Windows retains the existing GitHub download fallback for older/missing packages; macOS release builds now include `whisper-cli` and dylibs under `Contents/Resources/bin/darwin-arm64/whisper-cpp`, so end users do not need Homebrew or build tools.
 - Current Windows package is intentionally unsigned; this is the selected Round 13 Windows distribution form. `Get-AuthenticodeSignature` reports `NotSigned` for both `dist-release/win-unpacked/Fast Sub.exe` and `dist-release/FastSub-Desktop-0.13.0-windows-x64.exe`. Windows executable resource editing remains enabled so icon and version metadata are embedded. Current version resource: ProductName/FileDescription/CompanyName `Fast Sub`, FileVersion `0.13.0`, ProductVersion `0.13.0.0`.
 - App icon source is `desktop/build/icon.png`; Windows package icon is `desktop/build/icon.ico`.
-- macOS arm64 dmg must be built and tested on a macOS arm64 machine; signing/notarization/Gatekeeper status remains a follow-up release-machine checkpoint.
+- macOS arm64 dmg was built and smoke-tested on a macOS arm64 machine. It is ad-hoc signed and not notarized; `codesign --verify --deep --strict --verbose=2` passed, while `spctl --assess --type execute --verbose` returned `internal error in Code Signing subsystem`.
+- macOS release machine expected commands are documented in `dev-docs/release/macos.md`.
 - Third-party license reports are generated under `desktop-tests/licenses/`; current aggregate is 618 records, 0 `needs-review`, 0 `blocked`.
 
 ## Cleanup Notes
@@ -80,8 +89,10 @@ Status date: 2026-05-20
 
 ## Release Blockers Before macOS Distribution
 
-- macOS arm64 dmg build and smoke on the macOS release machine.
+- macOS signing/notarization/Gatekeeper must be completed before any external distribution.
 
 ## Known Distribution Risks
 
 - Windows artifacts are unsigned by current decision. Users may see Windows SmartScreen or antivirus reputation prompts until a future signed release exists.
+- macOS artifact is ad-hoc signed and not notarized. Treat it as a preview build only; users may see Gatekeeper blocking or quarantine warnings.
+- macOS preview distribution follows the unsigned open-source app pattern: explicitly document Gatekeeper risk and manual install commands, and do not describe the artifact as notarized or stable.

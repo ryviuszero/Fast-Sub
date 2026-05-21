@@ -18,10 +18,11 @@
     "smoke:translation-model-failure": "node scripts/smoke-translation-model-failure.mjs",
     "smoke:native-deps": "node scripts/smoke-native-dependencies.mjs",
     "prepare:python-runtime": "node scripts/prepare-python-runtime.mjs",
+    "prepare:whisper-cpp-runtime": "node scripts/prepare-whisper-cpp-runtime.mjs",
     "prepare:release-resources": "node scripts/prepare-release-resources.mjs",
     "clean:release": "node scripts/clean-release-output.mjs",
-    "package:dir": "npm run clean:release && npm run build && npm run prepare:release-resources && electron-builder --dir",
-    "package": "npm run clean:release && npm run build && npm run prepare:release-resources && electron-builder"
+    "package:dir": "npm run clean:release && npm run build && npm run prepare:whisper-cpp-runtime && npm run prepare:release-resources && electron-builder --dir",
+    "package": "npm run clean:release && npm run build && npm run prepare:whisper-cpp-runtime && npm run prepare:release-resources && electron-builder"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

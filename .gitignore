@@ -13,6 +13,7 @@ pytest-local-basetemp/
 pytest-local-tmp/
 __pycache__/
 *.py[cod]
+.DS_Store
 local_tests/*
 scripts/bench_assets.py
 scripts/bench_translate_assets.py

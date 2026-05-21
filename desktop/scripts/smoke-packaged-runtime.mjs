@@ -1,34 +1,26 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import process from "node:process";
+import { assertLayoutExists, packagedLayout, packagedRuntimeEnv } from "./release-platform.mjs";
 
 const desktopRoot = process.cwd();
-const unpackedRoot = process.env.FAST_SUB_PACKAGED_ROOT || join(desktopRoot, "dist-release", "win-unpacked");
-const resourcesRoot = join(unpackedRoot, "resources");
-const appExe = join(unpackedRoot, "Fast Sub.exe");
-const daemonExe = join(resourcesRoot, "bin", "win32-x64", "fast-sub-go.exe");
-const pythonRoot = join(resourcesRoot, "python", "win32-x64");
-const pythonExe = join(pythonRoot, "python.exe");
-const fastSubExe = join(pythonRoot, "Scripts", "fast-sub.exe");
-const workerExe = join(pythonRoot, "Scripts", "fast-sub-worker-faster-whisper.exe");
+const layout = packagedLayout(desktopRoot);
 const daemonSmokeRoot = join(desktopRoot, "test-results", "round13-packaged-daemon");
 const daemonRepairSmokeRoot = join(desktopRoot, "test-results", "round13-daemon-repair");
 
-[
-  [appExe, "packaged app executable"],
-  [join(resourcesRoot, "app.asar"), "app.asar"],
-  [daemonExe, "packaged Go daemon"],
-  [pythonExe, "app-private Python executable"],
-  [fastSubExe, "app-private fast-sub CLI"],
-  [workerExe, "app-private faster-whisper worker"]
-].forEach(([path, label]) => {
-  if (!existsSync(path)) {
-    fail(`Missing ${label}: ${path}`);
-  }
-});
+try {
+  assertLayoutExists(layout, [
+    [layout.appExecutable, "packaged app executable"],
+    [join(layout.resourcesRoot, "app.asar"), "app.asar"],
+    [layout.daemonExecutable, "packaged Go daemon"],
+    [layout.pythonExecutable, "app-private Python executable"]
+  ]);
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error));
+}
 
-run(appExe, [], {
+run(layout.appExecutable, [], {
   env: {
     ...process.env,
     FAST_SUB_SMOKE: "1"
@@ -36,18 +28,20 @@ run(appExe, [], {
 });
 rmSync(daemonRepairSmokeRoot, { recursive: true, force: true });
 mkdirSync(daemonRepairSmokeRoot, { recursive: true });
-run(appExe, [], {
+run(layout.appExecutable, [], {
   env: {
     ...process.env,
     FAST_SUB_SMOKE_DAEMON_REPAIR: "1",
     FAST_SUB_SMOKE_USER_DATA: daemonRepairSmokeRoot
   }
 });
-run(fastSubExe, ["--version"]);
-run(workerExe, ["--help"]);
-run(pythonExe, ["-m", "fast_sub.app", "--version"]);
-run(pythonExe, ["-m", "fast_sub_workers.faster_whisper", "--help"]);
-run(pythonExe, [
+if (process.platform === "win32") {
+  run(layout.fastSubCli, ["--version"]);
+  run(layout.sttWorker, ["--help"]);
+}
+run(layout.pythonExecutable, ["-m", "fast_sub.app", "--version"]);
+run(layout.pythonExecutable, ["-m", "fast_sub_workers.faster_whisper", "--help"]);
+run(layout.pythonExecutable, [
   "-c",
   "import fast_sub, faster_whisper, ctranslate2, sentencepiece; print('packaged-python-ok')"
 ]);
@@ -79,9 +73,10 @@ function smokeDaemonReady() {
   rmSync(daemonSmokeRoot, { recursive: true, force: true });
   mkdirSync(daemonSmokeRoot, { recursive: true });
   return new Promise((resolve) => {
-    const child = spawn(daemonExe, ["serve", "--json-ready", "--host", "127.0.0.1", "--port", "0"], {
+    const child = spawn(layout.daemonExecutable, ["serve", "--json-ready", "--host", "127.0.0.1", "--port", "0"], {
       cwd: daemonSmokeRoot,
       shell: false,
+      env: packagedRuntimeEnv(layout),
       stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "";

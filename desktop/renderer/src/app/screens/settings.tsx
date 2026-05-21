@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import type { ConfigViewModel, ModelStatus, ProviderState, ProviderStatus } from "../../../../shared/contracts/types";
+import type { ConfigViewModel, LocalDataCleanupTarget, ModelStatus, ProviderState, ProviderStatus } from "../../../../shared/contracts/types";
 import { redactSecretText } from "../../../../shared/privacy/redaction";
 import type { RenderProps, Screen, UiFontStyle, UiLanguage } from "../types";
 import { Chip, Chrome, KV, Segment, SettingRow, Toggle } from "../components";
@@ -955,11 +955,28 @@ function providerDefaultBlockReason(provider: ProviderStatus, t: (key: string) =
   }
 }
 
-export function SettingsDiagnostics({ environment }: RenderProps) {
+export function SettingsDiagnostics({ environment, cleanupLocalData }: RenderProps) {
   const t = useT();
   const health = environment?.health ?? "checking";
   const logLines = (environment?.ffmpegInstallLogs ?? []).map((line) => redactSecretText(line)).slice(-12);
   const warnings = environment?.warnings ?? [];
+  const [cleaning, setCleaning] = useState<LocalDataCleanupTarget | null>(null);
+  const [cleanupMessage, setCleanupMessage] = useState<string>("");
+  const runCleanup = async (target: LocalDataCleanupTarget) => {
+    if (!window.confirm(t(cleanupConfirmKey(target)))) {
+      return;
+    }
+    setCleaning(target);
+    setCleanupMessage("");
+    try {
+      await cleanupLocalData(target);
+      setCleanupMessage(t("Local data cleanup complete"));
+    } catch {
+      setCleanupMessage(t("Local data cleanup failed"));
+    } finally {
+      setCleaning(null);
+    }
+  };
   return (
     <div className="settings-list">
       <div className="between"><h2>{t("Diagnostics")}</h2><Chip tone={health === "ok" ? "ok" : health === "degraded" ? "warn" : "accent"}>{healthLabel(health, t)}</Chip></div>
@@ -980,8 +997,34 @@ export function SettingsDiagnostics({ environment }: RenderProps) {
         {environment?.error?.diagnostic && <KV k="diagnostic" v={redactSecretText(environment.error.diagnostic)} mono />}
       </section>
       <pre>{logLines.length ? logLines.join("\n") : t("No detailed logs")}</pre>
+      <section className="panel paper-muted">
+        <div className="between">
+          <div>
+            <h3>{t("Local data cleanup")}</h3>
+            <p className="caption">{t("Local data cleanup note")}</p>
+          </div>
+        </div>
+        <div className="row gap-8 wrap">
+          <button className="btn" disabled={cleaning !== null} onClick={() => void runCleanup("jobs")} type="button">
+            {cleaning === "jobs" ? t("Cleaning") : t("Clear task history")}
+          </button>
+          <button className="btn" disabled={cleaning !== null} onClick={() => void runCleanup("native-binaries")} type="button">
+            {cleaning === "native-binaries" ? t("Cleaning") : t("Clear native dependencies")}
+          </button>
+          <button className="btn" disabled={cleaning !== null} onClick={() => void runCleanup("cache")} type="button">
+            {cleaning === "cache" ? t("Cleaning") : t("Clear app cache")}
+          </button>
+        </div>
+        {cleanupMessage && <p className="caption">{cleanupMessage}</p>}
+      </section>
     </div>
   );
+}
+
+function cleanupConfirmKey(target: LocalDataCleanupTarget): string {
+  if (target === "jobs") return "Confirm clear task history";
+  if (target === "native-binaries") return "Confirm clear native dependencies";
+  return "Confirm clear app cache";
 }
 
 function healthLabel(health: string, t: (key: string) => string): string {

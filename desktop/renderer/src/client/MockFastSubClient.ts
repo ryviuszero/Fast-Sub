@@ -11,6 +11,8 @@ import type {
   JobLogEntry,
   JobResult,
   JobSummary,
+  LocalDataCleanupResult,
+  LocalDataCleanupTarget,
   MockScenario,
   ModelStatus,
   ProviderStatus,
@@ -466,6 +468,13 @@ export class MockFastSubClient implements FastSubClient {
 
   async deleteJob(jobId: string): Promise<void> {
     this.jobs.delete(jobId);
+  }
+
+  async cleanupLocalData(target: LocalDataCleanupTarget): Promise<LocalDataCleanupResult> {
+    if (target === "jobs") {
+      this.jobs.clear();
+    }
+    return { target, deleted: [target], skipped: [] };
   }
 
   subscribeJobEvents(jobId: string, handlers: JobEventHandlers): () => void {

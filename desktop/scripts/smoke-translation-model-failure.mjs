@@ -2,17 +2,17 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import process from "node:process";
+import { packagedLayout, packagedRuntimeEnv } from "./release-platform.mjs";
 
 const desktopRoot = process.cwd();
-const unpackedRoot = process.env.FAST_SUB_PACKAGED_ROOT || join(desktopRoot, "dist-release", "win-unpacked");
-const daemonExe = join(unpackedRoot, "resources", "bin", "win32-x64", "fast-sub-go.exe");
+const layout = packagedLayout(desktopRoot);
 const smokeRoot = join(desktopRoot, "test-results", "round13-translation-model-failure");
 const modelStore = join(smokeRoot, "empty-model-store");
 const input = join(smokeRoot, "missing-model-input.srt");
 const output = join(smokeRoot, "missing-model-output.zh.srt");
 
-if (!existsSync(daemonExe)) {
-  fail(`Missing packaged daemon: ${daemonExe}`);
+if (!existsSync(layout.daemonExecutable)) {
+  fail(`Missing packaged daemon: ${layout.daemonExecutable}`);
 }
 
 rmSync(smokeRoot, { recursive: true, force: true });
@@ -34,14 +34,13 @@ try {
 
 function startDaemon() {
   return new Promise((resolve) => {
-    const child = spawn(daemonExe, ["serve", "--json-ready", "--host", "127.0.0.1", "--port", "0"], {
+    const child = spawn(layout.daemonExecutable, ["serve", "--json-ready", "--host", "127.0.0.1", "--port", "0"], {
       cwd: smokeRoot,
       shell: false,
-      env: {
-        ...process.env,
+      env: packagedRuntimeEnv(layout, {
         FAST_SUB_MODEL_STORE_DIR: modelStore,
         FAST_SUB_GO_CONFIG: join(smokeRoot, "fast-sub-go.toml")
-      },
+      }),
       stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "";

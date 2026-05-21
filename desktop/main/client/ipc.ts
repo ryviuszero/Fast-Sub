@@ -2,6 +2,7 @@ import { app, ipcMain, type WebContents } from "electron";
 import type { CreateJobRequest, FFmpegPackageManager, JobEventHandlers } from "../../shared/contracts/types";
 import { DaemonProcessManager } from "./daemonProcess";
 import { MainDaemonFastSubClient } from "./daemonClient";
+import { cleanupLocalData, normalizeLocalDataCleanupTarget } from "./localDataCleanup";
 import { defaultSecretStorePath, SafeStorageSecretStore } from "./secretStore";
 import { errorFromUnknown, uiError } from "./uiError";
 
@@ -56,6 +57,14 @@ export function registerFastSubClientIpc(): void {
   handle("fast-sub-client:get-job-result", (_event, jobId: unknown) => client.getJobResult(String(jobId)));
   handle("fast-sub-client:get-job-logs", (_event, jobId: unknown) => client.getJobLogs(String(jobId)));
   handle("fast-sub-client:delete-job", (_event, jobId: unknown) => client.deleteJob(String(jobId)));
+  handle("fast-sub-client:cleanup-local-data", async (_event, target: unknown) => {
+    const normalizedTarget = normalizeLocalDataCleanupTarget(target);
+    const result = await cleanupLocalData(normalizedTarget);
+    if (normalizedTarget === "jobs") {
+      await processManager.repair().catch(() => undefined);
+    }
+    return result;
+  });
 
   ipcMain.handle("fast-sub-client:subscribe-job-events", (event, jobId: unknown, subscriptionId: unknown) => {
     const id = String(subscriptionId);
@@ -121,7 +130,7 @@ function normalizeSecretAlias(providerId: string, alias: unknown): string {
 }
 
 function normalizeFFmpegPackageManager(value: unknown): FFmpegPackageManager {
-  if (value === "winget" || value === "choco") {
+  if (value === "winget" || value === "choco" || value === "brew") {
     return value;
   }
   return "scoop";

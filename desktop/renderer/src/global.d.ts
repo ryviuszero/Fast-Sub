@@ -12,6 +12,7 @@ declare global {
       selectSubtitleOutputPath: (defaultPath: string) => Promise<string | null>;
       getPathForFile: (file: File) => string;
       openPathMock: (path: string) => Promise<boolean>;
+      openExternalURL: (url: string) => Promise<boolean>;
       getSecuritySnapshot: () => Promise<{
         contextIsolation: boolean;
         nodeIntegration: boolean;

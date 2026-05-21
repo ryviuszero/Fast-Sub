@@ -1,4 +1,4 @@
-import type { ConfigViewModel, EnvironmentStatus, FFmpegPackageManager, JobDetail, JobLogEntry, JobSummary, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
+import type { ConfigViewModel, EnvironmentStatus, FFmpegPackageManager, JobDetail, JobLogEntry, JobSummary, LocalDataCleanupTarget, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
 
 export type Screen =
   | "setup-check"
@@ -71,6 +71,7 @@ export type RenderProps = {
   cancelAllJobs: () => Promise<void>;
   deleteJob: () => Promise<void>;
   deleteJobs: (jobIds: string[]) => Promise<void>;
+  cleanupLocalData: (target: LocalDataCleanupTarget) => Promise<void>;
   installModel: (id: string) => Promise<void>;
   removeModel: (id: string) => Promise<void>;
   repairDaemon: () => Promise<void>;

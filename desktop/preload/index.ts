@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { ConfigViewModel, CreateJobRequest, FFmpegPackageManager, FolderScanOptions, JobEvent, JobEventHandlers } from "../shared/contracts/types";
+import type { ConfigViewModel, CreateJobRequest, FFmpegPackageManager, FolderScanOptions, JobEvent, JobEventHandlers, LocalDataCleanupTarget } from "../shared/contracts/types";
 
 type SecuritySnapshot = {
   contextIsolation: boolean;
@@ -15,6 +15,7 @@ const api = {
   selectSubtitleOutputPath: (defaultPath: string): Promise<string | null> => ipcRenderer.invoke("fast-sub:select-subtitle-output-path", defaultPath) as Promise<string | null>,
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
   openPathMock: (path: string): Promise<boolean> => ipcRenderer.invoke("fast-sub:open-path-mock", path) as Promise<boolean>,
+  openExternalURL: (url: string): Promise<boolean> => ipcRenderer.invoke("fast-sub:open-external-url", url) as Promise<boolean>,
   getSecuritySnapshot: (): Promise<SecuritySnapshot> =>
     ipcRenderer.invoke("fast-sub:security-snapshot") as Promise<SecuritySnapshot>
 };
@@ -49,6 +50,7 @@ const clientApi = {
   getJobResult: (jobId: string) => ipcRenderer.invoke("fast-sub-client:get-job-result", jobId),
   getJobLogs: (jobId: string) => ipcRenderer.invoke("fast-sub-client:get-job-logs", jobId),
   deleteJob: (jobId: string) => ipcRenderer.invoke("fast-sub-client:delete-job", jobId),
+  cleanupLocalData: (target: LocalDataCleanupTarget) => ipcRenderer.invoke("fast-sub-client:cleanup-local-data", target),
   subscribeJobEvents: (jobId: string, handlers: JobEventHandlers) => {
     const subscriptionId = `sub_${subscriptionSequence++}`;
     const onEvent = (_event: Electron.IpcRendererEvent, id: string, jobEvent: JobEvent) => {

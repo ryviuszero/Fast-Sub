@@ -22,7 +22,8 @@ export type JobStage =
   | "done";
 export type JobEventType = "snapshot" | "progress" | "log_tail" | "succeeded" | "failed" | "canceled" | "events_lost";
 export type RecoveryAction = "retry" | "install_model" | "open_settings" | "open_diagnostics" | "repair_daemon" | "dismiss";
-export type FFmpegPackageManager = "scoop" | "winget" | "choco";
+export type FFmpegPackageManager = "scoop" | "winget" | "choco" | "brew";
+export type LocalDataCleanupTarget = "jobs" | "native-binaries" | "cache";
 export type MockScenario =
   | "setupReady"
   | "missingAsr"
@@ -216,6 +217,12 @@ export type JobEventHandlers = {
   onError?: (error: UiError) => void;
 };
 
+export interface LocalDataCleanupResult {
+  target: LocalDataCleanupTarget;
+  deleted: string[];
+  skipped: string[];
+}
+
 export interface FastSubClient {
   health(): Promise<HealthStatus>;
   version(): Promise<string>;
@@ -242,5 +249,6 @@ export interface FastSubClient {
   getJobResult(jobId: string): Promise<JobResult>;
   getJobLogs(jobId: string): Promise<JobLogEntry[]>;
   deleteJob(jobId: string): Promise<void>;
+  cleanupLocalData(target: LocalDataCleanupTarget): Promise<LocalDataCleanupResult>;
   subscribeJobEvents(jobId: string, handlers: JobEventHandlers): () => void;
 }

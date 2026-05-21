@@ -17,6 +17,7 @@ const MEDIA_EXTENSIONS = new Set([".mp4", ".mkv", ".mov", ".mp3", ".wav", ".m4a"
 const DEFAULT_FOLDER_SCAN_MAX_FILES = 100;
 const MAX_FOLDER_SCAN_MAX_FILES = 500;
 const SKIPPED_FOLDER_SCAN_DIRS = new Set([".git", ".hg", ".svn", ".venv", "venv", "node_modules", "dist", "build", "__pycache__"]);
+const HELP_DOCUMENT_URL = "https://ryviuszero.github.io/Fast-Sub/";
 
 if (process.env.FAST_SUB_SMOKE_USER_DATA) {
   app.setPath("userData", process.env.FAST_SUB_SMOKE_USER_DATA);
@@ -130,6 +131,14 @@ ipcMain.handle("fast-sub:open-path-mock", async (_event, path: unknown) => {
   }
   const error = await shell.openPath(path);
   return error.length === 0;
+});
+
+ipcMain.handle("fast-sub:open-external-url", async (_event, url: unknown) => {
+  if (url !== HELP_DOCUMENT_URL) {
+    return false;
+  }
+  await shell.openExternal(HELP_DOCUMENT_URL);
+  return true;
 });
 
 ipcMain.handle("fast-sub:security-snapshot", () => ({

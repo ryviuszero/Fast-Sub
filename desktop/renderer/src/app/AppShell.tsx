@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { ConfigViewModel, CreateJobRequest, EnvironmentStatus, FastSubClient, FFmpegPackageManager, JobDetail, JobEvent, JobStatus, JobSummary, MockScenario, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
+import type { ConfigViewModel, CreateJobRequest, EnvironmentStatus, FastSubClient, FFmpegPackageManager, JobDetail, JobEvent, JobStatus, JobSummary, LocalDataCleanupTarget, MockScenario, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
 import { containsSecret } from "../../../shared/privacy/redaction";
 import { defaultConfig, mockPaths } from "../client/mockFixtures";
 import { AppMenu, DebugPanel, RemoteConfirmDialog } from "./components";
@@ -952,6 +952,10 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
           cancelAllJobs,
           deleteJob: deleteActiveJob,
           deleteJobs,
+          cleanupLocalData: async (target: LocalDataCleanupTarget) => {
+            await client.cleanupLocalData(target);
+            await loadBaseData();
+          },
           installModel: async (id) => {
             const job = await client.createModelInstallJob(id);
             setModelInstallJobs((current) => ({ ...current, [id]: job }));

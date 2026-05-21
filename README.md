@@ -6,17 +6,18 @@ It currently provides:
 
 - A Python v0 CLI for local subtitle generation and translation workflows.
 - A Go product core and local daemon for desktop orchestration.
-- An Electron desktop app with Windows x64 installer and portable zip release-candidate artifacts.
+- An Electron desktop app with Windows x64 installer / portable zip release-candidate artifacts and a macOS arm64 preview dmg.
 
 The project defaults to local processing. Remote API or web providers must be selected explicitly before media or subtitle text is uploaded.
 
 ## Current Status
 
-Fast Sub is at the Windows desktop release-candidate stage.
+Fast Sub is at the desktop release-candidate / preview stage.
 
 - Windows x64 installer and portable zip have passed Round 13 smoke records.
-- macOS arm64 dmg packaging still needs to run on a macOS arm64 release machine.
+- macOS arm64 dmg has passed packaged runtime smoke on a macOS arm64 release machine.
 - Windows builds are currently unsigned internal builds.
+- macOS builds are currently ad-hoc signed and not notarized; Gatekeeper may require manual user approval.
 - Models are not bundled with the installer; first-start model installation is managed by the app/model store.
 - The default local translation model is not bundled and is license-sensitive; the current default NLLB manifest is marked `CC-BY-NC-4.0`.
 
@@ -24,13 +25,13 @@ See [dev-docs/current-status.md](dev-docs/current-status.md) for the current pro
 
 ## Download And Quick Start
 
-Fast Sub is not yet published as a public GitHub Release. The current validated artifacts are Windows x64 release-candidate builds.
+Fast Sub is not yet published as a public GitHub Release. The current validated artifacts are Windows x64 release-candidate builds and a macOS arm64 preview build.
 
 | Platform | Status |
 | --- | --- |
 | Windows x64 installer | Release candidate, unsigned internal build |
 | Windows x64 portable zip | Release candidate, unsigned internal build |
-| macOS arm64 dmg | Planned, requires macOS arm64 release-machine packaging |
+| macOS arm64 dmg | Preview, ad-hoc signed and not notarized |
 | Linux desktop | Not packaged |
 
 See [help-docs/help/download.md](help-docs/help/download.md) for download status and release limitations.

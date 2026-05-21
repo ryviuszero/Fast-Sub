@@ -11,6 +11,8 @@ import type {
   JobLogEntry,
   JobResult,
   JobSummary,
+  LocalDataCleanupResult,
+  LocalDataCleanupTarget,
   ModelStatus,
   ProviderStatus
 } from "../../../shared/contracts/types";
@@ -43,6 +45,7 @@ export interface FastSubClientBridge {
   getJobResult(jobId: string): Promise<JobResult>;
   getJobLogs(jobId: string): Promise<JobLogEntry[]>;
   deleteJob(jobId: string): Promise<void>;
+  cleanupLocalData(target: LocalDataCleanupTarget): Promise<LocalDataCleanupResult>;
   subscribeJobEvents: SubscribeFn;
 }
 
@@ -74,6 +77,7 @@ export class DaemonFastSubClient implements FastSubClient {
   getJobResult(jobId: string): Promise<JobResult> { return this.bridge.getJobResult(jobId); }
   getJobLogs(jobId: string): Promise<JobLogEntry[]> { return this.bridge.getJobLogs(jobId); }
   deleteJob(jobId: string): Promise<void> { return this.bridge.deleteJob(jobId); }
+  cleanupLocalData(target: LocalDataCleanupTarget): Promise<LocalDataCleanupResult> { return this.bridge.cleanupLocalData(target); }
   subscribeJobEvents(jobId: string, handlers: JobEventHandlers): () => void {
     return this.bridge.subscribeJobEvents(jobId, handlers);
   }
