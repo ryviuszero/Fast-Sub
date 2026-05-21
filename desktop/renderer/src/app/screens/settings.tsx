@@ -4,6 +4,7 @@ import { redactSecretText } from "../../../../shared/privacy/redaction";
 import type { RenderProps, Screen, UiFontStyle, UiLanguage } from "../types";
 import { Chip, Chrome, KV, Segment, SettingRow, Toggle } from "../components";
 import { useT } from "../i18n";
+import packageJson from "../../../../package.json";
 
 export function SettingsPage(props: RenderProps & { tab: "general" | "models" | "api" | "providers" | "diagnostics" | "benchmark" }) {
   const t = useT();
@@ -19,7 +20,7 @@ export function SettingsPage(props: RenderProps & { tab: "general" | "models" | 
             ["settings-diagnostics", "⚙", t("Diagnostics")],
             ["settings-benchmark", "▣", t("Benchmark")]
           ].map(([id, icon, label]) => <button key={id} className={props.screen === id ? "active" : ""} onClick={() => id === "settings-providers" ? props.openProviderSettings() : props.setScreen(id as Screen)}>{icon} {label}</button>)}
-          <span className="caption version">v0.11 mock</span>
+          <span className="caption version">v{packageJson.version}</span>
         </aside>
         <section className="settings-content">
           {props.tab === "general" && <SettingsGeneral {...props} />}

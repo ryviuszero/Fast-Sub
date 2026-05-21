@@ -55,11 +55,11 @@ npm run build
 
 ## Screenshots
 
-![Fast Sub public setup check screenshot](desktop-tests/pics/round13/01-setup-check.png)
+![Fast Sub packaged setup check screenshot](desktop-tests/pics/readme/01-setup-check.png)
 
-![Fast Sub public media selected screenshot](desktop-tests/pics/round13/03-main-file-selected.png)
+![Fast Sub packaged media selected screenshot](desktop-tests/pics/readme/02-main-file-selected.png)
 
-![Fast Sub public diagnostics screenshot](desktop-tests/pics/round13/09-diagnostics.png)
+![Fast Sub packaged diagnostics screenshot](desktop-tests/pics/readme/03-diagnostics.png)
 
 ## Repository Layout
 
