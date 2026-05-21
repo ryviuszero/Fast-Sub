@@ -32,7 +32,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - uses: astral-sh/setup-uv@bd01e18f51369d5a26f1651c3cb451d3417e3bba
+      - uses: astral-sh/setup-uv@v8.1.0
       - name: Install
         run: uv sync --all-extras --dev
       - name: Ruff format check
