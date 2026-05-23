@@ -97,7 +97,7 @@ def test_pyproject_declares_translation_extras() -> None:
 
     extras = pyproject["project"]["optional-dependencies"]
 
-    assert any(dependency.startswith("translators>=") for dependency in extras["web-translate"])
+    assert "web-translate" not in extras
     assert any(dependency.startswith("ctranslate2>=") for dependency in extras["local-translate"])
 
 

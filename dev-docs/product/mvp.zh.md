@@ -54,11 +54,9 @@ pip install "fast-sub[local-asr]"
 uv sync --extra local-asr
 ```
 
-网页翻译依赖 GPL-3.0 的 `translators` 包，因此作为 optional extra 处理，方便发布打包前审查：
-
-```bash
-uv sync --extra web-translate
-```
+网页翻译当前不再声明为打包 optional extra。此前 GPL-3.0 的 `translators`
+依赖链会引入存在漏洞的 `js2py` 版本，因此在上游依赖链安全前，打包版本优先使用本地
+NLLB 或显式 API Provider。
 
 本地 NLLB 翻译依赖：
 

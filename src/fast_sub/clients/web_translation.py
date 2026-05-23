@@ -23,7 +23,8 @@ except ImportError as exc:
                 "ok": False,
                 "code": "missing_dependency",
                 "message": "Web translation requires the GPL-3.0 `translators` package. "
-                "Install with `uv sync --extra web-translate` or accept the default dependency.",
+                "The packaged optional extra is disabled because its dependency chain includes "
+                "vulnerable js2py releases.",
             },
             ensure_ascii=False,
         )
@@ -72,7 +73,8 @@ def translate_text(
         except ImportError as exc:
             raise WebTranslationClientError(
                 "Web translation requires the GPL-3.0 `translators` package. "
-                "Install with `uv sync --extra web-translate` or accept the default dependency.",
+                "The packaged optional extra is disabled because its dependency chain includes "
+                "vulnerable js2py releases.",
                 code="missing_dependency",
             ) from exc
         try:

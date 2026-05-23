@@ -30,8 +30,11 @@ Optional extras:
 | Extra | Purpose |
 | --- | --- |
 | `local-asr` | Installs `faster-whisper` for the local STT worker. |
-| `web-translate` | Installs web translation dependencies. |
 | `local-translate` | Installs `ctranslate2` and `sentencepiece` for local NLLB translation. |
+
+`web-translate` is intentionally not declared. The previous `translators`
+dependency chain pulled in vulnerable `js2py` releases, so web translation
+support is disabled from packaged extras until the upstream chain is safe.
 
 ## Provider Contract
 

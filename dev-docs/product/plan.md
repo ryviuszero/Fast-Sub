@@ -745,7 +745,8 @@ fast-sub translate input.srt --provider api-openai-chat --model <model> --to zh
 - partial failure 写最终 SRT 和 `.errors.json`；all failure 非零退出且不写误导性的最终 SRT。
 - checkpoint 文件为 `<output>.translate-progress.json`，参数和 input hash 不匹配时不复用。
 - `local-nllb-ct2 --from auto` 会先做轻量字幕语言检测；无法可靠判断 `en|zh|ja|ko` 时要求显式 `--from`。NLLB 内部使用 FLORES-200 code：`eng_Latn`、`zho_Hans`、`jpn_Jpan`、`kor_Hang`。
-- `translators` 作为 `web-translate` optional extra 处理，以隔离 GPL-3.0 分发风险。
+- `web-translate` optional extra 已移除：此前 `translators` 依赖链会拉入存在漏洞的
+  `js2py`，网页翻译保留为显式第三方能力，不再进入默认锁文件和打包依赖。
 
 验收：
 

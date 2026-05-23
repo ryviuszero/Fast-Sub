@@ -158,7 +158,9 @@ Summary:
   - free web translation through `translators`
   - OpenAI-compatible chat translation
   - local NLLB/CTranslate2 translation
-- Land free web translation first with `web-bing` and `web-google`; `translators` is GPL-3.0 and is handled as the `web-translate` optional extra for packaging review.
+- Land free web translation first with `web-bing` and `web-google`; the packaged
+  `web-translate` optional extra was later removed because the `translators`
+  dependency chain pulled in vulnerable `js2py` releases.
 - Require explicit provider selection or configuration before any subtitle text is sent to a third party.
 
 CLI interface:

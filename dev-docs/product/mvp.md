@@ -54,12 +54,10 @@ For source checkouts:
 uv sync --extra local-asr
 ```
 
-Web translation support uses the GPL-3.0 `translators` package and is kept as an
-optional extra for packaging review:
-
-```bash
-uv sync --extra web-translate
-```
+Web translation support is not declared as a packaged optional extra. The
+previous GPL-3.0 `translators` dependency chain pulled in vulnerable `js2py`
+releases, so packaged builds should prefer local NLLB or explicit API providers
+until that upstream chain is safe.
 
 Local NLLB translation support:
 

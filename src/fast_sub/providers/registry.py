@@ -78,7 +78,11 @@ DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
             ),
         ),
         dependency_module="translators",
-        install_hint="Install web translation support with `uv sync --extra web-translate`.",
+        install_hint=(
+            "Web translation currently requires manually installing `translators`; "
+            "the packaged optional extra is disabled because its dependency chain includes "
+            "vulnerable js2py releases."
+        ),
     ),
     ProviderDefinition(
         metadata=ProviderMetadata(
@@ -97,7 +101,11 @@ DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
             ),
         ),
         dependency_module="translators",
-        install_hint="Install web translation support with `uv sync --extra web-translate`.",
+        install_hint=(
+            "Web translation currently requires manually installing `translators`; "
+            "the packaged optional extra is disabled because its dependency chain includes "
+            "vulnerable js2py releases."
+        ),
     ),
     ProviderDefinition(
         metadata=ProviderMetadata(
