@@ -6,14 +6,16 @@ This page is the public-facing index for release validation evidence. It summari
 
 - Windows release checklist: `../../desktop-tests/round13-release-checklist.md`
 - Windows release smoke record: `../../desktop-tests/round13-release-smoke.md`
+- Release artifact checksums: `v0.13.0.md`
 - Round 13 screenshots: `../../desktop-tests/pics/round13/README.md`
 - License inventory summaries: `../../desktop-tests/licenses/`
 
 ## Current Status
 
 - Windows x64 installer and portable zip have release-candidate smoke records.
-- macOS arm64 dmg packaging is still pending on a macOS arm64 release machine.
-- Windows builds are unsigned internal builds.
+- macOS arm64 dmg has a preview packaged-runtime smoke record.
+- Windows builds are unsigned release-candidate builds.
+- macOS builds are ad-hoc signed and not notarized.
 - Remote OpenAI/Bing/Google provider smoke is deferred; local loopback OpenAI-compatible smoke is recorded instead.
 
 ## Evidence Rules

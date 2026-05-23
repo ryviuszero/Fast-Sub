@@ -9,7 +9,7 @@ This page is a user-facing starting point. Detailed release smoke evidence remai
 
 ## Windows SmartScreen Or Antivirus Warning
 
-Current Windows artifacts are unsigned internal builds. SmartScreen or antivirus reputation prompts are expected until code signing is configured.
+Current Windows artifacts are unsigned preview builds. SmartScreen or antivirus reputation prompts are expected until code signing is configured.
 
 ## Missing FFmpeg Or FFprobe
 

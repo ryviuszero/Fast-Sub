@@ -48,7 +48,7 @@ Recommended path:
 
 ## SmartScreen Or Antivirus Warnings
 
-Current Windows builds are unsigned internal builds. Windows SmartScreen or antivirus tools may warn about the app until a code-signing certificate is configured.
+Current Windows builds are unsigned preview builds. Windows SmartScreen or antivirus tools may warn about the app until a code-signing certificate is configured.
 
 If you are testing an internal build, confirm that the artifact came from the expected project release process before running it.
 
@@ -58,6 +58,7 @@ The Windows package includes:
 
 - Electron desktop app.
 - Go daemon.
+- Native whisper.cpp runtime for the packaged native transcription provider.
 - App-private Python runtime for local ASR and local translation bridge.
 
 The Windows package does not include:
@@ -65,7 +66,6 @@ The Windows package does not include:
 - Whisper/NLLB model files.
 - FFmpeg/FFprobe.
 - aria2.
-- whisper.cpp binary.
 
 These are installed or downloaded into app-private user data paths when needed.
 

@@ -1,6 +1,6 @@
 # Current Project Status
 
-Last updated: 2026-05-21
+Last updated: 2026-05-23
 
 ## Summary
 
@@ -16,12 +16,12 @@ The original Python CLI remains available, the Go product core and daemon/job AP
 
 - Windows x64 installer and portable zip have been built and smoke tested.
 - macOS arm64 dmg has been built and smoke tested as an ad-hoc signed, unnotarized preview artifact.
-- The packaged app includes the Go daemon and an app-private Python runtime outside ASAR.
+- The packaged app includes the Go daemon, native whisper.cpp runtime, and an app-private Python runtime outside ASAR.
 - Models are not bundled with the installer.
 - First-start/default model installation was tested from a clean model store for `whisper-small` and the default NLLB model.
 - Local Faster Whisper ASR, native whisper.cpp ASR, local NLLB translation, bilingual subtitles, burn-in, Unicode/space paths, and GPU long-task cancellation have Windows smoke records.
 - Diagnostics, redaction, API key save/replace/delete, license inventory, and screenshot baselines have Round 13 records.
-- Windows artifacts are currently unsigned internal builds. SmartScreen and antivirus reputation warnings are expected until signing is configured.
+- Windows artifacts are currently unsigned preview builds. SmartScreen and antivirus reputation warnings are expected until signing is configured.
 - macOS artifact is currently ad-hoc signed and not notarized. Gatekeeper warnings are expected until Developer ID signing and notarization are configured.
 
 ## Open Release Work
@@ -30,7 +30,7 @@ The original Python CLI remains available, the Go product core and daemon/job AP
 - macOS real long-running ASR / FFmpeg / whisper.cpp cancellation cleanup still needs manual smoke.
 - Windows code signing remains deferred until a real certificate and publisher identity exist.
 - Real OpenAI/Bing/Google external provider smoke is deferred by decision; local loopback OpenAI-compatible smoke has passed.
-- Public GitHub readiness fixes now include MIT source licensing, baseline CI, Security reporting guidance, and explicit NLLB license-sensitive user docs.
+- Public GitHub readiness fixes now include MIT source licensing, baseline CI, Security reporting guidance, release checksum records, package-size notes, and explicit NLLB license-sensitive user docs.
 
 ## Documentation Map
 
@@ -48,9 +48,9 @@ The original Python CLI remains available, the Go product core and daemon/job AP
 
 ## Near-Term Priorities
 
-1. Publish macOS preview only with explicit unsigned/ad-hoc installation instructions.
+1. Publish preview artifacts only with explicit unsigned/ad-hoc installation instructions.
 2. Decide Windows and macOS signing/notarization path before stable external distribution.
-3. Enable GitHub private vulnerability reporting before broad public distribution.
+3. Enable or verify GitHub private vulnerability reporting before broad public distribution.
 4. Continue slimming the installer, with highest attention on the app-private Python runtime.
 5. Continue expanding user-facing help under `../help-docs/help/` based on real tester feedback.
 6. Maintain generated API/reference docs under `api/` without replacing the hand-written daemon contract.

@@ -26,7 +26,7 @@ description: User help and release notes for Fast Sub.
   </div>
   <div>
     <strong>macOS arm64</strong>
-    <span>DMG packaging still needs a macOS release machine.</span>
+    <span>Preview dmg; ad-hoc signed and not notarized.</span>
   </div>
   <div>
     <strong>Models</strong>

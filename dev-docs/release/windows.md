@@ -14,7 +14,7 @@ Artifacts:
 - Installer: `FastSub-Desktop-0.13.0-windows-x64.exe`
 - Portable zip: `FastSub-Desktop-0.13.0-windows-x64.zip`
 
-Current artifacts are unsigned internal builds. Users may see SmartScreen or antivirus reputation prompts until code signing is configured.
+Current artifacts are unsigned preview builds. Users may see SmartScreen or antivirus reputation prompts until code signing is configured.
 
 ## Build And Smoke
 

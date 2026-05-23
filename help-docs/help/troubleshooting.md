@@ -88,7 +88,7 @@ Automatic translation is imperfect. Check:
 
 ## Windows SmartScreen Warning
 
-Current Windows builds are unsigned internal builds. SmartScreen warnings are expected until code signing is configured.
+Current Windows builds are unsigned preview builds. SmartScreen warnings are expected until code signing is configured.
 
 ## What To Include In A Bug Report
 

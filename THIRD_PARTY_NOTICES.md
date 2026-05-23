@@ -26,6 +26,7 @@ This file is the Round 13 release-readiness inventory for components that are bu
 | `faster-whisper` local ASR extra | Packaged Python site-packages report | Permissive package licenses; model licenses handled separately | `bundle-ok` | Required for default local ASR smoke. |
 | `ctranslate2` and `sentencepiece` local translation extra | Packaged Python site-packages report | Permissive package licenses; `sentencepiece` license verified as Apache-2.0 from upstream | `bundle-ok` | Required for local NLLB smoke; NLLB model license is handled separately below. |
 | `translators` web translation extra | Packaged Python site-packages report | Permissive package licenses in generated inventory | `bundle-ok` | Web provider external smoke is not a default local release blocker. |
+| whisper.cpp native runtime | `github.com/ggml-org/whisper.cpp` release binary, v1.8.4 | MIT | `bundle-ok` | Windows package includes the native runtime under `resources/bin/win32-x64/whisper-cpp`; model weights are handled separately and are not bundled. |
 
 ## Generated License Reports
 
@@ -48,7 +49,6 @@ Round 13 package content scan of `desktop/dist-release/win-unpacked/resources` f
 | --- | --- | --- | --- | --- |
 | FFmpeg / FFprobe | Runtime download from `https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip` on Windows | LGPL/GPL build variant must be verified from source package | `download-only` | Current app downloads to `userData/native-binaries/ffmpeg/bin`; do not bundle until variant, source offer, and notice are reviewed. |
 | aria2 | Runtime download from `github.com/aria2/aria2` Windows release | GPL-2.0-or-later | `download-only` | Current app uses it only as a downloader accelerator and falls back to HTTPS. Do not bundle in installer without GPL obligations review. |
-| whisper.cpp native binary | Runtime download from `github.com/ggml-org/whisper.cpp` Windows release | MIT | `download-only` | Current app downloads Windows x64 binary to `userData/native-binaries/whisper-cpp/bin`; macOS runtime path still needs implementation. |
 | System package managers | Scoop, Winget, Chocolatey commands | External package manager terms | `manual-user-install` | App only offers explicit fixed commands for FFmpeg fallback. |
 
 ## Models

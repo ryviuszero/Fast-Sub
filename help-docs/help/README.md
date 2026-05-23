@@ -33,4 +33,4 @@ Use this help section when you want to install the app, generate subtitles, tran
 
 ## Current Product Status
 
-Windows x64 is currently the validated desktop release-candidate platform. macOS arm64 packaging still needs to be completed on a macOS release machine.
+Windows x64 is currently the validated release-candidate platform. macOS arm64 is available as a preview dmg that is ad-hoc signed and not notarized.

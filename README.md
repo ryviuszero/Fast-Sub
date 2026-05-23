@@ -12,11 +12,11 @@ The project defaults to local processing. Remote API or web providers must be se
 
 ## Current Status
 
-Fast Sub is at the desktop release-candidate / preview stage.
+Fast Sub is at the desktop public-preview / release-candidate stage.
 
 - Windows x64 installer and portable zip have passed Round 13 smoke records.
 - macOS arm64 dmg has passed packaged runtime smoke on a macOS arm64 release machine.
-- Windows builds are currently unsigned internal builds.
+- Windows builds are currently unsigned preview builds.
 - macOS builds are currently ad-hoc signed and not notarized; Gatekeeper may require manual user approval.
 - Models are not bundled with the installer; first-start model installation is managed by the app/model store.
 - The default local translation model is not bundled and is license-sensitive; the current default NLLB manifest is marked `CC-BY-NC-4.0`.
@@ -25,16 +25,18 @@ See [dev-docs/current-status.md](dev-docs/current-status.md) for the current pro
 
 ## Download And Quick Start
 
-Fast Sub is not yet published as a public GitHub Release. The current validated artifacts are Windows x64 release-candidate builds and a macOS arm64 preview build.
+Preview artifacts are prepared through [GitHub Releases](https://github.com/ryviuszero/Fast-Sub/releases). If the latest release is still marked as a draft, maintainers must publish it before external users can download the files.
 
 | Platform | Status |
 | --- | --- |
-| Windows x64 installer | Release candidate, unsigned internal build |
-| Windows x64 portable zip | Release candidate, unsigned internal build |
-| macOS arm64 dmg | Preview, ad-hoc signed and not notarized |
+| Windows x64 installer | `FastSub-Desktop-0.13.0-windows-x64.exe`; release candidate, unsigned |
+| Windows x64 portable zip | `FastSub-Desktop-0.13.0-windows-x64.zip`; release candidate, unsigned |
+| macOS arm64 dmg | `FastSub-Desktop-0.13.0-macos-arm64.dmg`; preview, ad-hoc signed and not notarized |
 | Linux desktop | Not packaged |
 
-See [help-docs/help/download.md](help-docs/help/download.md) for download status and release limitations.
+See [help-docs/help/download.md](help-docs/help/download.md) for download status and release limitations. Checksums and release notes are tracked in [dev-docs/release/v0.13.0.md](dev-docs/release/v0.13.0.md).
+
+Package size note: the Windows portable zip is large because it includes Electron/Chromium plus an app-private Python AI runtime. Model files are still downloaded after installation and are not bundled.
 
 For source checkout validation:
 

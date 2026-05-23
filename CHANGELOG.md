@@ -10,9 +10,9 @@ All notable project milestones should be recorded here in user-facing language.
 
 ## 0.13.0 - Windows Release Candidate
 
-- Added Electron productization and release readiness work for Windows x64.
+- Added Electron productization and release readiness work for Windows x64 and macOS arm64 preview packaging.
 - Added `electron-builder` packaging with Windows installer and portable zip targets.
-- Bundled the Go daemon and app-private Python runtime outside ASAR for packaged Windows builds.
+- Bundled the Go daemon, native whisper.cpp runtime, and app-private Python runtime outside ASAR for packaged Windows builds.
 - Added packaged daemon smoke coverage for ready JSON, health, auth baseline, repair, SSE disconnect, and `events_lost`.
 - Added release smoke records for local Faster Whisper ASR, whisper.cpp ASR, local NLLB translation, bilingual subtitles, burn-in, Unicode/space paths, and GPU long-task cancellation.
 - Added first-start default model installation smoke from a clean model store.
@@ -22,6 +22,6 @@ All notable project milestones should be recorded here in user-facing language.
 
 Known release state:
 
-- Windows artifacts are unsigned internal builds.
-- macOS arm64 dmg build and smoke are deferred to a macOS arm64 release machine.
+- Windows artifacts are unsigned release-candidate builds.
+- macOS arm64 dmg is an ad-hoc signed, unnotarized preview build.
 - Real OpenAI/Bing/Google external provider smoke is deferred; local loopback OpenAI-compatible smoke has passed.

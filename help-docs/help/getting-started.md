@@ -23,7 +23,7 @@ The current validated desktop build is Windows x64.
 - Windows portable zip: supported for internal release-candidate testing.
 - macOS arm64 dmg: planned, but must be built and tested on a macOS arm64 release machine.
 
-Windows builds are currently unsigned internal builds. Windows may show SmartScreen or antivirus reputation warnings until code signing is configured.
+Windows builds are currently unsigned preview builds. Windows may show SmartScreen or antivirus reputation warnings until code signing is configured.
 
 ## What Fast Sub Is Good At
 
