@@ -36,9 +36,9 @@ Validated areas:
 
 | Artifact | SHA256 |
 | --- | --- |
-| `FastSub-Desktop-0.13.0-windows-x64.exe` | `b6bfcfe1d38cf56d8dd6851f8a00f3eb0a90373b4c0a8f9ef9ad074b6701a8c9` |
-| `FastSub-Desktop-0.13.0-windows-x64.exe.blockmap` | `c74e069c3657abdd8c3ba2eca41af105afb9034fe284b0f590c22a34fc304190` |
-| `FastSub-Desktop-0.13.0-windows-x64.zip` | `be75a8d97f9cb93cbe6d4f427319c9dbd923012bafc780782a7d100611af83a5` |
+| `FastSub-Desktop-0.13.0-windows-x64.exe` | `7d2df9d6aa49140f59c113cef2e7972d4cb46dd65ed2802c3e6710eed53d1e54` |
+| `FastSub-Desktop-0.13.0-windows-x64.exe.blockmap` | `1cac770ce39cbdda72053ae9bad35b520dd4f9f807fa549f5785ed6865b93196` |
+| `FastSub-Desktop-0.13.0-windows-x64.zip` | `78006e32a52c54300b4621f24977fedeceaab61f17ddf26a665441b19486260b` |
 | `FastSub-Desktop-0.13.0-macos-arm64.dmg` | `e588a07b94276bda4d1a02a4691018ba06884b0288d6c1a125c7c3f7302d6d19` |
 | `FastSub-Desktop-0.13.0-macos-arm64.dmg.blockmap` | `1fea13f5719a6ece83aeacfd28f0fcdfb78f0a57eb644ae5c589f1bf9a88a44b` |
 
