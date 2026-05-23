@@ -45,15 +45,7 @@ async function prepareWindowsRuntime() {
   const staging = join(cacheRoot, "windows-staging");
   rmSync(staging, { recursive: true, force: true });
   mkdirSync(staging, { recursive: true });
-  run("powershell.exe", [
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-Command",
-    "& { param($zipPath, $destination) Expand-Archive -LiteralPath $zipPath -DestinationPath $destination -Force }",
-    windowsZip,
-    staging
-  ], desktopRoot);
+  run("tar", ["-xf", windowsZip, "-C", staging], desktopRoot);
   const bin = findFirst(staging, ["whisper-cli.exe", "main.exe", "whisper-cpp.exe"]);
   if (!bin) {
     fail(`Downloaded whisper.cpp archive did not contain a known CLI binary: ${windowsZip}`);
@@ -158,10 +150,13 @@ function findFirst(root, names) {
   if (!existsSync(root)) {
     return null;
   }
-  const lowerNames = new Set(names.map((name) => name.toLowerCase()));
-  for (const entry of walk(root)) {
-    if (lowerNames.has(basename(entry).toLowerCase()) && statSync(entry).isFile()) {
-      return entry;
+  const entries = walk(root);
+  for (const name of names) {
+    const lowerName = name.toLowerCase();
+    for (const entry of entries) {
+      if (basename(entry).toLowerCase() === lowerName && statSync(entry).isFile()) {
+        return entry;
+      }
     }
   }
   return null;

@@ -25,6 +25,7 @@ tests/test_bench_assets.py
 .gocache/
 .gocache-release/
 .gomodcache/
+.release-cache/
 dist/
 fast-sub-go.toml
 dev-docs/ui-docs/prototype/node_modules/
