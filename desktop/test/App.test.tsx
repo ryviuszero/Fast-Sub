@@ -371,8 +371,8 @@ describe("Fast Sub renderer flow", () => {
     expect(within(openAiTranslateCard).queryByText("快速填充提供方")).not.toBeInTheDocument();
     expect(within(openAiTranslateCard).getByLabelText("模型")).toHaveValue("gpt-4o-mini");
     expect(within(openAiTranslateCard).queryByText("NLLB-200 Distilled 600M CTranslate2 INT8")).not.toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "静态检查" })[0]);
-    await waitFor(() => expect(within(screen.getByText("本地 Faster Whisper").closest("article") as HTMLElement).getByText("静态检查通过")).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole("button", { name: "检查模型" })[0]);
+    await waitFor(() => expect(within(screen.getByText("本地 Faster Whisper").closest("article") as HTMLElement).getByText("模型检查通过")).toBeInTheDocument());
     fireEvent.click(within(openAiTranslateCard).getByRole("button", { name: "连接检查" }));
     await waitFor(() => expect(within(openAiTranslateCard).getByText("连接检查通过")).toBeInTheDocument());
     expect(within(openAiTranslateCard).getByRole("button", { name: "设为默认" })).not.toBeDisabled();

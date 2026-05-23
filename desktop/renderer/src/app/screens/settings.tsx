@@ -424,7 +424,7 @@ export function SettingsProviders(props: RenderProps) {
     setProviderViews(nextProviders);
     setProviderChecks(Object.fromEntries(nextProviders.map((provider) => [provider.id, {
       status: provider.state === "available" ? "ok" : "failed",
-      message: provider.state === "available" ? "Static check passed" : providerStateLabel(provider.state, t)
+      message: provider.state === "available" ? providerCheckPassedLabel(provider) : providerStateLabel(provider.state, t)
     } satisfies ProviderCheckState])));
     setRefreshLabel("Refreshed");
   };
@@ -451,7 +451,7 @@ export function SettingsProviders(props: RenderProps) {
       setProviderViews((current) => current.map((provider) => provider.id === providerId ? checked : provider));
       setProviderChecks((current) => ({ ...current, [providerId]: {
         status: checked.state === "available" ? "ok" : "failed",
-        message: checked.state === "available" ? (mode === "live" ? "Connection check passed" : "Static check passed") : providerStateLabel(checked.state, t)
+        message: checked.state === "available" ? (mode === "live" ? "Connection check passed" : providerCheckPassedLabel(checked)) : providerStateLabel(checked.state, t)
       } }));
     } catch {
       setProviderChecks((current) => ({ ...current, [providerId]: { status: "failed", message: "Check failed" } }));
@@ -871,7 +871,7 @@ function ProviderCard(props: {
         )}
         {modelInstalling && <Chip tone="accent">{t("Downloading")} {modelInstallProgress}%</Chip>}
         {!props.active && !canSetDefault && <Chip tone="warn">{defaultBlockReason}</Chip>}
-        <button className="btn sm ghost" disabled={checking} onClick={props.onTest}>{checking ? t("Checking") : provider.kind === "api" ? t("Connection check") : t("Static check")}</button>
+        <button className="btn sm ghost" disabled={checking} onClick={props.onTest}>{checking ? t("Checking") : t(providerCheckActionLabel(provider))}</button>
         {props.check && props.check.status !== "idle" && (
           <Chip tone={props.check.status === "ok" ? "ok" : props.check.status === "failed" ? "warn" : "accent"}>{t(props.check.message)}</Chip>
         )}
@@ -886,6 +886,20 @@ function providerDependencyActionLabel(providerId: string): string {
     return "Recheck bundled runtime";
   }
   return "Install dependency first";
+}
+
+function providerCheckActionLabel(provider: ProviderStatus): string {
+  if (provider.kind === "api") {
+    return "Connection check";
+  }
+  if (provider.requiresModel) {
+    return "Model check";
+  }
+  return "Static check";
+}
+
+function providerCheckPassedLabel(provider: ProviderStatus): string {
+  return provider.requiresModel ? "Model check passed" : "Static check passed";
 }
 
 function providerControlValue(activeModel: string, draftModel: string, models: ModelStatus[]): string {

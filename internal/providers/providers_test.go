@@ -248,6 +248,57 @@ func TestWhisperCPPCommandPackagedRuntimeUsesRepairHint(t *testing.T) {
 	assertPackagedRepairHint(t, check.ActionHint)
 }
 
+func TestWhisperCPPCommandAllowsPackagedPathWithSpaces(t *testing.T) {
+	binDir := filepath.Join(t.TempDir(), "Fast Sub", "resources", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(binDir, "whisper-cli")
+	if err := os.WriteFile(binary, []byte("fake"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := fakeRuntime(map[string]string{
+		"FAST_SUB_PACKAGED_RUNTIME_ONLY": "1",
+		"FAST_SUB_WHISPER_CPP_COMMAND":   binary,
+	}, false, nil)
+	cfg.RunCommand = func(_ context.Context, command string, args []string) error {
+		if command != binary || len(args) != 1 || args[0] != "--help" {
+			t.Fatalf("unexpected command check: %q %#v", command, args)
+		}
+		return nil
+	}
+
+	check := checkWhisperCPPCommand(cfg)
+
+	if !check.OK || check.Status != StatusAvailable {
+		t.Fatalf("packaged path with spaces should resolve: %#v", check)
+	}
+}
+
+func TestWhisperCPPCommandRejectsNonRunnablePackagedPath(t *testing.T) {
+	binDir := filepath.Join(t.TempDir(), "Fast Sub", "resources", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	modelFile := filepath.Join(binDir, "ggml-base.bin")
+	if err := os.WriteFile(modelFile, []byte("not executable"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := fakeRuntime(map[string]string{
+		"FAST_SUB_PACKAGED_RUNTIME_ONLY": "1",
+		"FAST_SUB_WHISPER_CPP_COMMAND":   modelFile,
+	}, false, nil)
+	cfg.RunCommand = func(context.Context, string, []string) error {
+		return errors.New("not runnable")
+	}
+
+	check := checkWhisperCPPCommand(cfg)
+
+	if check.OK || check.Status != StatusMissingDependency {
+		t.Fatalf("non-runnable packaged path should be missing dependency: %#v", check)
+	}
+}
+
 func TestFasterWhisperMissingWorkerThenMissingModelThenAvailable(t *testing.T) {
 	modelDir := t.TempDir()
 

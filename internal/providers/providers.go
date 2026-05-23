@@ -492,6 +492,12 @@ func openAIBaseURL(providerConfig appconfig.OpenAIProviderConfig) string {
 
 func checkCommand(cfg RuntimeConfig, name, explicitCommand, pathName, actionHint string) Check {
 	if explicitCommand != "" {
+		explicitPath := strings.Trim(explicitCommand, `"`)
+		if strings.ContainsAny(explicitPath, `/\`) || filepath.IsAbs(explicitPath) {
+			if info, err := cfg.Stat(explicitPath); err == nil && !info.IsDir() && commandRuns(context.Background(), cfg, explicitPath, []string{"--help"}) {
+				return Check{Name: name, OK: true, Status: StatusAvailable, Message: name + " command is configured and runnable."}
+			}
+		}
 		parts := splitCommandLine(explicitCommand)
 		if len(parts) == 0 {
 			return Check{Name: name, OK: false, Status: StatusMissingDependency, Message: name + " command is empty.", ActionHint: actionHint}
@@ -505,6 +511,12 @@ func checkCommand(cfg RuntimeConfig, name, explicitCommand, pathName, actionHint
 		return Check{Name: name, OK: true, Status: StatusAvailable, Message: name + " was found on PATH."}
 	}
 	return Check{Name: name, OK: false, Status: StatusMissingDependency, Message: name + " was not found.", ActionHint: actionHint}
+}
+
+func commandRuns(ctx context.Context, cfg RuntimeConfig, command string, args []string) bool {
+	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return cfg.RunCommand(checkCtx, command, args) == nil
 }
 
 func checkWhisperCPPCommand(cfg RuntimeConfig) Check {
