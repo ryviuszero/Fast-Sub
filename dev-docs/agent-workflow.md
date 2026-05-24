@@ -20,6 +20,8 @@ Read these first for implementation work:
 - Do not commit secrets, ready tokens, signed URLs, raw local paths, real media, model files, or unapproved benchmark output.
 - Use fake/mock dependencies for automated tests unless the task explicitly asks for real provider or native runtime smoke.
 - Respect dirty worktrees and do not revert unrelated user changes.
+- Prefer doing implementation, privacy checks, and CI-equivalent validation on a feature branch. After the branch is green, squash or amend small fixups there, then fast-forward merge into `master`.
+- Before pushing `master`, mirror the relevant CI gates locally. For Python changes this means `ruff format --check`, `ruff check`, `mypy`, and `pytest`, not only `pytest`.
 
 ## Review Expectations
 

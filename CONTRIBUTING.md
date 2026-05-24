@@ -42,6 +42,10 @@ go test ./...
 ```
 
 ```powershell
+$env:UV_CACHE_DIR='.uv-cache'
+uv run ruff format --check src\fast_sub tests
+uv run ruff check src\fast_sub tests
+uv run mypy src
 uv run pytest
 ```
 
@@ -52,6 +56,21 @@ npm test
 npm run build
 npm run smoke
 ```
+
+Before pushing to `master`, prefer validating on a feature branch first. Keep the
+branch green, squash or amend small fixups there, then fast-forward merge into
+`master`:
+
+```powershell
+git switch master
+git merge --ff-only <feature-branch>
+git push origin master
+```
+
+This avoids pushing formatting-only CI failures to the public default branch.
+Local validation should mirror CI where practical; in particular, do not treat
+`uv run pytest` alone as the full Python gate because CI also runs Ruff format,
+Ruff lint, and mypy before pytest.
 
 For Windows packaged desktop changes, also run:
 
