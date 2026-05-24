@@ -37,7 +37,7 @@ Current native dependency behavior:
 - macOS packaged app first checks the app-private FFmpeg directory, then complete system installs at `/opt/homebrew/bin`, `/usr/local/bin`, and `/usr/bin`.
 - If FFmpeg or FFprobe is still missing, the app downloads `ffmpeg-darwin-<arch>.gz` and `ffprobe-darwin-<arch>.gz` from the GitHub `eugeneware/ffmpeg-static` release and installs them under userData `native-binaries/ffmpeg/bin`.
 - The environment check page offers Homebrew as the macOS manual install action. Windows-only Scoop, Winget, and Chocolatey actions are hidden on macOS.
-- aria2 is not downloaded on macOS. A system `aria2c` is reused when available; otherwise downloads fall back to ordinary HTTPS.
+- aria2 is not bundled or downloaded on macOS. A system `aria2c` is reused in development/manual environments when available; packaged app downloads otherwise use the built-in HTTPS downloader.
 - whisper.cpp is bundled in the app package under `Contents/Resources/bin/darwin-arm64/whisper-cpp`. End users do not need Homebrew, CMake, Git, or Xcode to use `local-whisper-cpp`; only the GGML model is downloaded separately through the normal model store.
 
 ## Release Machine Commands

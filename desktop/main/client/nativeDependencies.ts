@@ -498,7 +498,7 @@ async function resolveAria2View(): Promise<NativeDependencyView> {
   if (!app.isPackaged && await canRun("aria2c", process.env, ["--version"])) {
     return { ready: true, source: "system-path", displayPath: "system aria2", version: "aria2" };
   }
-  return { ready: false, source: "missing", displayPath: "HTTPS fallback", lastError: "aria2 is not available; FFmpeg download will use normal HTTPS." };
+  return { ready: false, source: "missing", displayPath: "Built-in HTTPS downloader", version: "HTTPS" };
 }
 
 async function checkWhisperCPPAvailable(): Promise<NativeDependencyStatus> {
@@ -786,7 +786,7 @@ async function ensureAria2Installed(): Promise<string | null> {
     return legacy;
   }
   if (app.isPackaged) {
-    pushLog("未检测到内置 aria2，改用普通 HTTPS 下载。", 8);
+    pushLog(process.platform === "darwin" ? "macOS 使用内置 HTTPS 下载器。" : "未检测到内置 aria2，改用普通 HTTPS 下载。", 8);
     return null;
   }
   if (await canRun(bundled, process.env)) {
@@ -797,7 +797,7 @@ async function ensureAria2Installed(): Promise<string | null> {
     pushLog("已启用系统 aria2 加速下载。", 8);
     return "aria2c";
   }
-  pushLog("未检测到 aria2，改用普通 HTTPS 下载。", 8);
+  pushLog("未检测到 aria2，使用内置 HTTPS 下载器。", 8);
   return null;
 }
 

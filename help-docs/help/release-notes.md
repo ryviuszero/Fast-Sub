@@ -7,7 +7,7 @@ description: User-facing release status and known limitations for Fast Sub.
 
 ## 0.13.2 Public Preview
 
-Fast Sub `0.13.2` is a Windows x64 desktop release candidate focused on FFmpeg / FFprobe readiness.
+Fast Sub `0.13.2` is a desktop public preview focused on FFmpeg / FFprobe readiness. Windows x64 is the release-candidate platform; macOS arm64 is a preview build.
 
 Changes since `0.13.1`:
 
@@ -15,6 +15,7 @@ Changes since `0.13.1`:
 - Transcription and burn-in now ask for FFmpeg / FFprobe only when a job actually needs them.
 - Users can choose an existing FFmpeg / FFprobe directory, explicitly download app-private FFmpeg, or use a same-directory system `PATH` pair.
 - Windows packages include bundled aria2 for FFmpeg downloads, with normal HTTPS fallback.
+- macOS packages use the built-in HTTPS downloader by default instead of bundled aria2.
 - Diagnostics and provider refresh should not repeatedly retry FFmpeg installation.
 
 Validated areas:
@@ -79,6 +80,8 @@ Validated areas:
 | `FastSub-Desktop-0.13.2-windows-x64.exe` | `12f8622b6d5f978fcdf0c47ceefaccad31dabba2a81626f080ff7a8c29494c8a` |
 | `FastSub-Desktop-0.13.2-windows-x64.exe.blockmap` | `4d6d723ce519fabe0f97f42a73321e5af0d0e1c47f1acc36811b16e6e28cd21e` |
 | `FastSub-Desktop-0.13.2-windows-x64.zip` | `ae5d69a3c67f8b41e5476ff523d5ccd8db1423f85bd42f8aea53cf89fa46c847` |
+| `FastSub-Desktop-0.13.2-macos-arm64.dmg` | `04ebe5d8e3953986ef11d89a8f72ec76255aa0cbe43f717d5de797c064ab76b5` |
+| `FastSub-Desktop-0.13.2-macos-arm64.dmg.blockmap` | `a48963128abfd8025b5e7dd60c39b9eaa6a11dc41d76f9a7b81072829ff9ded7` |
 
 ## 0.13.1 Artifact Checksums
 

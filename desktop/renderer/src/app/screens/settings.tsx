@@ -1021,7 +1021,7 @@ export function SettingsDiagnostics({ environment, cleanupLocalData, checkNative
           </div>
         )}
         {environment?.nativeDependencies?.ffmpegPair.lastError && !environment.nativeDependencies.ffmpegPair.installing && <p className="caption warn-text no-margin">{redactSecretText(rt(environment.nativeDependencies.ffmpegPair.lastError))}</p>}
-        <KV k={t("Download accelerator")} v={environment?.nativeDependencies?.aria2?.ready ? t(`FFmpeg source ${environment.nativeDependencies.aria2.source}`) : t("Normal HTTPS fallback")} />
+        <KV k={t("Download accelerator")} v={downloadAcceleratorLabel(environment, t)} />
         <div className="row gap-8 wrap">
           <button className="btn sm" onClick={() => void checkNativeDependencies()} type="button">{t("Recheck")}</button>
           <button className="btn sm" onClick={() => void chooseFFmpegDirectory()} type="button">{t("Choose FFmpeg directory")}</button>
@@ -1057,6 +1057,17 @@ export function SettingsDiagnostics({ environment, cleanupLocalData, checkNative
       </section>
     </div>
   );
+}
+
+function downloadAcceleratorLabel(environment: RenderProps["environment"], t: (key: string) => string): string {
+  const aria2 = environment?.nativeDependencies?.aria2;
+  if (aria2?.ready) {
+    return t(`Download accelerator source ${aria2.source}`);
+  }
+  if (environment?.os === "darwin") {
+    return t("Built-in HTTPS downloader");
+  }
+  return t("Normal HTTPS fallback");
 }
 
 function cleanupConfirmKey(target: LocalDataCleanupTarget): string {

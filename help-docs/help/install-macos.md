@@ -9,7 +9,7 @@ Fast Sub currently provides a macOS arm64 preview dmg for Apple Silicon.
 
 Current status:
 
-- Artifact: `FastSub-Desktop-0.13.0-macos-arm64.dmg`.
+- Artifact: `FastSub-Desktop-0.13.2-macos-arm64.dmg`.
 - Architecture: Apple Silicon / arm64.
 - Signing: ad-hoc signed.
 - Notarization: not completed.
@@ -41,6 +41,7 @@ This is the same unsigned preview-style distribution approach used by some open-
 - The app starts from the packaged bundle in smoke mode.
 - The packaged Go daemon is executable and can start.
 - The app-private Python runtime is present and executable.
+- FFmpeg downloads use the built-in HTTPS downloader by default; macOS does not require bundled or user-installed aria2.
 - Packaged daemon repair, SSE reconnect, and missing translation model smoke checks pass.
 - The dmg mounts and contains `Fast Sub.app`.
 

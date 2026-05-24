@@ -13,7 +13,7 @@ Fast Sub is currently at the desktop public-preview / release-candidate stage.
 | --- | --- | --- |
 | Windows x64 installer | Release candidate | `FastSub-Desktop-0.13.2-windows-x64.exe`; smoke tested as an unsigned build. |
 | Windows x64 portable zip | Release candidate | `FastSub-Desktop-0.13.2-windows-x64.zip`; smoke tested as an unsigned build. |
-| macOS arm64 dmg | Preview | `FastSub-Desktop-0.13.0-macos-arm64.dmg`; smoke tested as an ad-hoc signed, unnotarized build. |
+| macOS arm64 dmg | Preview | `FastSub-Desktop-0.13.2-macos-arm64.dmg`; smoke tested as an ad-hoc signed, unnotarized build. |
 | Linux desktop | Not packaged | No desktop release target yet. |
 | Python CLI | Available from source | Intended for developers and existing CLI users. |
 | Go CLI / daemon | Available from source | Used by the desktop app and local daemon workflows. |
@@ -43,7 +43,7 @@ SHA256 checksums for `0.13.2` are listed in the project release notes:
 
 ## Package Size
 
-The Windows packages are large because they include Electron/Chromium, the Go daemon, whisper.cpp runtime, and an app-private Python runtime for local ASR and translation bridge features. Model files are not included in the package and are installed after first run.
+The desktop packages are large because they include Electron/Chromium, the Go daemon, whisper.cpp runtime, and an app-private Python runtime for local ASR and translation bridge features. Model files are not included in the package and are installed after first run. Windows includes bundled aria2 for FFmpeg downloads; macOS uses the built-in HTTPS downloader by default.
 
 ## Related Pages
 

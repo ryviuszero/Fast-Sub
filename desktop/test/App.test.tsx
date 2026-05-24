@@ -1927,6 +1927,46 @@ describe("Fast Sub renderer flow", () => {
     confirm.mockRestore();
   });
 
+  it("shows macOS HTTPS downloader as the normal download accelerator", async () => {
+    const environment: EnvironmentStatus = {
+      health: "ok",
+      os: "darwin",
+      arch: "arm64",
+      memory: "16 GB",
+      disk: "240 GB",
+      localTranscriptionReady: true,
+      localTranslationReady: true,
+      ffmpegReady: true,
+      modelDirectoryReady: true,
+      daemonReady: true,
+      nativeDependencies: {
+        ffmpegPair: {
+          ready: true,
+          source: "app-private",
+          displayPath: "/Users/example/Library/Application Support/Fast Sub/native-binaries/ffmpeg/bin"
+        },
+        aria2: {
+          ready: false,
+          source: "missing",
+          displayPath: "Built-in HTTPS downloader"
+        }
+      },
+      warnings: []
+    };
+    render(
+      <I18nProvider language="zh">
+        <SettingsDiagnostics
+          {...({
+            environment
+          } as Parameters<typeof SettingsDiagnostics>[0])}
+        />
+      </I18nProvider>
+    );
+
+    expect(await screen.findByText("内置 HTTPS 下载器")).toBeInTheDocument();
+    expect(screen.queryByText("普通 HTTPS 回退")).not.toBeInTheDocument();
+  });
+
   it("does not clear local data when diagnostics cleanup is canceled", async () => {
     const cleaned: LocalDataCleanupTarget[] = [];
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);

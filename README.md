@@ -32,12 +32,12 @@ Preview artifacts are prepared through [GitHub Releases](https://github.com/ryvi
 | --- | --- |
 | Windows x64 installer | `FastSub-Desktop-0.13.2-windows-x64.exe`; release candidate, unsigned |
 | Windows x64 portable zip | `FastSub-Desktop-0.13.2-windows-x64.zip`; release candidate, unsigned |
-| macOS arm64 dmg | `FastSub-Desktop-0.13.0-macos-arm64.dmg`; preview, ad-hoc signed and not notarized |
+| macOS arm64 dmg | `FastSub-Desktop-0.13.2-macos-arm64.dmg`; preview, ad-hoc signed and not notarized |
 | Linux desktop | Not packaged |
 
 See [help-docs/help/download.md](help-docs/help/download.md) for download status and release limitations. Checksums and release notes are tracked in [dev-docs/release/v0.13.2.md](dev-docs/release/v0.13.2.md).
 
-Package size note: the Windows portable zip is large because it includes Electron/Chromium plus an app-private Python AI runtime. Model files are still downloaded after installation and are not bundled.
+Package size note: the desktop packages are large because they include Electron/Chromium plus an app-private Python AI runtime. Model files are still downloaded after installation and are not bundled. Windows includes bundled aria2 for FFmpeg downloads; macOS uses the built-in HTTPS downloader by default.
 
 For source checkout validation:
 
