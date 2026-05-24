@@ -5,6 +5,25 @@ description: User-facing release status and known limitations for Fast Sub.
 
 # Release Notes
 
+## 0.13.1 Public Preview
+
+Fast Sub `0.13.1` is a Windows x64 desktop release candidate focused on restoring packaged no-key web translation and tightening public project documentation.
+
+Changes since `0.13.0`:
+
+- Restored no-key Bing/Google web translation in the packaged desktop app through an ASAR-outside JS helper.
+- Kept the old Python `translators/js2py` dependency chain removed from the Python lock file and packaged Python runtime.
+- Added generated API/reference documentation under `dev-docs/api/`.
+- Added and reorganized public repository docs, contribution guidance, security policy, roadmap, issue templates, and AI-assisted workflow notes.
+- Documented the CI-equivalent local validation workflow for future release branches.
+
+Validated areas:
+
+- Windows x64 installer smoke.
+- Windows x64 portable zip smoke.
+- No-key Bing/Google web translation for short subtitles in the packaged desktop app.
+- Python, Go, and Desktop CI checks.
+
 ## 0.13.0 Public Preview
 
 Fast Sub `0.13.0` is prepared as a Windows x64 desktop release candidate and macOS arm64 preview build.
@@ -33,6 +52,14 @@ Validated areas:
 - The default local NLLB translation model is marked `CC-BY-NC-4.0`; users should review its non-commercial restriction before commercial or organizational use.
 - Real OpenAI provider smoke is not part of the default automated test suite.
 - Bing/Google web translation is experimental and best-effort; Windows x64 packaged short-SRT smoke has passed, and macOS arm64 web translation smoke still needs to run on a macOS release machine.
+
+## 0.13.1 Artifact Checksums
+
+| Artifact | SHA256 |
+| --- | --- |
+| `FastSub-Desktop-0.13.1-windows-x64.exe` | `801227c3a599f7b0b921030b3faba2a4b5b91c43fd7ac89c2b7330099dcf8c1a` |
+| `FastSub-Desktop-0.13.1-windows-x64.exe.blockmap` | `897e1c93f5eb20ad5e0bb1713e5a12ca8cdfd71cdca9db6cae1295a16ddc78d5` |
+| `FastSub-Desktop-0.13.1-windows-x64.zip` | `b62d3f5bdd74bbe8c747883b176dce94e71f1161c095eda105c00bfaa5100340` |
 
 ## 0.13.0 Artifact Checksums
 

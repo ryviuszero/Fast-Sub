@@ -4,10 +4,13 @@ All notable project milestones should be recorded here in user-facing language.
 
 ## Unreleased
 
+## 0.13.1 - Web Translation Recovery Preview
+
 - Documentation structure reorganized into `dev-docs/` for internal project docs and `help-docs/` for user help and GitHub Pages.
 - Root project README, contribution notes, security policy, code of conduct, roadmap, release docs, issue templates, PR template, and AI-assisted workflow notes added.
 - Generated API/reference docs added under `dev-docs/api/` for Go, Python, desktop, and JSON schema references.
 - Restored no-key Bing/Google web translation in the packaged desktop app through an ASAR-outside JS helper, without reintroducing the old Python `translators/js2py` dependency chain.
+- Documented the CI-equivalent local validation workflow and the feature-branch-to-fast-forward release practice.
 
 ## 0.13.0 - Windows Release Candidate
 

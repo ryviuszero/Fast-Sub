@@ -11,8 +11,8 @@ Windows x64 is the current release-candidate platform.
 
 Artifacts:
 
-- Installer: `FastSub-Desktop-0.13.0-windows-x64.exe`
-- Portable zip: `FastSub-Desktop-0.13.0-windows-x64.zip`
+- Installer: `FastSub-Desktop-0.13.1-windows-x64.exe`
+- Portable zip: `FastSub-Desktop-0.13.1-windows-x64.zip`
 
 Current artifacts are unsigned preview builds. Users may see SmartScreen or antivirus reputation prompts until code signing is configured.
 
@@ -43,7 +43,7 @@ Additional release smoke records are tracked in:
 - App-private Python runtime is packaged under app resources.
 - Web translation helper source and production dependencies are packaged outside ASAR under `resources/web-translate-helper`; `web-bing` and `web-google` use the packaged Electron executable as Node with no API key and no system Node requirement.
 - Models are not bundled.
-- FFmpeg, aria2, and whisper.cpp native binaries are app-private userData downloads, not bundled in the Windows installer.
+- FFmpeg and aria2 are app-private userData downloads. The pinned whisper.cpp native runtime is bundled under app resources for packaged native transcription.
 
 Round 14 Windows packaged web translation smoke should verify `web-bing` and `web-google` on a public short SRT, helper outside ASAR, no API key requirement, and no packaged `js2py` / `translators` / `ai-cloudscraper` metadata.
 
