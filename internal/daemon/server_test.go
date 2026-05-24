@@ -608,6 +608,7 @@ func TestServer_RestartMarksRunningInterrupted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer manager.Shutdown()
 	job, appErr := manager.Create(jobs.CreateRequest{SchemaVersion: 1, Type: "transcribe", InputPath: "input.mp4", OutputPath: "out.srt", Provider: "local-faster-whisper"})
 	if appErr != nil {
 		t.Fatal(appErr)
@@ -618,6 +619,7 @@ func TestServer_RestartMarksRunningInterrupted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer recovered.Shutdown()
 	recoveredJob, appErr := recovered.Get(job.ID)
 	if appErr != nil {
 		t.Fatal(appErr)
@@ -637,6 +639,7 @@ func TestServer_RestartRecoversQueuedJobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer manager.Shutdown()
 	first, appErr := manager.Create(jobs.CreateRequest{SchemaVersion: 1, Type: "transcribe", InputPath: "first.mp4", OutputPath: "first.srt", Provider: "local-faster-whisper"})
 	if appErr != nil {
 		t.Fatal(appErr)
@@ -652,6 +655,7 @@ func TestServer_RestartRecoversQueuedJobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer recovered.Shutdown()
 	waitManagerStatus(t, recovered, second.ID, jobs.StatusSucceeded)
 	recoveredFirst, appErr := recovered.Get(first.ID)
 	if appErr != nil {
