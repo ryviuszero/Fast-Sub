@@ -6,11 +6,13 @@
 
 - Round 13 Electron Productization And Release Readiness 已按 13.1 -> 13.7 完成 Windows x64 可自动/本机可验证部分；第三方 license 明细、干净 model store 首启双模型安装复测、Windows unsigned version resource 决策、GPU 长任务取消 smoke、翻译批处理 blocker 修复、翻译模型失败降级 smoke、Secret storage 保存/替换/删除 smoke、最终自动验证基线、最新 installer/portable 复测和截图/E2E baseline 已完成。macOS arm64 dmg 已在 macOS arm64 release machine 上生成并通过 packaged runtime smoke、macOS FFmpeg/FFprobe 首装 smoke、内置 whisper.cpp runtime smoke、codesign verify 和 DMG mount check；剩余 blocker 是正式 Developer ID 签名/公证/Gatekeeper 和真实长任务退出/取消清理 smoke。
 - Round 14 无 API Key 网页翻译恢复已在分支 `codex/web-translation-dependency-risk` 按 14.1 -> 14.8 完成 Windows x64 可验证范围：packaged desktop 通过 ASAR 外 JS helper 恢复 `web-bing` / `web-google` 无 API key 短 SRT 翻译，不恢复 Python `translators` / `js2py` 依赖链。macOS arm64 packaged web translation smoke 仍需在 macOS release machine 上执行并记录。Round 14 spec 见 `dev-docs/iterations/round14-web-translation-js-helper.md`。
+- Round 15 本机依赖可用性与 FFmpeg 配置体验已完成方案细化，spec 见 `dev-docs/iterations/round15-native-dependency-readiness.md`。本轮处理公开发布后用户反馈的 FFmpeg / FFprobe / aria2 安装体验：环境检测不再自动下载，Windows packaged app 支持自定义 FFmpeg 目录和系统 PATH 同目录探测，缺 FFmpeg 不阻塞进入主界面，只在转写/烧录任务启动前阻断并提供恢复动作；aria2 计划改为 Windows 包内置下载加速器。
 
 ## 当前目标
 
 - Round 13 只承接产品化和发布准备：打包形态、安装包/便携包 smoke、打包后 daemon lifecycle、诊断 polish、隐私/redaction 验证、真实外部 Provider smoke、真实文件路径/GPU/超时场景验证，以及可重复执行的发布检查清单。Round 13 不再新增核心业务能力或改变 daemon/UI 主 contract。
 - Round 14 只承接无 key 网页翻译恢复：保留 `web-bing` / `web-google` provider id，优先保证 packaged desktop 下载即用；不恢复 Python `web-translate` extra，不新增官方 API Provider，不让 renderer 直接调用网页翻译 package。
+- Round 15 只承接本机依赖可用性和用户恢复流程：拆分检测与安装，支持 FFmpeg / FFprobe 自定义目录和系统 PATH 来源，内置 aria2 作为下载加速器，并把缺 FFmpeg 的阻断点移动到真正需要媒体处理的任务启动前。Round 15 不打包 FFmpeg / FFprobe，不改变模型分发策略，也不改变 daemon job API 的媒体处理语义。
 
 ## 完成的
 

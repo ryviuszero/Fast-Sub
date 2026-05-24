@@ -43,6 +43,7 @@ Do not put user-facing task guides here. User help for GitHub Pages lives under 
 - `ui-docs/project-overview.md`: Electron product definition.
 - `ui-docs/architecture.md`: Electron architecture.
 - `iterations/`: post-release implementation specs and cross-stack iteration plans.
+- `iterations/round15-native-dependency-readiness.md`: Round 15 plan for FFmpeg / FFprobe custom paths, detect-only checks, task-time dependency gates, and bundled aria2.
 
 ## User Help
 
