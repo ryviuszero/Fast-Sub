@@ -4,6 +4,13 @@ All notable project milestones should be recorded here in user-facing language.
 
 ## Unreleased
 
+## 0.13.2 - Native Dependency Readiness
+
+- Improved Windows FFmpeg / FFprobe readiness flow so missing FFmpeg no longer blocks opening the desktop app.
+- Added explicit FFmpeg directory selection, app-private download, and same-directory system `PATH` detection.
+- Bundled aria2 for Windows FFmpeg downloads and documented deterministic native-dependency smoke coverage.
+- Added safeguards so provider refresh and diagnostics checks do not repeatedly trigger FFmpeg installation.
+
 ## 0.13.1 - Web Translation Recovery Preview
 
 - Documentation structure reorganized into `dev-docs/` for internal project docs and `help-docs/` for user help and GitHub Pages.

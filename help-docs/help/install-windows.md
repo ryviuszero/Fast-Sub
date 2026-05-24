@@ -7,8 +7,8 @@ description: Windows installer and portable package guide for Fast Sub.
 
 Fast Sub currently provides two Windows x64 package types:
 
-- Installer: `FastSub-Desktop-0.13.1-windows-x64.exe`
-- Portable zip: `FastSub-Desktop-0.13.1-windows-x64.zip`
+- Installer: `FastSub-Desktop-0.13.2-windows-x64.exe`
+- Portable zip: `FastSub-Desktop-0.13.2-windows-x64.zip`
 
 ## Installer
 

@@ -5,6 +5,25 @@ description: User-facing release status and known limitations for Fast Sub.
 
 # Release Notes
 
+## 0.13.2 Public Preview
+
+Fast Sub `0.13.2` is a Windows x64 desktop release candidate focused on FFmpeg / FFprobe readiness.
+
+Changes since `0.13.1`:
+
+- Missing FFmpeg / FFprobe no longer blocks opening the desktop app.
+- Transcription and burn-in now ask for FFmpeg / FFprobe only when a job actually needs them.
+- Users can choose an existing FFmpeg / FFprobe directory, explicitly download app-private FFmpeg, or use a same-directory system `PATH` pair.
+- Windows packages include bundled aria2 for FFmpeg downloads, with normal HTTPS fallback.
+- Diagnostics and provider refresh should not repeatedly retry FFmpeg installation.
+
+Validated areas:
+
+- Windows x64 installer build.
+- Windows x64 portable zip build.
+- Packaged runtime smoke.
+- Native dependency smoke for missing, custom, app-private, and system `PATH` FFmpeg sources.
+
 ## 0.13.1 Public Preview
 
 Fast Sub `0.13.1` is a Windows x64 desktop release candidate focused on restoring packaged no-key web translation and tightening public project documentation.
@@ -52,6 +71,14 @@ Validated areas:
 - The default local NLLB translation model is marked `CC-BY-NC-4.0`; users should review its non-commercial restriction before commercial or organizational use.
 - Real OpenAI provider smoke is not part of the default automated test suite.
 - Bing/Google web translation is experimental and best-effort; Windows x64 packaged short-SRT smoke has passed, and macOS arm64 web translation smoke still needs to run on a macOS release machine.
+
+## 0.13.2 Artifact Checksums
+
+| Artifact | SHA256 |
+| --- | --- |
+| `FastSub-Desktop-0.13.2-windows-x64.exe` | `12f8622b6d5f978fcdf0c47ceefaccad31dabba2a81626f080ff7a8c29494c8a` |
+| `FastSub-Desktop-0.13.2-windows-x64.exe.blockmap` | `4d6d723ce519fabe0f97f42a73321e5af0d0e1c47f1acc36811b16e6e28cd21e` |
+| `FastSub-Desktop-0.13.2-windows-x64.zip` | `ae5d69a3c67f8b41e5476ff523d5ccd8db1423f85bd42f8aea53cf89fa46c847` |
 
 ## 0.13.1 Artifact Checksums
 

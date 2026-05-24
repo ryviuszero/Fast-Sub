@@ -11,8 +11,8 @@ Fast Sub is currently at the desktop public-preview / release-candidate stage.
 
 | Platform | Status | Notes |
 | --- | --- | --- |
-| Windows x64 installer | Release candidate | `FastSub-Desktop-0.13.1-windows-x64.exe`; smoke tested as an unsigned build. |
-| Windows x64 portable zip | Release candidate | `FastSub-Desktop-0.13.1-windows-x64.zip`; smoke tested as an unsigned build. |
+| Windows x64 installer | Release candidate | `FastSub-Desktop-0.13.2-windows-x64.exe`; smoke tested as an unsigned build. |
+| Windows x64 portable zip | Release candidate | `FastSub-Desktop-0.13.2-windows-x64.zip`; smoke tested as an unsigned build. |
 | macOS arm64 dmg | Preview | `FastSub-Desktop-0.13.0-macos-arm64.dmg`; smoke tested as an ad-hoc signed, unnotarized build. |
 | Linux desktop | Not packaged | No desktop release target yet. |
 | Python CLI | Available from source | Intended for developers and existing CLI users. |
@@ -36,10 +36,10 @@ Use the release notes and checksums to confirm which artifacts have been validat
 
 ## Checksums
 
-SHA256 checksums for `0.13.1` are listed in the project release notes:
+SHA256 checksums for `0.13.2` are listed in the project release notes:
 
 - [Release notes](release-notes.md)
-- [Developer release record](https://github.com/ryviuszero/Fast-Sub/blob/master/dev-docs/release/v0.13.1.md)
+- [Developer release record](https://github.com/ryviuszero/Fast-Sub/blob/master/dev-docs/release/v0.13.2.md)
 
 ## Package Size
 

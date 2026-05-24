@@ -6,7 +6,7 @@ This page is the public-facing index for release validation evidence. It summari
 
 - Windows release checklist: `../../desktop-tests/round13-release-checklist.md`
 - Windows release smoke record: `../../desktop-tests/round13-release-smoke.md`
-- Release artifact checksums: `v0.13.1.md`
+- Release artifact checksums: `v0.13.2.md`
 - Round 13 screenshots: `../../desktop-tests/pics/round13/README.md`
 - License inventory summaries: `../../desktop-tests/licenses/`
 - Round 14 web translation smoke record: `../../desktop-tests/round14-web-translation-smoke.md`

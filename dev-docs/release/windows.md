@@ -11,8 +11,8 @@ Windows x64 is the current release-candidate platform.
 
 Artifacts:
 
-- Installer: `FastSub-Desktop-0.13.1-windows-x64.exe`
-- Portable zip: `FastSub-Desktop-0.13.1-windows-x64.zip`
+- Installer: `FastSub-Desktop-0.13.2-windows-x64.exe`
+- Portable zip: `FastSub-Desktop-0.13.2-windows-x64.zip`
 
 Current artifacts are unsigned preview builds. Users may see SmartScreen or antivirus reputation prompts until code signing is configured.
 
