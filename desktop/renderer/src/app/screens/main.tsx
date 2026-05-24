@@ -421,7 +421,7 @@ export function MainGenerating({ activeJob, jobs, activeBatchJobIds, cancelJob, 
   const hiddenWaitingJobs = Math.max(0, waitingJobs.length - visibleWaitingJobs.length);
   const activeIndex = activeId && batchIds.length > 0 ? Math.max(0, batchIds.indexOf(activeId)) : 0;
   const totalJobs = batchIds.length || batchJobs.length || 1;
-  const remainingLabel = activeJob?.estimatedRemaining ? t("Estimated remaining", { time: activeJob.estimatedRemaining }) : t("Waiting for progress");
+  const remainingLabel = activeJob?.estimatedRemaining ? t("Estimated remaining", { time: rt(activeJob.estimatedRemaining) }) : t("Waiting for progress");
   return (
     <div className="wf">
       <Chrome right={<Chip tone="accent">{copy.badge}</Chip>} />
@@ -439,7 +439,7 @@ export function MainGenerating({ activeJob, jobs, activeBatchJobIds, cancelJob, 
         {waitingJobs.length > 0 && (
           <section className="next-list">
             <h3>{t("Next")}</h3>
-            {visibleWaitingJobs.map((job) => <p key={job.id}><Chip>{job.statusLabel}</Chip> {job.title}</p>)}
+            {visibleWaitingJobs.map((job) => <p key={job.id}><Chip>{rt(job.statusLabel)}</Chip> {job.title}</p>)}
             {hiddenWaitingJobs > 0 && <p className="caption">{t("More waiting jobs hidden", { count: hiddenWaitingJobs })}</p>}
           </section>
         )}
@@ -518,7 +518,7 @@ function clampProgress(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
-export function MainDone({ activeJob, completedBatchJobs, openMock, setScreen }: RenderProps) {
+export function MainDone({ activeJob, completedBatchJobs, completionReturnScreen, openMock, setScreen }: RenderProps) {
   const t = useT();
   const rt = useRuntimeText();
   const completedJobs = completedBatchJobs.length > 0 ? completedBatchJobs : activeJob ? [activeJob] : [];
@@ -536,7 +536,7 @@ export function MainDone({ activeJob, completedBatchJobs, openMock, setScreen }:
           const outputPath = subtitleOutputPath(job);
           const outputFolder = directoryName(outputPath) || result?.outputFolder || job.outputDirectory;
           const outputName = baseName(outputPath) || job.title || t("Subtitle result");
-          const detail = result?.durationLabel || result?.summary || rt(job.stageLabel) || t("Task completed");
+          const detail = result?.durationLabel ? rt(result.durationLabel) : result?.summary ? rt(result.summary) : rt(job.stageLabel) || t("Task completed");
           return <ResultCard key={job.id} name={outputName} detail={detail} ok onOpen={() => void openMock(outputPath)} onOpenFolder={() => void openMock(outputFolder)} />;
         })}
       </main>
@@ -544,7 +544,7 @@ export function MainDone({ activeJob, completedBatchJobs, openMock, setScreen }:
         <SettingsEntry onClick={() => setScreen("settings-general")} />
         <div className="row gap-8">
           <button className="btn ghost" onClick={() => setScreen("queue-list")}>{t("View all history")}</button>
-          <button className="btn primary" onClick={() => setScreen("main-empty")}>{t("Add more")}</button>
+          <button className="btn primary" onClick={() => setScreen(completionReturnScreen)}>{t("Add more")}</button>
         </div>
       </div>
     </div>

@@ -692,6 +692,9 @@ label { display: grid; gap: 4px; color: var(--ink-2); font-size: 11px; font-weig
   display: grid;
   gap: 6px;
 }
+.provider-action-hint {
+  color: var(--warn) !important;
+}
 .provider-section {
   display: grid;
   gap: 8px;

@@ -48,6 +48,7 @@ export function packagedLayout(desktopRoot) {
     unpackedRoot,
     appExecutable,
     resourcesRoot,
+    webTranslateHelper: join(resourcesRoot, "web-translate-helper", "cli.mjs"),
     daemonExecutable: join(resourcesRoot, "bin", target, daemonExecutable),
     pythonRoot,
     pythonExecutable: join(pythonBin, pythonExecutable),
@@ -71,6 +72,9 @@ export function packagedRuntimeEnv(layout, extra = {}) {
     FAST_SUB_PYTHON: pythonCommand,
     FAST_SUB_PYTHON_CLI: `${pythonCommand} -m fast_sub.app`,
     FAST_SUB_STT_WORKER_COMMAND: `${pythonCommand} -m fast_sub_workers.faster_whisper`,
+    FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND: layout.appExecutable,
+    FAST_SUB_WEB_TRANSLATE_HELPER_ARGS: JSON.stringify([layout.webTranslateHelper]),
+    ELECTRON_RUN_AS_NODE: "1",
     [pathKey]: nextPath,
     ...extra
   };

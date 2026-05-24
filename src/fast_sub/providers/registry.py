@@ -71,17 +71,16 @@ DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
             supports_batch=False,
             requires_gpu=False,
             offline=False,
-            license="GPL-3.0 dependency: translators",
+            license="Packaged JS helper dependency: bing-translate-api (MIT)",
             privacy_note=(
-                "Uploads subtitle text to a third-party web translation service; "
-                "rate limits and terms are controlled by that service."
+                "Uploads subtitle text to Bing web translation through a no-key "
+                "packaged helper; experimental and best-effort, with rate limits, "
+                "regional access, and upstream page changes controlled by the service."
             ),
         ),
-        dependency_module="translators",
         install_hint=(
-            "Web translation currently requires manually installing `translators`; "
-            "the packaged optional extra is disabled because its dependency chain includes "
-            "vulnerable js2py releases."
+            "Run web translation through the packaged desktop helper or set "
+            "FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND and FAST_SUB_WEB_TRANSLATE_HELPER_ARGS."
         ),
     ),
     ProviderDefinition(
@@ -94,17 +93,16 @@ DEFAULT_PROVIDER_DEFINITIONS: tuple[ProviderDefinition, ...] = (
             supports_batch=False,
             requires_gpu=False,
             offline=False,
-            license="GPL-3.0 dependency: translators",
+            license="Packaged JS helper dependency: @vitalets/google-translate-api (MIT)",
             privacy_note=(
-                "Uploads subtitle text to Google web translation through translators; "
-                "mainland China access may fail, try web-bing if needed."
+                "Uploads subtitle text to Google web translation through a no-key "
+                "packaged helper; experimental and best-effort, with rate limits, "
+                "regional access, and upstream page changes controlled by the service."
             ),
         ),
-        dependency_module="translators",
         install_hint=(
-            "Web translation currently requires manually installing `translators`; "
-            "the packaged optional extra is disabled because its dependency chain includes "
-            "vulnerable js2py releases."
+            "Run web translation through the packaged desktop helper or set "
+            "FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND and FAST_SUB_WEB_TRANSLATE_HELPER_ARGS."
         ),
     ),
     ProviderDefinition(

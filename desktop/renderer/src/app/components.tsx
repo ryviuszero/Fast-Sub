@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Settings } from "lucide-react";
 import type { JobDetail, JobSummary, MockScenario, ProviderStatus } from "../../../shared/contracts/types";
 import { debugScreens, scenarioOptions } from "./fixtures";
-import { useT } from "./i18n";
+import { useRuntimeText, useT } from "./i18n";
 import type { MediaFile, Screen } from "./types";
 
 const HELP_DOCUMENT_URL = "https://ryviuszero.github.io/Fast-Sub/";
@@ -73,20 +73,22 @@ export function CheckItem({ label, detail, status }: { label: string; detail?: s
 
 export function RemoteConfirmDialog({ provider, files, onCancel, onConfirm }: { provider?: ProviderStatus; files: MediaFile[]; onCancel: () => void; onConfirm: () => void }) {
   const t = useT();
+  const rt = useRuntimeText();
   const previewLimit = 24;
   const uploadPreview = files.slice(0, previewLimit).map((file) => file.name).join("、");
   const remainingFiles = Math.max(0, files.length - previewLimit);
+  const providerName = provider?.name ? rt(provider.name) : t("Remote Provider");
   return (
     <div className="modal-backdrop">
       <section className="modal-card upload-confirm">
         <div className="between"><h2>{t("Confirm API provider")}</h2><span className="warn-symbol">!</span></div>
-        <p>{provider?.name ?? t("Remote Provider")} {t("Remote provider upload warning")}</p>
+        <p>{providerName} {t("Remote provider upload warning")}</p>
         <section className="panel warn-panel upload-confirm-body">
           <div className="upload-confirm-list">
             <span>{t("Upload content")}</span>
             <strong>{remainingFiles > 0 ? t("Upload preview with more", { preview: uploadPreview, count: remainingFiles }) : uploadPreview}</strong>
           </div>
-          <KV k={t("Provider")} v={provider?.name ?? "OpenAI Transcription API"} />
+          <KV k={t("Provider")} v={providerName} />
           <KV k="API key" v="sk-••••••••••••" mono />
         </section>
         <div className="row gap-8 end upload-confirm-actions"><button className="btn ghost" onClick={onCancel} type="button">{t("Cancel")}</button><button className="btn primary" onClick={onConfirm} type="button">{t("Confirm and continue")}</button></div>
@@ -106,11 +108,11 @@ export function DebugPanel({ screen, setScreen, scenario, setScenario, disabledS
       <div className="debug-head"><strong>{t("Debug")}</strong><span>Ctrl+D</span></div>
       <h3>{t(groups[0][0])}</h3>
       <div className="debug-grid">
-        {debugScreens.map((item) => <button key={item.id} className={screen === item.id ? "active" : ""} onClick={() => setScreen(item.id)}>{item.label}</button>)}
+        {debugScreens.map((item) => <button key={item.id} className={screen === item.id ? "active" : ""} onClick={() => setScreen(item.id)}>{t(item.labelKey)}</button>)}
       </div>
       <h3>{t(groups[1][0])}</h3>
       <select value={scenario} onChange={(event) => setScenario(event.target.value as MockScenario)} disabled={disabledScenario}>
-        {scenarioOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        {scenarioOptions.map((item) => <option key={item.value} value={item.value}>{t(item.labelKey)}</option>)}
       </select>
     </aside>
   );

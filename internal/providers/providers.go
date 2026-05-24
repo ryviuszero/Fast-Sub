@@ -3,6 +3,7 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -266,12 +267,12 @@ func defaultRegistry() map[string]Provider {
 			Check: checkLocalNLLB,
 		},
 		"web-bing": {
-			Metadata: translationWebMetadata("web-bing", "bing-web-translate", "Uploads subtitle text to Bing web translation only when explicitly selected."),
-			Check:    checkAlwaysAvailable,
+			Metadata: translationWebMetadata("web-bing", "bing-web-translate", "Uploads subtitle text to Bing web translation only when explicitly selected. This no-key web provider is experimental and best-effort; it may fail because of rate limits, regional access, or upstream page changes."),
+			Check:    checkWebTranslationHelper,
 		},
 		"web-google": {
-			Metadata: translationWebMetadata("web-google", "google-web-translate", "Uploads subtitle text to Google web translation only when explicitly selected."),
-			Check:    checkAlwaysAvailable,
+			Metadata: translationWebMetadata("web-google", "google-web-translate", "Uploads subtitle text to Google web translation only when explicitly selected. This no-key web provider is experimental and best-effort; it may fail because of rate limits, regional access, or upstream page changes."),
+			Check:    checkWebTranslationHelper,
 		},
 		"api-openai-chat": {
 			Metadata: Metadata{
@@ -375,6 +376,49 @@ func checkLocalNLLB(ctx context.Context, cfg RuntimeConfig, metadata Metadata) C
 
 func checkOpenAIChat(ctx context.Context, cfg RuntimeConfig, metadata Metadata) CheckResult {
 	return checkOpenAI(ctx, cfg, metadata)
+}
+
+func checkWebTranslationHelper(_ context.Context, cfg RuntimeConfig, metadata Metadata) CheckResult {
+	actionHint := "Repair the packaged web translation helper, reinstall Fast Sub, or choose local/API translation."
+	command := strings.TrimSpace(cfg.Env("FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND"))
+	if command == "" {
+		check := Check{Name: "web_helper", OK: false, Status: StatusMissingDependency, Message: "Packaged web translation helper is not configured.", ActionHint: actionHint}
+		return summarize(metadata, []Check{check}, map[string]any{"live_network": false})
+	}
+	if filepath.IsAbs(command) {
+		if info, err := cfg.Stat(command); err != nil || info.IsDir() {
+			check := Check{Name: "web_helper_runtime", OK: false, Status: StatusMissingDependency, Message: "Packaged Node/Electron helper runtime is missing.", ActionHint: actionHint}
+			return summarize(metadata, []Check{check}, map[string]any{"live_network": false})
+		}
+	} else if _, err := cfg.LookPath(command); err != nil {
+		check := Check{Name: "web_helper_runtime", OK: false, Status: StatusMissingDependency, Message: "Packaged Node/Electron helper runtime is not resolvable.", ActionHint: actionHint}
+		return summarize(metadata, []Check{check}, map[string]any{"live_network": false})
+	}
+	argsRaw := strings.TrimSpace(cfg.Env("FAST_SUB_WEB_TRANSLATE_HELPER_ARGS"))
+	if argsRaw == "" {
+		check := Check{Name: "web_helper_args", OK: false, Status: StatusMissingDependency, Message: "Web translation helper args are missing.", ActionHint: actionHint}
+		return summarize(metadata, []Check{check}, map[string]any{"live_network": false})
+	}
+	var args []string
+	if err := json.Unmarshal([]byte(argsRaw), &args); err != nil {
+		check := Check{Name: "web_helper_args", OK: false, Status: StatusMissingDependency, Message: "Web translation helper args are invalid.", ActionHint: actionHint}
+		return summarize(metadata, []Check{check}, map[string]any{"live_network": false})
+	}
+	if len(args) == 0 {
+		check := Check{Name: "web_helper_args", OK: false, Status: StatusMissingDependency, Message: "Web translation helper args are empty.", ActionHint: actionHint}
+		return summarize(metadata, []Check{check}, map[string]any{"live_network": false})
+	}
+	for _, arg := range args {
+		ext := strings.ToLower(filepath.Ext(arg))
+		if filepath.IsAbs(arg) && (ext == ".js" || ext == ".mjs" || ext == ".cjs") {
+			if info, err := cfg.Stat(arg); err != nil || info.IsDir() {
+				check := Check{Name: "web_helper_file", OK: false, Status: StatusMissingDependency, Message: "Packaged web translation helper file is missing.", ActionHint: actionHint}
+				return summarize(metadata, []Check{check}, map[string]any{"live_network": false})
+			}
+		}
+	}
+	check := Check{Name: "web_helper", OK: true, Status: StatusAvailable, Message: "Packaged web translation helper is configured. Live use still requires explicit upload confirmation."}
+	return summarize(metadata, []Check{check}, map[string]any{"live_network": false})
 }
 
 func checkOpenAILive(ctx context.Context, cfg RuntimeConfig, metadata Metadata) CheckResult {

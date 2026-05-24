@@ -61,7 +61,14 @@ Connection check behavior:
 
 ## Web Providers
 
-Web translation providers are convenience options. They are less reliable than local models or explicit API providers and are better suited for small files.
+Web translation providers are no-key convenience options in the packaged desktop app.
+
+Examples:
+
+- `web-bing`
+- `web-google`
+
+They upload subtitle text only after explicit selection and upload confirmation. They do not require an API key, but they are experimental and best-effort because they depend on third-party web translation behavior. They may fail because of rate limits, regional access, network failures, or upstream page changes.
 
 Use web providers for quick tests or small files. For larger or repeatable jobs, prefer local NLLB or an explicit API provider.
 

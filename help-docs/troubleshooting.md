@@ -43,3 +43,11 @@ For OpenAI-compatible providers:
 - Confirm whether the endpoint requires an API key.
 
 Raw API keys should not be pasted into logs, issues, screenshots, or release records.
+
+For web translation providers (`web-bing` and `web-google`):
+
+- No API key is required in the packaged desktop app.
+- Retry later if the service is rate limited or blocked in your region.
+- Use smaller subtitle files.
+- Switch to local translation or an API provider if reliability matters.
+- If the app reports the web translation helper is missing, repair or reinstall Fast Sub rather than installing global Python or npm packages.

@@ -20,7 +20,7 @@ from fast_sub.translation.service import (
 )
 
 
-def test_translate_segments_uses_translators_package(monkeypatch) -> None:
+def test_translate_segments_uses_web_provider_adapter(monkeypatch) -> None:
     calls = []
 
     def fake_translate_text(*, text, translator, from_language, to_language, timeout=None):

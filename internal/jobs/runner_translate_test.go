@@ -17,14 +17,16 @@ func TestRunTranslateSRTUsesPythonCLIBridge(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := map[string]string{
-		"FAST_SUB_PYTHON_CLI":      fmt.Sprintf("%q -test.run=TestTranslateCLIHelper --", os.Args[0]),
-		"GO_WANT_TRANSLATE_HELPER": "1",
-		"PATH":                     os.Getenv("PATH"),
-		"PATHEXT":                  os.Getenv("PATHEXT"),
-		"SYSTEMROOT":               os.Getenv("SYSTEMROOT"),
-		"WINDIR":                   os.Getenv("WINDIR"),
-		"TEMP":                     os.Getenv("TEMP"),
-		"TMP":                      os.Getenv("TMP"),
+		"FAST_SUB_PYTHON_CLI":                   fmt.Sprintf("%q -test.run=TestTranslateCLIHelper --", os.Args[0]),
+		"FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND": "node",
+		"FAST_SUB_WEB_TRANSLATE_HELPER_ARGS":    `["helper.mjs"]`,
+		"GO_WANT_TRANSLATE_HELPER":              "1",
+		"PATH":                                  os.Getenv("PATH"),
+		"PATHEXT":                               os.Getenv("PATHEXT"),
+		"SYSTEMROOT":                            os.Getenv("SYSTEMROOT"),
+		"WINDIR":                                os.Getenv("WINDIR"),
+		"TEMP":                                  os.Getenv("TEMP"),
+		"TMP":                                   os.Getenv("TMP"),
 	}
 	modelDir := filepath.Join(dir, "nllb-model")
 	if err := os.MkdirAll(modelDir, 0o700); err != nil {
@@ -67,14 +69,16 @@ func TestRunTranslateSRTAcceptsPlainTextInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := map[string]string{
-		"FAST_SUB_PYTHON_CLI":      fmt.Sprintf("%q -test.run=TestTranslateCLIHelper --", os.Args[0]),
-		"GO_WANT_TRANSLATE_HELPER": "1",
-		"PATH":                     os.Getenv("PATH"),
-		"PATHEXT":                  os.Getenv("PATHEXT"),
-		"SYSTEMROOT":               os.Getenv("SYSTEMROOT"),
-		"WINDIR":                   os.Getenv("WINDIR"),
-		"TEMP":                     os.Getenv("TEMP"),
-		"TMP":                      os.Getenv("TMP"),
+		"FAST_SUB_PYTHON_CLI":                   fmt.Sprintf("%q -test.run=TestTranslateCLIHelper --", os.Args[0]),
+		"FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND": "node",
+		"FAST_SUB_WEB_TRANSLATE_HELPER_ARGS":    `["helper.mjs"]`,
+		"GO_WANT_TRANSLATE_HELPER":              "1",
+		"PATH":                                  os.Getenv("PATH"),
+		"PATHEXT":                               os.Getenv("PATHEXT"),
+		"SYSTEMROOT":                            os.Getenv("SYSTEMROOT"),
+		"WINDIR":                                os.Getenv("WINDIR"),
+		"TEMP":                                  os.Getenv("TEMP"),
+		"TMP":                                   os.Getenv("TMP"),
 	}
 	modelDir := filepath.Join(dir, "nllb-model")
 	if err := os.MkdirAll(modelDir, 0o700); err != nil {
@@ -189,6 +193,92 @@ func TestRunTranslateSRTRequiresRemoteConfirmation(t *testing.T) {
 	}, func(Update) {})
 	if appErr == nil || appErr.Code != "invalid_input" {
 		t.Fatalf("appErr = %#v", appErr)
+	}
+}
+
+func TestRunTranslateSRTRequiresWebHelper(t *testing.T) {
+	runner := DefaultRunner{Env: func(key string) string {
+		switch key {
+		case "FAST_SUB_PYTHON_CLI":
+			return fmt.Sprintf("%q -test.run=TestTranslateCLIHelper --", os.Args[0])
+		default:
+			return ""
+		}
+	}}
+	_, appErr := runner.runTranslateSRT(context.Background(), CreateRequest{
+		Type:      "translate_srt",
+		InputPath: "input.srt",
+		Provider:  "web-bing",
+		Options:   map[string]any{"yes": true},
+	}, func(Update) {})
+	if appErr == nil || appErr.Code != "missing_dependency" {
+		t.Fatalf("appErr = %#v", appErr)
+	}
+}
+
+func TestTranslateEnvIncludesWebHelperEnv(t *testing.T) {
+	env := translateEnv("web-google", func(key string) string {
+		switch key {
+		case "FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND":
+			return "node"
+		case "FAST_SUB_WEB_TRANSLATE_HELPER_ARGS":
+			return `["helper.mjs"]`
+		case "ELECTRON_RUN_AS_NODE":
+			return "1"
+		default:
+			return ""
+		}
+	})
+	if !hasString(env, "FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND=node") {
+		t.Fatalf("helper command env missing: %#v", env)
+	}
+	if !hasString(env, `FAST_SUB_WEB_TRANSLATE_HELPER_ARGS=["helper.mjs"]`) {
+		t.Fatalf("helper args env missing: %#v", env)
+	}
+	if !hasString(env, "ELECTRON_RUN_AS_NODE=1") {
+		t.Fatalf("electron node env missing: %#v", env)
+	}
+}
+
+func TestValidateWebTranslationHelperMissingFile(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing-helper.mjs")
+	runner := DefaultRunner{Env: func(key string) string {
+		switch key {
+		case "FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND":
+			return "node"
+		case "FAST_SUB_WEB_TRANSLATE_HELPER_ARGS":
+			return fmt.Sprintf("[%q]", missing)
+		default:
+			return ""
+		}
+	}}
+	appErr := runner.validateWebTranslationHelper("web-google")
+	if appErr == nil || appErr.Code != "missing_dependency" {
+		t.Fatalf("appErr = %#v", appErr)
+	}
+}
+
+func TestValidateWebTranslationHelperRequiresArgs(t *testing.T) {
+	for name, args := range map[string]string{
+		"missing": "",
+		"empty":   "[]",
+	} {
+		t.Run(name, func(t *testing.T) {
+			runner := DefaultRunner{Env: func(key string) string {
+				switch key {
+				case "FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND":
+					return "node"
+				case "FAST_SUB_WEB_TRANSLATE_HELPER_ARGS":
+					return args
+				default:
+					return ""
+				}
+			}}
+			appErr := runner.validateWebTranslationHelper("web-bing")
+			if appErr == nil || appErr.Code != "missing_dependency" {
+				t.Fatalf("appErr = %#v", appErr)
+			}
+		})
 	}
 }
 

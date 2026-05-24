@@ -45,6 +45,11 @@ type translateCLIEnvelope struct {
 const webTranslationJobTimeout = 3 * time.Minute
 
 const (
+	webTranslateHelperCommandEnv = "FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND"
+	webTranslateHelperArgsEnv    = "FAST_SUB_WEB_TRANSLATE_HELPER_ARGS"
+)
+
+const (
 	defaultLocalTranslationBatchSize = 32
 	defaultAPITranslationBatchSize   = 16
 	defaultWebTranslationBatchSize   = 1
@@ -62,6 +67,9 @@ func (r DefaultRunner) runTranslateSRTBridge(ctx context.Context, req CreateRequ
 		if !boolOption(req, "yes") {
 			return Result{}, fserrors.New(fserrors.CodeInvalidInput, "translating", "remote translation requires explicit upload confirmation.", "Confirm that subtitle text may be uploaded before starting this job.", map[string]any{"provider": provider})
 		}
+	}
+	if appErr := r.validateWebTranslationHelper(provider); appErr != nil {
+		return Result{}, appErr
 	}
 	sourceLanguage := language(req)
 	if provider == "local-nllb-ct2" && sourceLanguage == "auto" {
@@ -455,6 +463,9 @@ func translateMode(req CreateRequest) string {
 
 func translateEnv(provider string, getenv func(string) string) []string {
 	keep := []string{"PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP", "VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME", "UV_CACHE_DIR", "GO_WANT_TRANSLATE_HELPER"}
+	if isWebTranslationProvider(provider) {
+		keep = append(keep, webTranslateHelperCommandEnv, webTranslateHelperArgsEnv, "ELECTRON_RUN_AS_NODE")
+	}
 	if provider == "api-openai-chat" {
 		keep = append(keep, "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL")
 	}
@@ -550,15 +561,88 @@ func mapTranslateErrorCode(code string) string {
 	switch code {
 	case "missing_model":
 		return fserrors.CodeMissingModel
-	case "missing_dependency":
+	case "missing_dependency", "missing_helper", "missing_node_runtime", "helper_start_failed":
 		return fserrors.CodeMissingDependency
 	case "missing_api_key":
 		return fserrors.CodeMissingAPIKey
 	case "invalid_options", "invalid_input":
 		return fserrors.CodeInvalidInput
+	case "provider_timeout", "rate_limited", "region_blocked", "provider_response_changed", "provider_failed":
+		return fserrors.CodeProviderUnavailable
 	default:
 		return fserrors.CodeProviderUnavailable
 	}
+}
+
+func (r DefaultRunner) validateWebTranslationHelper(provider string) *fserrors.AppError {
+	if !isWebTranslationProvider(provider) {
+		return nil
+	}
+	command := strings.TrimSpace(r.env(webTranslateHelperCommandEnv))
+	if command == "" {
+		return fserrors.New(
+			fserrors.CodeMissingDependency,
+			"translating",
+			"Packaged web translation helper is not configured.",
+			"Repair or reinstall Fast Sub, or choose local/API translation.",
+			map[string]any{"provider": provider},
+		)
+	}
+	if filepath.IsAbs(command) {
+		if _, err := os.Stat(command); err != nil {
+			return fserrors.New(
+				fserrors.CodeMissingDependency,
+				"translating",
+				"Packaged Node/Electron helper runtime is missing.",
+				"Repair or reinstall Fast Sub, or choose local/API translation.",
+				map[string]any{"provider": provider},
+			)
+		}
+	}
+	argsRaw := strings.TrimSpace(r.env(webTranslateHelperArgsEnv))
+	if argsRaw == "" {
+		return fserrors.New(
+			fserrors.CodeMissingDependency,
+			"translating",
+			"Web translation helper args are missing.",
+			"Repair or reinstall Fast Sub, or choose local/API translation.",
+			map[string]any{"provider": provider},
+		)
+	}
+	var args []string
+	if err := json.Unmarshal([]byte(argsRaw), &args); err != nil {
+		return fserrors.New(
+			fserrors.CodeMissingDependency,
+			"translating",
+			"Web translation helper args are invalid.",
+			"Repair or reinstall Fast Sub, or choose local/API translation.",
+			map[string]any{"provider": provider},
+		)
+	}
+	if len(args) == 0 {
+		return fserrors.New(
+			fserrors.CodeMissingDependency,
+			"translating",
+			"Web translation helper args are empty.",
+			"Repair or reinstall Fast Sub, or choose local/API translation.",
+			map[string]any{"provider": provider},
+		)
+	}
+	for _, arg := range args {
+		ext := strings.ToLower(filepath.Ext(arg))
+		if filepath.IsAbs(arg) && (ext == ".js" || ext == ".mjs" || ext == ".cjs") {
+			if _, err := os.Stat(arg); err != nil {
+				return fserrors.New(
+					fserrors.CodeMissingDependency,
+					"translating",
+					"Packaged web translation helper file is missing.",
+					"Repair or reinstall Fast Sub, or choose local/API translation.",
+					map[string]any{"provider": provider},
+				)
+			}
+		}
+	}
+	return nil
 }
 
 func redactedTail(value string) string {

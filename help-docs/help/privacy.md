@@ -28,6 +28,8 @@ Remote workflows include:
 
 These can upload media or subtitle text to an external service. Fast Sub should require explicit provider selection and confirmation before upload.
 
+Web translation providers do not require an API key in the packaged desktop app, but they still send subtitle text to third-party web translation services. Treat them as experimental, best-effort providers for short files.
+
 ## Secrets
 
 Fast Sub should not show raw API keys in the renderer UI after saving.

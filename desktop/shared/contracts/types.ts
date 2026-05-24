@@ -99,6 +99,7 @@ export interface ProviderStatus {
   capabilities?: string[];
   compatibleModelTypes?: string[];
   maskedCredential?: string;
+  actionHint?: string;
 }
 
 export interface ConfigViewModel {

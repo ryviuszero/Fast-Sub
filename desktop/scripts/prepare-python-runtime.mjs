@@ -60,6 +60,8 @@ run("uv", [
   "--compile-bytecode",
   "--link-mode",
   "copy",
+  "--reinstall-package",
+  "fast-sub",
   ".[local-asr,local-translate]"
 ]);
 

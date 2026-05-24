@@ -13,6 +13,9 @@ try {
   assertLayoutExists(layout, [
     [layout.appExecutable, "packaged app executable"],
     [join(layout.resourcesRoot, "app.asar"), "app.asar"],
+    [layout.webTranslateHelper, "packaged web translation helper"],
+    [join(layout.resourcesRoot, "web-translate-helper", "node_modules", "bing-translate-api"), "packaged Bing web translation dependency"],
+    [join(layout.resourcesRoot, "web-translate-helper", "node_modules", "@vitalets", "google-translate-api"), "packaged Google web translation dependency"],
     [layout.daemonExecutable, "packaged Go daemon"],
     [layout.pythonExecutable, "app-private Python executable"]
   ]);
@@ -36,8 +39,8 @@ run(layout.appExecutable, [], {
   }
 });
 if (process.platform === "win32") {
-  run(layout.fastSubCli, ["--version"]);
-  run(layout.sttWorker, ["--help"]);
+  run(layout.fastSubCli, ["--version"], { cwd: layout.pythonScripts });
+  run(layout.sttWorker, ["--help"], { cwd: layout.pythonScripts });
 }
 run(layout.pythonExecutable, ["-m", "fast_sub.app", "--version"]);
 run(layout.pythonExecutable, ["-m", "fast_sub_workers.faster_whisper", "--help"]);

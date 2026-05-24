@@ -23,6 +23,8 @@ Examples include:
 - Web translation providers.
 - Any future cloud provider.
 
+Web translation providers (`web-bing` and `web-google`) do not require an API key in the packaged desktop app, but they still send subtitle text to third-party web translation services. They are experimental, best-effort providers and may fail because of rate limits, regional access, network errors, or upstream page changes.
+
 ## Secrets
 
 - Renderer code must not receive raw API keys.

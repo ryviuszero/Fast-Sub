@@ -16,15 +16,19 @@
     "smoke": "node test/smoke.mjs",
     "smoke:packaged": "node scripts/smoke-packaged-runtime.mjs",
     "smoke:translation-model-failure": "node scripts/smoke-translation-model-failure.mjs",
+    "smoke:web-translation": "node scripts/smoke-web-translation.mjs",
     "smoke:native-deps": "node scripts/smoke-native-dependencies.mjs",
     "prepare:python-runtime": "node scripts/prepare-python-runtime.mjs",
+    "prepare:web-translate-helper": "node scripts/prepare-web-translate-helper.mjs",
     "prepare:whisper-cpp-runtime": "node scripts/prepare-whisper-cpp-runtime.mjs",
-    "prepare:release-resources": "node scripts/prepare-release-resources.mjs",
+    "prepare:release-resources": "npm run prepare:web-translate-helper && node scripts/prepare-release-resources.mjs",
     "clean:release": "node scripts/clean-release-output.mjs",
     "package:dir": "npm run clean:release && npm run build && npm run prepare:whisper-cpp-runtime && npm run prepare:release-resources && electron-builder --dir",
     "package": "npm run clean:release && npm run build && npm run prepare:whisper-cpp-runtime && npm run prepare:release-resources && electron-builder"
   },
   "dependencies": {
+    "@vitalets/google-translate-api": "9.2.1",
+    "bing-translate-api": "4.2.0",
     "lucide-react": "^0.468.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"
@@ -46,6 +50,7 @@
     "vitest": "^4.0.14"
   },
   "build": {
+    "afterPack": "scripts/after-pack-web-translate-helper.cjs",
     "appId": "app.fastsub.desktop",
     "productName": "Fast Sub",
     "directories": {
@@ -68,6 +73,13 @@
       {
         "from": "resources/python",
         "to": "python",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/web-translate-helper",
+        "to": "web-translate-helper",
         "filter": [
           "**/*"
         ]

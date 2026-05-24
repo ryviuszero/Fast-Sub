@@ -380,6 +380,32 @@ describe("Fast Sub renderer flow", () => {
     await waitFor(() => expect(screen.getByText("已刷新")).toBeInTheDocument());
   });
 
+  it("shows web translation helper status without exposing helper internals", async () => {
+    class MissingWebHelperClient extends MockFastSubClient {
+      async listProviders(): Promise<ProviderStatus[]> {
+        return (await super.listProviders()).map((provider) => provider.id === "web-bing" ? {
+          ...provider,
+          enabled: false,
+          state: "missing_dependency",
+          actionHint: "Repair the packaged web translation helper, reinstall Fast Sub, or choose local/API translation."
+        } : provider);
+      }
+    }
+
+    render(<App client={new MissingWebHelperClient("setupReady")} />);
+    await enterMainScreen();
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: /服务商/ }));
+
+    const bingCard = (await screen.findByText("Bing 网页翻译")).closest("article") as HTMLElement;
+    expect(within(bingCard).getByText("缺少依赖")).toBeInTheDocument();
+    expect(within(bingCard).getByText("Repair the packaged web translation helper, reinstall Fast Sub, or choose local/API translation.")).toBeInTheDocument();
+    expect(within(bingCard).getByText(/无需 API Key/)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("FAST_SUB_WEB_TRANSLATE_HELPER");
+    expect(document.body).not.toHaveTextContent("cli.mjs");
+    expect(document.body).not.toHaveTextContent("web-translate-helper");
+  });
+
   it("keeps provider card controls independent before selecting defaults", async () => {
     render(<App />);
     await enterMainScreen();
@@ -1380,9 +1406,15 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.getByText("demo.txt")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "开始翻译" }));
     expect(await screen.findByRole("heading", { name: "字幕生成完成" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "继续添加" }));
+    expect(await screen.findByRole("heading", { name: "翻译字幕 / 文本" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "选择文件" }));
+    fireEvent.change(screen.getByLabelText("选择字幕或文本文件"), { target: { files: [new File(["hello"], "demo.txt", { type: "text/plain" })] } });
+    fireEvent.click(screen.getByRole("button", { name: "开始翻译" }));
+    expect(await screen.findByRole("heading", { name: "字幕生成完成" })).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("打开调试面板"));
     fireEvent.click(screen.getByRole("button", { name: "任务列表" }));
-    expect(screen.getByText("demo.translated.txt")).toBeInTheDocument();
+    expect(screen.getAllByText("demo.translated.txt").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("menuitem", { name: "字幕烧录" }));
     fireEvent.change(screen.getByLabelText("选择烧录视频文件"), { target: { files: [new File(["v"], "clip.mov", { type: "video/quicktime" })] } });
     fireEvent.change(screen.getByLabelText("选择烧录字幕文件"), { target: { files: [new File(["s"], "clip.zh.srt", { type: "text/plain" })] } });
@@ -1390,8 +1422,14 @@ describe("Fast Sub renderer flow", () => {
     expect(screen.getByText("clip.zh.srt")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "开始烧录" }));
     expect(await screen.findByRole("heading", { name: "字幕生成完成" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "继续添加" }));
+    expect(await screen.findByRole("heading", { name: "烧录字幕到视频" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("选择烧录视频文件"), { target: { files: [new File(["v"], "clip.mov", { type: "video/quicktime" })] } });
+    fireEvent.change(screen.getByLabelText("选择烧录字幕文件"), { target: { files: [new File(["s"], "clip.zh.srt", { type: "text/plain" })] } });
+    fireEvent.click(screen.getByRole("button", { name: "开始烧录" }));
+    expect(await screen.findByRole("heading", { name: "字幕生成完成" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "任务列表" }));
-    expect(screen.getByText("clip.burned.mp4")).toBeInTheDocument();
+    expect(screen.getAllByText("clip.burned.mp4").length).toBeGreaterThan(0);
   });
 
   it("blocks translate tool jobs when the translation environment is not ready", async () => {

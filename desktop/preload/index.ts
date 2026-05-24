@@ -16,6 +16,9 @@ const api = {
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
   openPathMock: (path: string): Promise<boolean> => ipcRenderer.invoke("fast-sub:open-path-mock", path) as Promise<boolean>,
   openExternalURL: (url: string): Promise<boolean> => ipcRenderer.invoke("fast-sub:open-external-url", url) as Promise<boolean>,
+  reportStartupTiming: (mark: string, details?: Record<string, unknown>): void => {
+    ipcRenderer.send("fast-sub:startup-timing", mark, details ?? {});
+  },
   getSecuritySnapshot: (): Promise<SecuritySnapshot> =>
     ipcRenderer.invoke("fast-sub:security-snapshot") as Promise<SecuritySnapshot>
 };

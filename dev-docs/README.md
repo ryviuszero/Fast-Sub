@@ -42,6 +42,7 @@ Do not put user-facing task guides here. User help for GitHub Pages lives under 
 - `api/README.md`: generated API/reference documentation policy.
 - `ui-docs/project-overview.md`: Electron product definition.
 - `ui-docs/architecture.md`: Electron architecture.
+- `iterations/`: post-release implementation specs and cross-stack iteration plans.
 
 ## User Help
 

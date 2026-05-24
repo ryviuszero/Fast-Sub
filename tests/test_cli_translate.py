@@ -219,7 +219,9 @@ def test_translate_all_failure_exits_nonzero_without_final_srt(
     assert payload["error"]["details"]["errors_path"] == str(output.with_suffix(".errors.json"))
     assert output.exists() is False
     assert output.with_suffix(".errors.json").exists()
-    assert "web-bing" in output.with_suffix(".errors.json").read_text(encoding="utf-8")
+    assert "Bing web translation" in output.with_suffix(".errors.json").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_translate_checkpoint_resume_and_no_resume(monkeypatch, work_dir: Path) -> None:

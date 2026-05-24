@@ -9,6 +9,7 @@ This page is the public-facing index for release validation evidence. It summari
 - Release artifact checksums: `v0.13.0.md`
 - Round 13 screenshots: `../../desktop-tests/pics/round13/README.md`
 - License inventory summaries: `../../desktop-tests/licenses/`
+- Round 14 web translation smoke record: `../../desktop-tests/round14-web-translation-smoke.md`
 
 ## Current Status
 
@@ -16,7 +17,8 @@ This page is the public-facing index for release validation evidence. It summari
 - macOS arm64 dmg has a preview packaged-runtime smoke record.
 - Windows builds are unsigned release-candidate builds.
 - macOS builds are ad-hoc signed and not notarized.
-- Remote OpenAI/Bing/Google provider smoke is deferred; local loopback OpenAI-compatible smoke is recorded instead.
+- Remote OpenAI provider smoke is deferred; local loopback OpenAI-compatible smoke is recorded instead.
+- Windows x64 packaged Bing/Google web translation smoke has passed for a public short SRT. macOS arm64 web translation smoke still needs to run on a macOS release machine.
 
 ## Evidence Rules
 

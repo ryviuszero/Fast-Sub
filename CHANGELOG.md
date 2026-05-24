@@ -7,6 +7,7 @@ All notable project milestones should be recorded here in user-facing language.
 - Documentation structure reorganized into `dev-docs/` for internal project docs and `help-docs/` for user help and GitHub Pages.
 - Root project README, contribution notes, security policy, code of conduct, roadmap, release docs, issue templates, PR template, and AI-assisted workflow notes added.
 - Generated API/reference docs added under `dev-docs/api/` for Go, Python, desktop, and JSON schema references.
+- Restored no-key Bing/Google web translation in the packaged desktop app through an ASAR-outside JS helper, without reintroducing the old Python `translators/js2py` dependency chain.
 
 ## 0.13.0 - Windows Release Candidate
 
@@ -24,4 +25,4 @@ Known release state:
 
 - Windows artifacts are unsigned release-candidate builds.
 - macOS arm64 dmg is an ad-hoc signed, unnotarized preview build.
-- Real OpenAI/Bing/Google external provider smoke is deferred; local loopback OpenAI-compatible smoke has passed.
+- Windows packaged Bing/Google web translation smoke has passed for a public short SRT; macOS arm64 web translation smoke still needs to be rerun on the macOS release machine. Real OpenAI external provider smoke is deferred; local loopback OpenAI-compatible smoke has passed.

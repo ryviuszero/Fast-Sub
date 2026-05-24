@@ -283,7 +283,7 @@ def _raise_if_no_translation(
     if first_error:
         detail = f"{detail} First error: {first_error}"
     raise _TranslationProviderError(
-        "provider_failed",
+        _all_failed_error_code(first_error),
         detail,
         hint=f"See {errors_path} for per-cue errors.",
     )
@@ -436,10 +436,24 @@ def _translate_web_segments(
                     raw_response=None,
                 )
         if error is not None:
-            errors.append(error)
+            errors.append(_friendly_web_error(error, translator))
         if sleep_seconds > 0:
             time.sleep(sleep_seconds)
     return TranslationResult(segments=translated, errors=errors)
+
+
+def _friendly_web_error(error: TranslationError, translator: str) -> TranslationError:
+    if translator != "google" or "--provider web-bing" not in error.message:
+        return error
+    return TranslationError(
+        batch_start_id=error.batch_start_id,
+        batch_end_id=error.batch_end_id,
+        message=error.message.replace(
+            " Try `--provider web-bing`.",
+            " Try Bing web translation or local/API translation.",
+        ),
+        raw_response=error.raw_response,
+    )
 
 
 def _translate_openai_chat_segments(
@@ -769,9 +783,43 @@ def _translate_text(
     except WebTranslationClientError as exc:
         code = getattr(exc, "code", "provider_failed")
         raise _TranslationProviderError(
-            "missing_dependency" if code == "missing_dependency" else "provider_failed",
+            _web_client_error_code(code),
             str(exc),
         ) from exc
+
+
+def _web_client_error_code(code: str) -> str:
+    if code in {
+        "missing_dependency",
+        "missing_helper",
+        "missing_node_runtime",
+        "helper_start_failed",
+    }:
+        return "missing_dependency"
+    if code == "invalid_input":
+        return "invalid_input"
+    return code or "provider_failed"
+
+
+def _all_failed_error_code(first_error: str) -> str:
+    lower = first_error.lower()
+    if any(
+        marker in lower
+        for marker in (
+            "missing_dependency",
+            "missing helper",
+            "helper is not configured",
+            "helper runtime is missing",
+            "helper file is missing",
+            "web translation helper is unavailable",
+            "web translation helper runtime is unavailable",
+            "web translation helper could not start",
+        )
+    ):
+        return "missing_dependency"
+    if "invalid_input" in lower:
+        return "invalid_input"
+    return "provider_failed"
 
 
 def _checkpoint_fingerprint(

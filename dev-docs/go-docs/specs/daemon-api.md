@@ -394,6 +394,8 @@ Provider metadata 必须包含 `type` / `location` / `privacy` / `requires_model
 
 `local-nllb-ct2` 的静态状态必须同时检查兼容翻译模型和本地 Python 翻译依赖；如果 `ctranslate2` 或 `sentencepiece` 在 daemon 使用的 Python/uv 环境中不可用，`GET /v1/providers` 和 `providers test local-nllb-ct2` 必须返回 `missing_dependency`。开发环境通过 `uv` 调用 Python CLI 时必须使用 `--extra local-translate`，并为子进程提供可写 `UV_CACHE_DIR`，避免 Windows 用户目录 cache 初始化失败。UI 必须据此阻断“翻译字幕 / 双语字幕”的主流程选择，避免 job 创建后才失败。
 
+`web-bing` 和 `web-google` 是无 API key 的 experimental / best-effort 网页翻译 provider。daemon 不执行真实网络探测；静态状态只检查 packaged JS helper runtime 是否配置完整。Electron 自管 daemon 通过环境注入 `FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND`、`FAST_SUB_WEB_TRANSLATE_HELPER_ARGS` 和需要时的 `ELECTRON_RUN_AS_NODE=1`，Go 只负责校验和白名单透传给 Python CLI。renderer 不接触 helper path、helper command、helper env、raw provider response 或 raw stderr；缺 helper/runtime/file 时 provider status 和 job error 使用 `missing_dependency` 加脱敏 action hint。
+
 Provider status vocabulary：
 
 ```text
@@ -550,6 +552,7 @@ Request：
 Rules：
 
 - 远程 provider（`web-bing`、`web-google`、`api-openai-chat`）必须由 UI 完成字幕文本上传确认后才能创建 job；daemon 也会在缺少确认时拒绝执行。
+- `web-bing` / `web-google` 继续由 Go daemon 受控调用 Python CLI；Python web adapter 只调用 packaged JS helper，不恢复 Python `translators` / `js2py` 依赖链。helper stdout 必须是单个 JSON object；stderr 只允许脱敏诊断进入错误摘要。
 - `input_path` 支持 `.srt`，并兼容 `.txt`、`.text`、`.md`、`.markdown` 纯文本输入。纯文本输入会在 job 临时目录中转换为内部 SRT 交给翻译 bridge；默认最终输出为 `*.translated.txt`，不在用户目录保留内部 SRT。
 - 纯文本输出必须遵守“输入一行，输出一行”的用户预期；翻译 bridge 可以内部切片，但回写时必须保持原始行数和空行结构，避免把聊天记录、日期行或普通段落合并成一段。
 - `local-nllb-ct2` 需要明确源语言，不建议使用 `auto`。

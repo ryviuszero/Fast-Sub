@@ -22,6 +22,7 @@ Current artifacts are unsigned preview builds. Users may see SmartScreen or anti
 cd desktop
 npm run package:dir
 npm run smoke:packaged
+npm run smoke:web-translation
 ```
 
 Full package:
@@ -40,8 +41,17 @@ Additional release smoke records are tracked in:
 
 - Go daemon is packaged under app resources.
 - App-private Python runtime is packaged under app resources.
+- Web translation helper source and production dependencies are packaged outside ASAR under `resources/web-translate-helper`; `web-bing` and `web-google` use the packaged Electron executable as Node with no API key and no system Node requirement.
 - Models are not bundled.
 - FFmpeg, aria2, and whisper.cpp native binaries are app-private userData downloads, not bundled in the Windows installer.
+
+Round 14 Windows packaged web translation smoke should verify `web-bing` and `web-google` on a public short SRT, helper outside ASAR, no API key requirement, and no packaged `js2py` / `translators` / `ai-cloudscraper` metadata.
+
+Packaged resource regression guard:
+
+- Do not treat `desktop/resources` or repo-local `dist-release/win-unpacked` execution as sufficient proof that helper dependencies are bundled. A repo-local unpacked app can accidentally resolve missing packages from parent `desktop/node_modules`.
+- `npm run smoke:packaged` must assert the final packaged `resources/web-translate-helper/node_modules` contains the production provider dependencies, including `bing-translate-api` and `@vitalets/google-translate-api`.
+- For installer and portable zip validation, inspect or run from the final artifact layout, not only the staging directory.
 
 ## Cleanup
 

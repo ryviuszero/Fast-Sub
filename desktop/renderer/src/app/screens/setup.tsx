@@ -66,7 +66,7 @@ export function SetupCheck(props: RenderProps) {
             <p>{t("FFmpeg installing detail")}</p>
             <div className="progress accent"><i style={{ width: `${Math.max(8, ffmpegProgress)}%` }} /></div>
             <div className="diag-log" role="status" aria-label={t("FFmpeg install log")}>
-              {(ffmpegLogs.length > 0 ? ffmpegLogs : [t("FFmpeg install starting")]).map((line) => <span key={line}>{line}</span>)}
+              {(ffmpegLogs.length > 0 ? ffmpegLogs : [t("FFmpeg install starting")]).map((line) => <span key={line}>{rt(line)}</span>)}
             </div>
           </section>
         )}

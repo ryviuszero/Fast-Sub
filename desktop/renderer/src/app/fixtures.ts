@@ -3,40 +3,40 @@ import { DaemonFastSubClient } from "../client/DaemonFastSubClient";
 import { MockFastSubClient } from "../client/MockFastSubClient";
 import type { MediaFile, Screen } from "./types";
 
-export const scenarioOptions: { value: MockScenario; label: string }[] = [
-  { value: "setupReady", label: "环境就绪" },
-  { value: "missingAsr", label: "缺少 ASR 模型" },
-  { value: "nllbInstallFailed", label: "翻译模型失败" },
-  { value: "modelInstalling", label: "模型安装中" },
-  { value: "modelInstallFailed", label: "模型安装失败" },
-  { value: "jobSuccess", label: "任务成功" },
-  { value: "jobFailed", label: "任务失败" },
-  { value: "jobCanceled", label: "任务取消" },
-  { value: "outputConflict", label: "输出冲突" },
-  { value: "remoteProviderConfirmRequired", label: "远程确认" },
-  { value: "daemonDisconnected", label: "服务中断" }
+export const scenarioOptions: { value: MockScenario; labelKey: string }[] = [
+  { value: "setupReady", labelKey: "Scenario setup ready" },
+  { value: "missingAsr", labelKey: "Scenario missing ASR" },
+  { value: "nllbInstallFailed", labelKey: "Scenario translation model failed" },
+  { value: "modelInstalling", labelKey: "Scenario model installing" },
+  { value: "modelInstallFailed", labelKey: "Scenario model install failed" },
+  { value: "jobSuccess", labelKey: "Scenario job success" },
+  { value: "jobFailed", labelKey: "Scenario job failed" },
+  { value: "jobCanceled", labelKey: "Scenario job canceled" },
+  { value: "outputConflict", labelKey: "Scenario output conflict" },
+  { value: "remoteProviderConfirmRequired", labelKey: "Scenario remote confirm" },
+  { value: "daemonDisconnected", labelKey: "Scenario service interrupted" }
 ];
 
-export const debugScreens: { id: Screen; label: string }[] = [
-  { id: "setup-check", label: "环境检测" },
-  { id: "setup-done", label: "设置完成" },
-  { id: "main-empty", label: "空状态" },
-  { id: "main-files", label: "已添加文件" },
-  { id: "main-advanced", label: "详细设置" },
-  { id: "main-missing", label: "模型未准备" },
-  { id: "main-conflict", label: "输出冲突" },
-  { id: "main-generating", label: "生成中" },
-  { id: "main-done", label: "已完成" },
-  { id: "queue-list", label: "任务列表" },
-  { id: "queue-detail", label: "任务详情" },
-  { id: "queue-failed", label: "失败详情" },
-  { id: "settings-general", label: "通用设置" },
-  { id: "settings-models", label: "模型管理" },
-  { id: "settings-providers", label: "Provider" },
-  { id: "settings-diagnostics", label: "诊断" },
-  { id: "settings-benchmark", label: "Benchmark" },
-  { id: "tool-translate", label: "翻译SRT" },
-  { id: "tool-burn-in", label: "字幕烧录" }
+export const debugScreens: { id: Screen; labelKey: string }[] = [
+  { id: "setup-check", labelKey: "Screen environment check" },
+  { id: "setup-done", labelKey: "Screen setup done" },
+  { id: "main-empty", labelKey: "Screen empty state" },
+  { id: "main-files", labelKey: "Screen files added" },
+  { id: "main-advanced", labelKey: "Screen detailed settings" },
+  { id: "main-missing", labelKey: "Screen model not ready" },
+  { id: "main-conflict", labelKey: "Screen output conflict" },
+  { id: "main-generating", labelKey: "Screen generating" },
+  { id: "main-done", labelKey: "Screen completed" },
+  { id: "queue-list", labelKey: "Screen task list" },
+  { id: "queue-detail", labelKey: "Screen task detail" },
+  { id: "queue-failed", labelKey: "Screen failed detail" },
+  { id: "settings-general", labelKey: "Screen general settings" },
+  { id: "settings-models", labelKey: "Screen model management" },
+  { id: "settings-providers", labelKey: "Screen providers" },
+  { id: "settings-diagnostics", labelKey: "Screen diagnostics" },
+  { id: "settings-benchmark", labelKey: "Screen benchmark" },
+  { id: "tool-translate", labelKey: "Screen translate SRT" },
+  { id: "tool-burn-in", labelKey: "Screen burn-in subtitles" }
 ];
 
 export const seedFiles: MediaFile[] = [

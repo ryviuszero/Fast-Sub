@@ -6,7 +6,7 @@ import (
 )
 
 func TestRedactKeepsNonSecretFilenames(t *testing.T) {
-	message := `api failed for Secret_20171207_231523.mp4: model returned status 500`
+	message := `api failed for sample-video.mp4: model returned status 500`
 
 	redacted := Redact(message)
 
@@ -16,7 +16,7 @@ func TestRedactKeepsNonSecretFilenames(t *testing.T) {
 }
 
 func TestRedactMasksSecretValuesWithoutDroppingMessage(t *testing.T) {
-	message := `request failed: Authorization: Bearer abcdefghijk api_key=sk-abcdefghijklmnopqrstuvwxyz token=local-token Secret_20171207_231523.mp4`
+	message := `request failed: Authorization: Bearer abcdefghijk api_key=sk-abcdefghijklmnopqrstuvwxyz token=local-token sample-video.mp4`
 
 	redacted := Redact(message)
 
@@ -25,7 +25,7 @@ func TestRedactMasksSecretValuesWithoutDroppingMessage(t *testing.T) {
 			t.Fatalf("secret leaked in %q", redacted)
 		}
 	}
-	if !strings.Contains(redacted, "Secret_20171207_231523.mp4") {
+	if !strings.Contains(redacted, "sample-video.mp4") {
 		t.Fatalf("non-secret filename was removed: %q", redacted)
 	}
 	if redacted == "[redacted]" {

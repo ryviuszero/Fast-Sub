@@ -123,6 +123,8 @@
 - 任务队列测试必须覆盖等待中、正在生成、已完成、已失败、已取消和服务中断。
 - 设置页测试必须覆盖 API key masked 状态、远程上传确认和 provider privacy note。
 - 不在默认测试中调用真实 daemon、真实模型、真实 ffmpeg、真实 API 或真实网络。
+- 修改 Electron `extraResources`、`afterPack`、app 私有 runtime、ASAR 外 helper 或 packaged provider 依赖时，必须增加或更新 packaged smoke 断言，验证最终 `dist-release/*/resources` 内的运行时文件和生产依赖真实存在。不能只验证源码目录、`desktop/resources` staging 目录或仓库内 `win-unpacked` 能运行，因为 Node module resolution 可能向上命中工作区 `desktop/node_modules`，导致安装版缺依赖的假阳性。
+- Packaged helper smoke 必须尽量验证自包含性：helper runtime command、helper entry、生产 `node_modules`、关键 provider dependency 目录、ASAR 外路径和 redaction 约束。真实网络 provider 验证仍只放手动 release smoke，但依赖存在性检查必须进入默认 packaged runtime smoke。
 
 ## File Organization
 

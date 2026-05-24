@@ -7,7 +7,7 @@ import { createInterface } from "node:readline";
 import { redactSecretText } from "../../shared/privacy/redaction";
 import { daemonTransportLog } from "./transportLog";
 import { ffmpegBinDirectory, prependNativeDependencyPath, whisperCPPCommandPath, whisperCPPBinDirectory } from "./nativeDependencies";
-import { packagedDaemonPath, privatePythonRuntimeCommands, prependPathDirs } from "./runtimeResources";
+import { packagedDaemonPath, privatePythonRuntimeCommands, prependPathDirs, webTranslateHelperRuntime } from "./runtimeResources";
 import { uiError } from "./uiError";
 
 export type DaemonSession = {
@@ -215,6 +215,14 @@ async function scrubbedEnv(): Promise<NodeJS.ProcessEnv> {
   }
   if (privatePython.sttWorker) {
     env.FAST_SUB_STT_WORKER_COMMAND = env.FAST_SUB_STT_WORKER_COMMAND ?? privatePython.sttWorker;
+  }
+  const webHelper = webTranslateHelperRuntime();
+  if (webHelper) {
+    env.FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND = env.FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND ?? webHelper.command;
+    env.FAST_SUB_WEB_TRANSLATE_HELPER_ARGS = env.FAST_SUB_WEB_TRANSLATE_HELPER_ARGS ?? JSON.stringify(webHelper.args);
+    if (webHelper.electronRunAsNode) {
+      env.ELECTRON_RUN_AS_NODE = env.ELECTRON_RUN_AS_NODE ?? "1";
+    }
   }
   return prependNativeDependencyPath(prependPathDirs(env, privatePython.pathDirs));
 }

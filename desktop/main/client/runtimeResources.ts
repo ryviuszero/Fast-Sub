@@ -9,6 +9,12 @@ export type RuntimeCommands = {
   pathDirs: string[];
 };
 
+export type WebTranslateHelperRuntime = {
+  command: string;
+  args: string[];
+  electronRunAsNode: boolean;
+};
+
 export function platformArchName(): string {
   return `${process.platform}-${process.arch}`;
 }
@@ -42,6 +48,26 @@ export function privatePythonRuntimeCommands(): RuntimeCommands {
     sttWorker: pythonCommand ? `${pythonCommand} -m fast_sub_workers.faster_whisper` : existsSync(worker) ? quoteCommand(worker) : undefined,
     pathDirs
   };
+}
+
+export function webTranslateHelperRuntime(): WebTranslateHelperRuntime | null {
+  const helper = resolveWebTranslateHelperPath();
+  if (!existsSync(helper)) {
+    return null;
+  }
+  return {
+    command: process.execPath,
+    args: [helper],
+    electronRunAsNode: true
+  };
+}
+
+function resolveWebTranslateHelperPath(): string {
+  const packagedHelper = appResourcePath("web-translate-helper", "cli.mjs");
+  if (existsSync(packagedHelper) || app.isPackaged) {
+    return packagedHelper;
+  }
+  return join(app.getAppPath(), "web-translate-helper", "cli.mjs");
 }
 
 export function prependPathDirs(env: NodeJS.ProcessEnv, dirs: string[]): NodeJS.ProcessEnv {

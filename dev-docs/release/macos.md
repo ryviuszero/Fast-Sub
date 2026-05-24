@@ -56,6 +56,7 @@ npm run smoke
 npm run package:dir
 npm run smoke:native-deps
 npm run smoke:packaged
+npm run smoke:web-translation
 npm run smoke:translation-model-failure
 npm run package
 ```
@@ -66,6 +67,7 @@ Expected key paths after `npm run package:dir`:
 desktop/dist-release/mac-arm64/Fast Sub.app
 desktop/dist-release/mac-arm64/Fast Sub.app/Contents/Resources/bin/darwin-arm64/fast-sub-go
 desktop/dist-release/mac-arm64/Fast Sub.app/Contents/Resources/python/darwin-arm64/bin/python
+desktop/dist-release/mac-arm64/Fast Sub.app/Contents/Resources/web-translate-helper/cli.mjs
 ```
 
 Expected dmg artifact after `npm run package`:
@@ -91,6 +93,7 @@ desktop/dist-release/FastSub-Desktop-0.13.0-macos-arm64.dmg
 - Configure Developer ID signing and notarization before external distribution.
 - Re-run Gatekeeper assessment after notarization.
 - Verify app exit/cancel/repair cleanup with a real long-running ASR/GPU/FFmpeg/whisper.cpp task; current automated packaged smoke covers daemon repair/restart but not a real long task.
+- Round 14 web translation packaged smoke still needs to be re-run on the macOS arm64 release machine after the helper packaging change: `npm run smoke:web-translation` should verify `web-bing` and `web-google` without API keys and confirm the helper lives outside ASAR.
 
 ## Preview Install Instructions
 

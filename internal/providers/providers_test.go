@@ -31,7 +31,7 @@ func TestListShape(t *testing.T) {
 }
 
 func TestTranslationProvidersAreListedWithMetadata(t *testing.T) {
-	items := List(context.Background(), fakeRuntime(nil, true, nil))
+	items := List(context.Background(), fakeRuntime(webHelperEnv(), true, nil))
 	byID := map[string]ListedProvider{}
 	for _, item := range items {
 		byID[item.ID] = item
@@ -51,11 +51,58 @@ func TestTranslationProvidersAreListedWithMetadata(t *testing.T) {
 	if byID["web-bing"].Status != StatusAvailable {
 		t.Fatalf("web-bing status = %q", byID["web-bing"].Status)
 	}
+	if !strings.Contains(byID["web-bing"].PrivacyNote, "best-effort") {
+		t.Fatalf("web-bing privacy note = %q", byID["web-bing"].PrivacyNote)
+	}
 	if byID["api-openai-chat"].Status != StatusAvailable {
 		t.Fatalf("api-openai-chat status = %q", byID["api-openai-chat"].Status)
 	}
 	if byID["api-openai-chat"].RequiresAPIKey {
 		t.Fatalf("api-openai-chat should let live connectivity decide whether auth is required")
+	}
+}
+
+func TestWebTranslationProviderMissingHelper(t *testing.T) {
+	result, ok := Test(context.Background(), fakeRuntime(nil, false, nil), "web-bing")
+	if !ok {
+		t.Fatal("provider missing")
+	}
+	if result.Status != StatusMissingDependency || result.Available {
+		t.Fatalf("result = %#v", result)
+	}
+	if strings.Contains(result.ActionHint, "FAST_SUB_WEB_TRANSLATE_HELPER") {
+		t.Fatalf("action hint should not expose helper env names: %q", result.ActionHint)
+	}
+}
+
+func TestWebTranslationProviderRequiresHelperArgs(t *testing.T) {
+	for name, args := range map[string]string{
+		"missing": "",
+		"empty":   "[]",
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := map[string]string{"FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND": "node"}
+			if args != "" {
+				env["FAST_SUB_WEB_TRANSLATE_HELPER_ARGS"] = args
+			}
+			result, ok := Test(context.Background(), fakeRuntime(env, true, nil), "web-google")
+			if !ok {
+				t.Fatal("provider missing")
+			}
+			if result.Status != StatusMissingDependency || result.Available {
+				t.Fatalf("result = %#v", result)
+			}
+		})
+	}
+}
+
+func TestWebTranslationProviderHelperConfigured(t *testing.T) {
+	result, ok := Test(context.Background(), fakeRuntime(webHelperEnv(), true, nil), "web-google")
+	if !ok {
+		t.Fatal("provider missing")
+	}
+	if result.Status != StatusAvailable || !result.Available {
+		t.Fatalf("result = %#v", result)
 	}
 }
 
@@ -629,6 +676,13 @@ func fakeRuntime(env map[string]string, lookPathOK bool, statErr error) RuntimeC
 		ModelResolver: func(providerID string) ModelResolution {
 			return ModelResolution{Message: "No compatible Go-managed model is installed."}
 		},
+	}
+}
+
+func webHelperEnv() map[string]string {
+	return map[string]string{
+		"FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND": "node",
+		"FAST_SUB_WEB_TRANSLATE_HELPER_ARGS":    `["helper.mjs"]`,
 	}
 }
 

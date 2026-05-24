@@ -152,7 +152,7 @@ Electron 应用不运行 AI 推理。它只创建任务、展示进度、展示�
 | Native ASR | `local-whisper-cpp` | 本地处理，依赖本机 binary 和模型；Windows 缺 binary 时由 Electron main 受控下载安装到 app 私有 native-binaries 目录 |
 | API ASR | `api-openai-transcription` | 会上传音频；需要 API key、base URL 和模型 |
 | 本地翻译 | `local-nllb-ct2` | 本地处理字幕文本；需要翻译模型 |
-| 网页翻译 | `web-bing`、`web-google` | 会把字幕文本发送到第三方网页翻译服务 |
+| 网页翻译 | `web-bing`、`web-google` | 无 API key，但会把字幕文本发送到第三方网页翻译服务；experimental / best-effort，依赖 packaged helper，renderer 不接触 helper path/command/raw response |
 | API 翻译 | `api-openai-chat` | 会上传字幕文本；可能产生费用 |
 
 ### UI job 类型

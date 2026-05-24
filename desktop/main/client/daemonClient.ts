@@ -863,7 +863,7 @@ function mapModel(value: unknown): ModelStatus {
     backend: str(item.backend, ""),
     compatibleProviders: stringArray(item.compatible_providers),
     defaultFor: stringArray(item.default_for),
-    recommendation: modelRecommendation(id, str(item.type, ""), str(item.backend, "")),
+    recommendation: str(item.recommendation, ""),
     progressPercent: typeof item.progress_percent === "number" ? item.progress_percent : undefined,
     requiredForMainFlow: id.includes("whisper-small"),
     diagnostic: str(item.diagnostic, "")
@@ -895,21 +895,13 @@ function mapProvider(value: unknown): ProviderStatus {
     supportedLanguages: stringArray(item.supported_languages),
     capabilities: stringArray(item.capabilities),
     compatibleModelTypes: stringArray(item.compatible_model_types),
-    maskedCredential: str(item.masked_credential, state === "missing_api_key" ? "未配置" : "")
+    maskedCredential: str(item.masked_credential, state === "missing_api_key" ? "未配置" : ""),
+    actionHint: str(item.action_hint, "")
   };
 }
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function modelRecommendation(id: string, type: string, backend: string): string {
-  if (id === "whisper-base") return "快速预览、低内存机器和短音频。";
-  if (id === "whisper-small") return "默认推荐，速度和准确率比较均衡。";
-  if (id.includes("large-v3-turbo")) return "更高准确率，适合长音频和更好的硬件。";
-  if (backend === "whisper.cpp") return "Native 本地路径，适合轻依赖和 CPU 场景。";
-  if (type === "translate" || id.includes("nllb")) return "本地离线翻译，适合隐私优先的字幕文本。";
-  return "可用于兼容 Provider 的本地任务。";
 }
 
 function outputPathFor(request: CreateJobRequest): string {

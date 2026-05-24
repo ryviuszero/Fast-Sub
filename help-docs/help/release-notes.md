@@ -19,6 +19,7 @@ Validated areas:
 - Local Faster Whisper transcription.
 - Native whisper.cpp transcription.
 - Local NLLB translation.
+- No-key Bing/Google web translation for short subtitles in the packaged desktop app.
 - Bilingual subtitle output.
 - Subtitle burn-in.
 - Diagnostics and redaction checks.
@@ -30,7 +31,8 @@ Validated areas:
 - macOS builds are ad-hoc signed and not notarized. Gatekeeper may block them until the user removes quarantine and applies a local ad-hoc signature.
 - Models are downloaded after installation and are not bundled with the app.
 - The default local NLLB translation model is marked `CC-BY-NC-4.0`; users should review its non-commercial restriction before commercial or organizational use.
-- Real OpenAI/Bing/Google provider smoke is not part of the default automated test suite.
+- Real OpenAI provider smoke is not part of the default automated test suite.
+- Bing/Google web translation is experimental and best-effort; Windows x64 packaged short-SRT smoke has passed, and macOS arm64 web translation smoke still needs to run on a macOS release machine.
 
 ## 0.13.0 Artifact Checksums
 

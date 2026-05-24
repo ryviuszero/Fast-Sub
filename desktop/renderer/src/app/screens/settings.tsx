@@ -3,7 +3,7 @@ import type { ConfigViewModel, LocalDataCleanupTarget, ModelStatus, ProviderStat
 import { redactSecretText } from "../../../../shared/privacy/redaction";
 import type { RenderProps, Screen, UiFontStyle, UiLanguage } from "../types";
 import { Chip, Chrome, KV, Segment, SettingRow, Toggle } from "../components";
-import { useT } from "../i18n";
+import { useRuntimeText, useT } from "../i18n";
 import packageJson from "../../../../package.json";
 
 export function SettingsPage(props: RenderProps & { tab: "general" | "models" | "api" | "providers" | "diagnostics" | "benchmark" }) {
@@ -212,6 +212,7 @@ export function SettingsModels({ models, modelInstallJobs, installModel, removeM
 
 function ModelCard({ model, installJob, isDefault, onInstall, onRemove, onDefault }: { model: ModelStatus; installJob?: RenderProps["activeJob"]; isDefault: boolean; onInstall: () => void; onRemove: () => void; onDefault: () => void }) {
   const t = useT();
+  const rt = useRuntimeText();
   const taskLabel = model.kind === "translation" ? t("Translation") : t("Transcription");
   const installing = installJob?.status === "queued" || installJob?.status === "running" || installJob?.status === "canceling" || model.state === "installing";
   const failed = installJob?.status === "failed" || model.state === "failed";
@@ -232,7 +233,7 @@ function ModelCard({ model, installJob, isDefault, onInstall, onRemove, onDefaul
           <Chip>{taskLabel}</Chip>
           {model.backend && <Chip tone="muted">{model.backend}</Chip>}
         </div>
-        <span>{model.sizeLabel} · {t("Compatible with")} {formatProviders(model.compatibleProviders, t)}</span>
+        <span>{rt(model.sizeLabel)} · {t("Compatible with")} {formatProviders(model.compatibleProviders, t)}</span>
         <p className="caption no-margin">{modelRecommendation(model, t)}</p>
         {installing && (
           <div className="model-install-progress" role="status" aria-label={t("Model download progress", { name: model.name })}>
@@ -243,13 +244,13 @@ function ModelCard({ model, installJob, isDefault, onInstall, onRemove, onDefaul
             <div className="bar sm"><span style={{ width: `${progress}%` }} /></div>
           </div>
         )}
-        {failed && failureMessage && <p className="caption warn-text no-margin">{failureMessage}</p>}
-        {failed && failureAction && <p className="caption no-margin">{failureAction}</p>}
+        {failed && failureMessage && <p className="caption warn-text no-margin">{rt(failureMessage)}</p>}
+        {failed && failureAction && <p className="caption no-margin">{rt(failureAction)}</p>}
         {failed && failureDiagnostic && <p className="caption mono no-margin">{failureDiagnostic}</p>}
         {recentLogs.length > 0 && (
-          <div className="model-install-log" aria-label="模型安装日志">
+          <div className="model-install-log" aria-label={t("Model install log")}>
             {recentLogs.map((log, index) => (
-              <p key={`${log.time}-${index}`} className={`caption no-margin ${log.level === "error" ? "warn-text" : ""}`}>{log.message}</p>
+              <p key={`${log.time}-${index}`} className={`caption no-margin ${log.level === "error" ? "warn-text" : ""}`}>{rt(log.message)}</p>
             ))}
           </div>
         )}
@@ -630,6 +631,7 @@ function ProviderCard(props: {
   modelInstallJobs: RenderProps["modelInstallJobs"];
 }) {
   const t = useT();
+  const rt = useRuntimeText();
   const { provider } = props;
   const [secretValue, setSecretValue] = useState("");
   const [showSecret, setShowSecret] = useState(false);
@@ -789,7 +791,8 @@ function ProviderCard(props: {
           <Chip>{providerKindLabel(provider.kind, t)}</Chip>
           {provider.requiresUploadConfirmation && <Chip tone="warn">{t("Upload confirmation")}</Chip>}
         </div>
-        <span>{providerPrivacyNote(provider, t)}</span>
+        <span>{rt(providerPrivacyNote(provider, t))}</span>
+        {provider.state !== "available" && provider.actionHint && <span className="provider-action-hint">{rt(provider.actionHint)}</span>}
         <div className="job-meta">
           {provider.requiresModel && <Chip tone="muted">{t("Requires model")}</Chip>}
           {provider.requiresApiKey && <Chip tone="muted">{t("Requires API key")}</Chip>}
@@ -971,8 +974,9 @@ function providerDefaultBlockReason(provider: ProviderStatus, t: (key: string) =
 
 export function SettingsDiagnostics({ environment, cleanupLocalData }: RenderProps) {
   const t = useT();
+  const rt = useRuntimeText();
   const health = environment?.health ?? "checking";
-  const logLines = (environment?.ffmpegInstallLogs ?? []).map((line) => redactSecretText(line)).slice(-12);
+  const logLines = (environment?.ffmpegInstallLogs ?? []).map((line) => redactSecretText(rt(line))).slice(-12);
   const warnings = environment?.warnings ?? [];
   const [cleaning, setCleaning] = useState<LocalDataCleanupTarget | null>(null);
   const [cleanupMessage, setCleanupMessage] = useState<string>("");
@@ -1007,7 +1011,7 @@ export function SettingsDiagnostics({ environment, cleanupLocalData }: RenderPro
       </section>
       <section className="panel dashed">
         <h3>{t("Diagnostics summary")}</h3>
-        {(warnings.length ? warnings : [t("No warnings")]).map((warning) => <p key={warning} className="caption">{redactSecretText(warning)}</p>)}
+        {(warnings.length ? warnings : [t("No warnings")]).map((warning) => <p key={warning} className="caption">{redactSecretText(rt(warning))}</p>)}
         {environment?.error?.diagnostic && <KV k="diagnostic" v={redactSecretText(environment.error.diagnostic)} mono />}
       </section>
       <pre>{logLines.length ? logLines.join("\n") : t("No detailed logs")}</pre>

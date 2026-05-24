@@ -30,6 +30,7 @@ export type QueueFilter = "all" | "running" | "done" | "failed";
 export type RenderProps = {
   screen: Screen;
   setScreen: (screen: Screen) => void;
+  completionReturnScreen: Screen;
   providerSettingsFocus: ProviderStatus["capability"] | null;
   openProviderSettings: (focus?: ProviderStatus["capability"]) => void;
   environment: EnvironmentStatus | null;

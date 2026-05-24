@@ -11,7 +11,7 @@ import type { MediaFile, QueueFilter, Screen, UiFontStyle, UiLanguage } from "./
 const ONBOARDING_DONE_KEY = "fast-sub:onboarding-complete";
 const FILE_IMPORT_FEEDBACK_DELAY_MS = 32;
 const SYNC_MEDIA_IMPORT_LIMIT = 20;
-const TRANSLATION_CONFIG_NOTICE = "当前翻译 Provider 或翻译模型未配置好，请先完成翻译配置。";
+const TRANSLATION_CONFIG_NOTICE = "Translation config not ready";
 
 type PendingRemoteConfirmation = {
   provider?: ProviderStatus;
@@ -23,6 +23,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const [scenario, setScenario] = useState<MockScenario>("setupReady");
   const client = useMemo(() => providedClient ?? createClient(scenario), [providedClient, scenario]);
   const [screen, setScreen] = useState<Screen>(() => onboardingComplete() ? "main-empty" : "setup-check");
+  const [completionReturnScreen, setCompletionReturnScreen] = useState<Screen>("main-empty");
   const [providerSettingsFocus, setProviderSettingsFocus] = useState<ProviderStatus["capability"] | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
   const [environment, setEnvironment] = useState<EnvironmentStatus | null>(null);
@@ -40,7 +41,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const [activeBatchJobIds, setActiveBatchJobIds] = useState<string[]>([]);
   const [activeJob, setActiveJob] = useState<JobDetail | null>(null);
   const [completedBatchJobs, setCompletedBatchJobs] = useState<JobDetail[]>([]);
-  const [outputDirectoryLabel, setOutputDirectoryLabel] = useState("与源视频相同目录");
+  const [outputDirectoryLabel, setOutputDirectoryLabel] = useState("Same folder as source");
   const [outputDirectoryPath, setOutputDirectoryPath] = useState(mockPaths.output);
   const [openNotice, setOpenNotice] = useState<{ message: string; tone: "ok" | "warn" } | null>(null);
   const [remoteConfirmRequest, setRemoteConfirmRequest] = useState<PendingRemoteConfirmation | null>(null);
@@ -57,10 +58,22 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const backgroundQueueOpenRef = useRef(false);
   const autoTranslationProviderChecksRef = useRef<Set<string>>(new Set());
   const autoTranslationProviderChecksInFlightRef = useRef<Set<string>>(new Set());
+  const reactMountedReportedRef = useRef(false);
 
   useEffect(() => {
     activeJobRef.current = activeJob;
   }, [activeJob]);
+
+  useEffect(() => {
+    if (reactMountedReportedRef.current) {
+      return;
+    }
+    reactMountedReportedRef.current = true;
+    window.fastSubSystem?.reportStartupTiming?.("react-mounted", {
+      screen,
+      performance_now_ms: Math.round(performance.now())
+    });
+  }, [screen]);
 
   useEffect(() => {
     activeBatchJobIdsRef.current = activeBatchJobIds;
@@ -134,6 +147,10 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   }, [client]);
 
   const loadBaseData = useCallback(async () => {
+    const started = performance.now();
+    window.fastSubSystem?.reportStartupTiming?.("base-data-start", {
+      performance_now_ms: Math.round(started)
+    });
     const [envResult, cfgResult, modelsResult, jobsResult] = await Promise.allSettled([
       client.getEnvironmentStatus(),
       client.getConfig(),
@@ -144,8 +161,8 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       health: "disconnected" as const,
       os: "Windows",
       arch: "x64",
-      memory: "未知",
-      disk: "未知",
+      memory: "Unknown",
+      disk: "Unknown",
       localTranscriptionReady: false,
       localTranslationReady: false,
       ffmpegReady: false,
@@ -154,12 +171,12 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       ffmpegInstallLogs: [],
       modelDirectoryReady: false,
       daemonReady: false,
-      warnings: ["本地服务暂时不可用"],
+      warnings: ["Fast Sub service unavailable"],
       error: {
         code: "daemon_disconnected",
-        title: "本地服务暂时不可用",
-        message: "请尝试一键修复，或检查 fast-sub-go 是否可启动。",
-        action: "打开诊断",
+        title: "Fast Sub service unavailable",
+        message: "Repair service or check fast-sub-go startup.",
+        action: "Open diagnostics",
         recoveryActions: ["repair_daemon", "open_diagnostics"],
         diagnostic: "daemon startup failed"
       }
@@ -172,8 +189,21 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     setConfig(cfg);
     setModels(modelList);
     setJobs(jobList);
+    window.fastSubSystem?.reportStartupTiming?.("base-data-core-ready", {
+      duration_ms: Math.round(performance.now() - started),
+      env: envResult.status,
+      config: cfgResult.status,
+      models: modelsResult.status,
+      jobs: jobsResult.status,
+      model_count: modelList.length,
+      job_count: jobList.length
+    });
     void client.listProviders().then((providerList) => {
       setProviders(providerList);
+      window.fastSubSystem?.reportStartupTiming?.("base-data-providers-ready", {
+        duration_ms: Math.round(performance.now() - started),
+        provider_count: providerList.length
+      });
       void autoCheckDefaultTranslationProvider(cfg, providerList);
     }).catch(() => undefined);
   }, [autoCheckDefaultTranslationProvider, client]);
@@ -318,7 +348,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       }
     }
     if (event.type === "progress" && event.progress) {
-      const updated = activeJobRef.current ? { ...activeJobRef.current, ...event.progress, statusLabel: "正在生成" } : null;
+      const updated = activeJobRef.current ? { ...activeJobRef.current, ...event.progress, statusLabel: "Running" } : null;
       if (updated) {
         activeJobRef.current = updated;
         setActiveJob(updated);
@@ -332,7 +362,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       setActiveJob((job) => job ? { ...job, logs: event.logs ?? job.logs } : job);
     }
     if (event.type === "succeeded" && event.result) {
-      const completedJob = activeJobRef.current ? { ...activeJobRef.current, status: "succeeded" as const, statusLabel: "已完成", progressPercent: 100, stageLabel: "已完成", result: event.result } : null;
+      const completedJob = activeJobRef.current ? { ...activeJobRef.current, status: "succeeded" as const, statusLabel: "Completed", progressPercent: 100, stageLabel: "Completed", result: event.result } : null;
       if (completedJob) {
         activeJobRef.current = completedJob;
         const nextCompletedJobs = mergeJobDetails(completedBatchJobsRef.current, [completedJob]);
@@ -422,12 +452,12 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     }
     if (event.type === "failed" && event.error) {
       const error = event.error;
-      const failedJob = activeJobRef.current ? { ...activeJobRef.current, status: "failed" as const, statusLabel: "已失败", error, stageLabel: error.title } : null;
+      const failedJob = activeJobRef.current ? { ...activeJobRef.current, status: "failed" as const, statusLabel: "Failed", error, stageLabel: error.title } : null;
       if (failedJob) {
         activeJobRef.current = failedJob;
         setActiveJob(failedJob);
       } else {
-        setActiveJob((job) => job ? { ...job, status: "failed", statusLabel: "已失败", error, stageLabel: error.title } : job);
+        setActiveJob((job) => job ? { ...job, status: "failed", statusLabel: "Failed", error, stageLabel: error.title } : job);
       }
       unsubscribeRef.current?.();
       unsubscribeRef.current = null;
@@ -442,12 +472,12 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       }
     }
     if (event.type === "canceled") {
-      const canceledJob = activeJobRef.current ? { ...activeJobRef.current, status: "canceled" as const, statusLabel: "已取消", stageLabel: "已取消" } : null;
+      const canceledJob = activeJobRef.current ? { ...activeJobRef.current, status: "canceled" as const, statusLabel: "Canceled", stageLabel: "Canceled" } : null;
       if (canceledJob) {
         activeJobRef.current = canceledJob;
         setActiveJob(canceledJob);
       } else {
-        setActiveJob((job) => job ? { ...job, status: "canceled", statusLabel: "已取消", stageLabel: "已取消" } : job);
+        setActiveJob((job) => job ? { ...job, status: "canceled", statusLabel: "Canceled", stageLabel: "Canceled" } : job);
       }
       unsubscribeRef.current?.();
       unsubscribeRef.current = null;
@@ -479,7 +509,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     if (event.type === "progress" && event.progress) {
       setModelInstallJobs((current) => {
         const existing = current[modelId];
-        return existing ? { ...current, [modelId]: { ...existing, ...event.progress, statusLabel: "下载中" } } : current;
+        return existing ? { ...current, [modelId]: { ...existing, ...event.progress, statusLabel: "Downloading" } } : current;
       });
       setModels((current) => current.map((model) => model.id === modelId ? { ...model, state: "installing", progressPercent: event.progress?.progressPercent ?? model.progressPercent } : model));
       return;
@@ -495,7 +525,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     if (event.type === "succeeded") {
       setModelInstallJobs((current) => {
         const existing = current[modelId];
-        return existing ? { ...current, [modelId]: { ...existing, status: "succeeded", statusLabel: "已完成", progressPercent: 100, stageLabel: "模型已可用", result: event.result } } : current;
+        return existing ? { ...current, [modelId]: { ...existing, status: "succeeded", statusLabel: "Completed", progressPercent: 100, stageLabel: "Model is ready", result: event.result } } : current;
       });
       setModels((current) => current.map((model) => model.id === modelId ? { ...model, state: "ready", progressPercent: 100, diagnostic: undefined } : model));
       modelInstallUnsubscribeRef.current.get(modelId)?.();
@@ -506,7 +536,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     if (event.type === "failed" && event.error) {
       setModelInstallJobs((current) => {
         const existing = current[modelId];
-        return existing ? { ...current, [modelId]: { ...existing, status: "failed", statusLabel: "已失败", stageLabel: event.error?.title ?? "下载失败", error: event.error } } : current;
+        return existing ? { ...current, [modelId]: { ...existing, status: "failed", statusLabel: "Failed", stageLabel: event.error?.title ?? "Download failed", error: event.error } } : current;
       });
       setModels((current) => current.map((model) => model.id === modelId ? { ...model, state: "failed", diagnostic: event.error?.diagnostic ?? event.error?.message } : model));
       modelInstallUnsubscribeRef.current.get(modelId)?.();
@@ -516,7 +546,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     if (event.type === "canceled") {
       setModelInstallJobs((current) => {
         const existing = current[modelId];
-        return existing ? { ...current, [modelId]: { ...existing, status: "canceled", statusLabel: "已取消", stageLabel: "已取消" } } : current;
+        return existing ? { ...current, [modelId]: { ...existing, status: "canceled", statusLabel: "Canceled", stageLabel: "Canceled" } } : current;
       });
       modelInstallUnsubscribeRef.current.get(modelId)?.();
       modelInstallUnsubscribeRef.current.delete(modelId);
@@ -578,7 +608,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const chooseOutputDirectory = async () => {
     const folder = await window.fastSubSystem?.selectFolder();
     if (folder) {
-      setOutputDirectoryLabel(folder.split(/[\\/]/).filter(Boolean).at(-1) ?? "自定义输出目录");
+      setOutputDirectoryLabel(folder.split(/[\\/]/).filter(Boolean).at(-1) ?? "Custom output folder");
       setOutputDirectoryPath(folder);
       return true;
     }
@@ -595,7 +625,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       return;
     }
     const first = selected[0];
-    const folderName = first.webkitRelativePath.split("/").at(0) || "自定义输出目录";
+    const folderName = first.webkitRelativePath.split("/").at(0) || "Custom output folder";
     setOutputDirectoryLabel(folderName);
     setOutputDirectoryPath(`mock-output://${folderName}`);
     if (outputInputRef.current) {
@@ -688,6 +718,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     }
     const batchJobIds = createdJobs.map((createdJob) => createdJob.id);
     backgroundQueueOpenRef.current = false;
+    setCompletionReturnScreen("main-empty");
     activeBatchJobIdsRef.current = batchJobIds;
     completedBatchJobsRef.current = [];
     setCompletedBatchJobs([]);
@@ -726,6 +757,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       translationUploadConfirmed: Boolean(translationRemoteProvider) ? confirmedRemoteUpload : false,
       remoteUploadConfirmed: type === "translate_srt" && Boolean(translationRemoteProvider) ? confirmedRemoteUpload : false
     };
+    setCompletionReturnScreen(type === "burn_in" ? "tool-burn-in" : "tool-translate");
     const job = repairJobPathFromRequest(await client.createJob(request), request);
     backgroundQueueOpenRef.current = false;
     activeBatchJobIdsRef.current = [job.id];
@@ -862,7 +894,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
 
   const openMock = async (path: string) => {
     const opened = await window.fastSubSystem?.openPathMock(path);
-    setOpenNotice(opened ? null : { message: "无法打开该路径", tone: "warn" });
+    setOpenNotice(opened ? null : { message: "Cannot open path", tone: "warn" });
   };
 
   useEffect(() => {
@@ -911,6 +943,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
         {renderScreen({
           screen,
           setScreen: navigateFromScreen,
+          completionReturnScreen,
           providerSettingsFocus,
           openProviderSettings,
           environment,
@@ -993,7 +1026,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
               ...current,
               ffmpegInstalling: true,
               ffmpegInstallProgressPercent: 5,
-              ffmpegInstallLogs: [`正在通过 ${manager} 安装 FFmpeg。`]
+              ffmpegInstallLogs: [`Installing FFmpeg with ${manager}.`]
             } : current);
             setEnvironment(await client.installFFmpegWithPackageManager(manager));
             setScreen("setup-check");

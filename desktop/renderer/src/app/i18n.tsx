@@ -99,6 +99,38 @@ const zh: Record<string, string> = {
   "Pages": "页面",
   "Scenarios": "场景",
   "Debug": "调试",
+  "Scenario setup ready": "环境就绪",
+  "Scenario missing ASR": "缺少 ASR 模型",
+  "Scenario translation model failed": "翻译模型失败",
+  "Scenario model installing": "模型安装中",
+  "Scenario model install failed": "模型安装失败",
+  "Scenario job success": "任务成功",
+  "Scenario job failed": "任务失败",
+  "Scenario job canceled": "任务取消",
+  "Scenario output conflict": "输出冲突",
+  "Scenario remote confirm": "远程确认",
+  "Scenario service interrupted": "服务中断",
+  "Screen environment check": "环境检测",
+  "Screen setup done": "设置完成",
+  "Screen empty state": "空状态",
+  "Screen files added": "已添加文件",
+  "Screen detailed settings": "详细设置",
+  "Screen model not ready": "模型未准备",
+  "Screen output conflict": "输出冲突",
+  "Screen generating": "生成中",
+  "Screen completed": "已完成",
+  "Screen task list": "任务列表",
+  "Screen task detail": "任务详情",
+  "Screen failed detail": "失败详情",
+  "Screen general settings": "通用设置",
+  "Screen model management": "模型管理",
+  "Screen providers": "Provider",
+  "Screen diagnostics": "诊断",
+  "Screen benchmark": "Benchmark",
+  "Screen translate SRT": "翻译SRT",
+  "Screen burn-in subtitles": "字幕烧录",
+  "Cannot open path": "无法打开该路径",
+  "Custom output folder": "自定义输出目录",
 
   "General": "通用",
   "Models": "模型管理",
@@ -283,6 +315,7 @@ const zh: Record<string, string> = {
   "Model download failed": "模型下载失败",
   "Model is ready": "模型已可用",
   "Verifying model": "正在校验模型",
+  "Model install log": "模型安装日志",
   "Whisper Base recommendation": "快速低资源，适合短音频和轻量机器。",
   "Whisper Small recommendation": "默认推荐，速度和准确率比较均衡。",
   "Whisper Large Turbo recommendation": "更高准确率，适合长音频和更好的硬件。",
@@ -300,8 +333,8 @@ const zh: Record<string, string> = {
   "Local whisper.cpp privacy note": "通过 whisper.cpp binary 本地转写。音频不会上传。",
   "OpenAI Transcription API privacy note": "仅在显式选择时上传音频到配置的 OpenAI-compatible 转写 API。",
   "Local NLLB privacy note": "通过 NLLB CTranslate2 provider 本地翻译字幕。字幕文本不会上传。",
-  "Bing Web Translation privacy note": "显式选择时会上传字幕文本到 Bing 网页翻译，适合小文件。",
-  "Google Web Translation privacy note": "显式选择时会上传字幕文本到 Google 网页翻译，适合小文件。",
+  "Bing Web Translation privacy note": "显式选择时会上传字幕文本到 Bing 网页翻译；无需 API Key，但属于 experimental / best-effort Provider，适合短字幕，可能因限流、地区或上游变化失败。",
+  "Google Web Translation privacy note": "显式选择时会上传字幕文本到 Google 网页翻译；无需 API Key，但属于 experimental / best-effort Provider，适合短字幕，可能因限流、地区或上游变化失败。",
   "OpenAI-compatible Translation API privacy note": "显式选择时会上传字幕文本到配置的 OpenAI-compatible Chat API。",
   "Not refreshed": "未刷新",
   "Refreshed": "已刷新",
@@ -574,6 +607,38 @@ const en: Record<string, string> = {
   "Pages": "Pages",
   "Scenarios": "Scenarios",
   "Debug": "Debug",
+  "Scenario setup ready": "Environment ready",
+  "Scenario missing ASR": "Missing ASR model",
+  "Scenario translation model failed": "Translation model failed",
+  "Scenario model installing": "Model installing",
+  "Scenario model install failed": "Model install failed",
+  "Scenario job success": "Job success",
+  "Scenario job failed": "Job failed",
+  "Scenario job canceled": "Job canceled",
+  "Scenario output conflict": "Output conflict",
+  "Scenario remote confirm": "Remote confirm",
+  "Scenario service interrupted": "Service interrupted",
+  "Screen environment check": "Environment check",
+  "Screen setup done": "Setup done",
+  "Screen empty state": "Empty state",
+  "Screen files added": "Files added",
+  "Screen detailed settings": "Detailed settings",
+  "Screen model not ready": "Model not ready",
+  "Screen output conflict": "Output conflict",
+  "Screen generating": "Generating",
+  "Screen completed": "Completed",
+  "Screen task list": "Task list",
+  "Screen task detail": "Task detail",
+  "Screen failed detail": "Failed detail",
+  "Screen general settings": "General settings",
+  "Screen model management": "Model management",
+  "Screen providers": "Provider",
+  "Screen diagnostics": "Diagnostics",
+  "Screen benchmark": "Benchmark",
+  "Screen translate SRT": "Translate SRT",
+  "Screen burn-in subtitles": "Burn-in subtitles",
+  "Cannot open path": "Cannot open this path",
+  "Custom output folder": "Custom output folder",
   "General": "General",
   "Models": "Models",
   "Diagnostics": "Diagnostics",
@@ -713,6 +778,7 @@ const en: Record<string, string> = {
   "Model download failed": "Model download failed",
   "Model is ready": "Model is ready",
   "Verifying model": "Verifying model",
+  "Model install log": "Model install log",
   "Whisper Base recommendation": "Fast and light, good for short audio and low-resource machines.",
   "Whisper Small recommendation": "Recommended default with balanced speed and accuracy.",
   "Whisper Large Turbo recommendation": "Higher accuracy for longer audio and stronger hardware.",
@@ -730,8 +796,8 @@ const en: Record<string, string> = {
   "Local whisper.cpp privacy note": "Runs transcription locally through a whisper.cpp binary. Audio is not uploaded.",
   "OpenAI Transcription API privacy note": "Uploads audio to the configured OpenAI-compatible transcription API only when explicitly selected.",
   "Local NLLB privacy note": "Runs subtitle translation locally through the NLLB CTranslate2 provider. Subtitle text is not uploaded.",
-  "Bing Web Translation privacy note": "Uploads subtitle text to Bing web translation when explicitly selected. Best for small files.",
-  "Google Web Translation privacy note": "Uploads subtitle text to Google web translation when explicitly selected. Best for small files.",
+  "Bing Web Translation privacy note": "Uploads subtitle text to Bing web translation when explicitly selected. No API key is required, but this experimental best-effort Provider is best for short subtitles and may fail because of rate limits, region, or upstream changes.",
+  "Google Web Translation privacy note": "Uploads subtitle text to Google web translation when explicitly selected. No API key is required, but this experimental best-effort Provider is best for short subtitles and may fail because of rate limits, region, or upstream changes.",
   "OpenAI-compatible Translation API privacy note": "Uploads subtitle text to the configured OpenAI-compatible chat API only when explicitly selected.",
   "Not refreshed": "Not refreshed",
   "Refreshed": "Refreshed",
@@ -814,7 +880,20 @@ const en: Record<string, string> = {
 };
 
 const runtimeText: Record<Locale, Record<string, string>> = {
-  zh: {},
+  zh: {
+    "Running": "正在生成",
+    "Completed": "已完成",
+    "Failed": "已失败",
+    "Canceled": "已取消",
+    "Canceling": "正在取消",
+    "Downloading": "下载中",
+    "Download failed": "下载失败",
+    "Model is ready": "模型已可用",
+    "Unknown": "未知",
+    "Fast Sub service unavailable": "Fast Sub 服务暂时不可用",
+    "Repair service or check fast-sub-go startup.": "请尝试一键修复，或检查 fast-sub-go 是否可启动。",
+    "Open diagnostics": "打开诊断"
+  },
   en: {
     "正在生成字幕": "Generating subtitles",
     "正在转写音频": "Transcribing audio",
@@ -839,6 +918,76 @@ const runtimeText: Record<Locale, Record<string, string>> = {
     "正在取消": "Canceling",
     "下载中": "Downloading",
     "下载失败": "Download failed",
+    "未知": "Unknown",
+    "本地服务暂时不可用": "Fast Sub service unavailable",
+    "请尝试一键修复，或检查 fast-sub-go 是否可启动。": "Repair service or check fast-sub-go startup.",
+    "打开诊断": "Open diagnostics",
+    "本地服务连接中断": "Local service connection interrupted",
+    "默认 ASR 模型缺失": "Default ASR model is missing",
+    "默认翻译模型安装失败，但不影响生成原语音字幕": "Default translation model installation failed, but original subtitle generation is still available",
+    "查看诊断并重试": "View diagnostics and retry",
+    "操作没有完成": "Operation did not complete",
+    "密钥为空": "Secret is empty",
+    "请输入 API key 后再保存。": "Enter an API key before saving.",
+    "系统凭据不可用": "System credential storage is unavailable",
+    "当前系统安全存储不可用，未保存 API key。": "System secure storage is unavailable. The API key was not saved.",
+    "当前系统安全存储不可用。": "System secure storage is unavailable.",
+    "本地服务认证失效": "Local service authentication expired",
+    "本地服务中断": "Local service interrupted",
+    "本地服务返回错误": "Local service returned an error",
+    "任务事件连接失败": "Task event connection failed",
+    "无法打开该路径": "Cannot open this path",
+    "服务中断": "Service interrupted",
+    "未知状态": "Unknown status",
+    "正在检查": "Checking",
+    "正在收尾": "Finalizing",
+    "等待开始": "Waiting to start",
+    "正在分析媒体": "Analyzing media",
+    "正在提取音频": "Extracting audio",
+    "正在准备上传": "Preparing upload",
+    "正在加载模型": "Loading model",
+    "正在开始": "Starting",
+    "任务": "Task",
+    "字幕任务": "Subtitle task",
+    "模型": "Model",
+    "刚刚": "Just now",
+    "任务已完成": "Task completed",
+    "已生成输出": "Output generated",
+    "由本地服务检查": "Checked by local service",
+    "请检查网络后重试": "Check the network and retry",
+    "会上传内容，可能产生费用。": "Uploads content and may incur costs.",
+    "会把字幕文本发送到第三方网页翻译服务。": "Sends subtitle text to a third-party web translation service.",
+    "本地处理，不上传。": "Processed locally. Nothing is uploaded.",
+    "本地 Faster Whisper": "Local Faster Whisper",
+    "本地 whisper.cpp": "Local whisper.cpp",
+    "OpenAI 音频转写 API": "OpenAI Transcription API",
+    "本地 NLLB 翻译": "Local NLLB Translation",
+    "Bing 网页翻译": "Bing Web Translation",
+    "Google 网页翻译": "Google Web Translation",
+    "OpenAI 兼容翻译 API": "OpenAI-compatible Translation API",
+    "本地处理音频，不上传。": "Audio is processed locally. Nothing is uploaded.",
+    "Native 本地转写，不上传音频。": "Native local transcription. Audio is not uploaded.",
+    "会上传音频，可能产生费用。": "Uploads audio and may incur costs.",
+    "本地处理字幕文本。": "Subtitle text is processed locally.",
+    "会上传字幕文本，可能产生费用。": "Uploads subtitle text and may incur costs.",
+    "自动识别": "Auto detect",
+    "已生成 mock 字幕": "Mock subtitles generated",
+    "已生成 118 行字幕": "118 subtitle lines generated",
+    "mock 工具任务已完成": "Mock tool task completed",
+    "模型已准备好": "Model is ready",
+    "音频轨无法提取": "Could not extract audio track",
+    "字幕生成失败": "Subtitle generation failed",
+    "本地服务中断，请修复后重新同步。": "Local service interrupted. Repair it and sync again.",
+    "模拟转写在媒体分析阶段失败，请重试或查看诊断。": "Mock transcription failed during media analysis. Retry or check diagnostics.",
+    "一键修复": "Repair",
+    "重试任务": "Retry task",
+    "已移除": "Removed",
+    "等待准备模型": "Waiting to prepare model",
+    "当前任务": "Current task",
+    "等待任务": "Queued task",
+    "历史任务": "History task",
+    "失败任务": "Failed task",
+    "少于 30 秒": "less than 30 seconds",
     "16 GB 可用": "16 GB available",
     "240 GB 可用": "240 GB available"
   }
@@ -856,10 +1005,73 @@ export function I18nProvider({ language, children }: { language: UiLanguage; chi
   const value = useMemo<I18nValue>(() => {
     return {
       t: (key, values) => interpolate(translations[locale][key] ?? key, values),
-      rt: (text) => runtimeText[locale][text] ?? text
+      rt: (text) => translateRuntimeText(locale, text)
     };
   }, [locale]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+function translateRuntimeText(locale: Locale, text: string): string {
+  const exact = runtimeText[locale][text];
+  if (exact) {
+    return exact;
+  }
+  if (locale === "zh") {
+    const ffmpegManager = text.match(/^Installing FFmpeg with (.+)\.$/);
+    if (ffmpegManager) {
+      return `正在通过 ${ffmpegManager[1]} 安装 FFmpeg。`;
+    }
+    const aboutSize = text.match(/^About ([0-9.]+) MB$/);
+    if (aboutSize) {
+      return `约 ${aboutSize[1]} MB`;
+    }
+    return text;
+  }
+  const aboutSize = text.match(/^约 ([0-9.]+) MB$/);
+  if (aboutSize) {
+    return `About ${aboutSize[1]} MB`;
+  }
+  const aboutMinutes = text.match(/^约 ([0-9.]+) 分钟$/);
+  if (aboutMinutes) {
+    return `about ${aboutMinutes[1]} minutes`;
+  }
+  const todayTime = text.match(/^今天 (.+)$/);
+  if (todayTime) {
+    return `Today ${todayTime[1]}`;
+  }
+  const savedAlias = text.match(/^(.+) \(已保存\)$/);
+  if (savedAlias) {
+    return `${savedAlias[1]} (saved)`;
+  }
+  const modelTask = text.match(/^模型任务 (.+)$/);
+  if (modelTask) {
+    return `Model task ${modelTask[1]}`;
+  }
+  const numberedTask = text.match(/^任务 (.+)$/);
+  if (numberedTask) {
+    return `Task ${numberedTask[1]}`;
+  }
+  const modelInstall = text.match(/^(.+) 模型安装$/);
+  if (modelInstall) {
+    return `${modelInstall[1]} model install`;
+  }
+  const ffmpegManager = text.match(/^正在通过 (.+) 安装 FFmpeg。$/);
+  if (ffmpegManager) {
+    return `Installing FFmpeg with ${ffmpegManager[1]}.`;
+  }
+  const ffmpegManagerDone = text.match(/^(.+) 安装命令已完成，正在验证 FFmpeg。$/);
+  if (ffmpegManagerDone) {
+    return `${ffmpegManagerDone[1]} install command completed. Verifying FFmpeg.`;
+  }
+  const ffmpegManagerFailed = text.match(/^(.+) 安装失败：(.+)$/);
+  if (ffmpegManagerFailed) {
+    return `${ffmpegManagerFailed[1]} install failed: ${ffmpegManagerFailed[2]}`;
+  }
+  const ffmpegMissing = text.match(/^FFmpeg 未安装或安装失败：(.+)$/);
+  if (ffmpegMissing) {
+    return `FFmpeg is not installed or installation failed: ${translateRuntimeText(locale, ffmpegMissing[1])}`;
+  }
+  return text;
 }
 
 export function useT() {

@@ -33,6 +33,7 @@ Web providers:
 
 - `web-bing`
 - `web-google`
+- No API key required in the packaged desktop app.
 - Convenience providers, not a reliability guarantee.
 - Better suited for small files.
 
@@ -59,6 +60,8 @@ API and web translation can upload subtitle text to an external service. Fast Su
 
 Do not paste API keys into logs, screenshots, issues, or release records.
 
+Web providers use a packaged helper and do not require users to install Python `web-translate`, `translators`, global Node, or npm packages. If a web provider is unavailable, repair or reinstall Fast Sub, retry later, or switch to local/API translation.
+
 API provider checklist:
 
 - Base URL is correct.
@@ -69,7 +72,7 @@ API provider checklist:
 
 ## Large Files
 
-For large files, prefer local translation or a reliable API provider. Web translation providers may time out or fail.
+For large files, prefer local translation or a reliable API provider. Web translation providers may time out or fail because of rate limits, regional access, network failures, or upstream page changes.
 
 ## Quality Review
 

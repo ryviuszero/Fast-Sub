@@ -255,8 +255,8 @@ Registered provider ids:
 | `local-whisper-cpp` | `stt` | `native` | `whisper.cpp` | Local only. |
 | `api-openai-transcription` | `stt` | `api` | `openai-compatible-transcription` | Uploads audio only when explicitly selected. |
 | `local-nllb-ct2` | `translation` | `local` | `nllb-ct2` | Local only. |
-| `web-bing` | `translation` | `web` | `bing-web-translate` | Uploads subtitle text only when explicitly selected. |
-| `web-google` | `translation` | `web` | `google-web-translate` | Uploads subtitle text only when explicitly selected. |
+| `web-bing` | `translation` | `web` | `bing-web-translate` | Uploads subtitle text only when explicitly selected; no-key, experimental, best-effort packaged helper path. |
+| `web-google` | `translation` | `web` | `google-web-translate` | Uploads subtitle text only when explicitly selected; no-key, experimental, best-effort packaged helper path. |
 | `api-openai-chat` | `translation` | `api` | `openai-compatible-chat` | Uploads subtitle text only when explicitly selected. |
 
 `Metadata` fields:

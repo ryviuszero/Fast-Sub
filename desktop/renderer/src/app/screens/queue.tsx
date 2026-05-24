@@ -188,7 +188,7 @@ export function QueueDetail({ activeJob, setScreen, failed, retryJob, deleteJob,
   const succeeded = activeJob?.status === "succeeded";
   const error = activeJob?.error;
   const title = activeJob?.title ?? t("No task selected");
-  const subtitle = activeJob ? `${succeeded ? activeJob.completedAt || activeJob.createdAt : activeJob.createdAt} · ${rt(activeJob.statusLabel)}` : t("Choose a task from the list");
+  const subtitle = activeJob ? `${rt(succeeded ? activeJob.completedAt || activeJob.createdAt : activeJob.createdAt)} · ${rt(activeJob.statusLabel)}` : t("Choose a task from the list");
   const progress = succeeded ? 100 : activeJob?.progressPercent ?? 0;
   const progressText = canceled
     ? t("Task canceled message")
@@ -197,7 +197,7 @@ export function QueueDetail({ activeJob, setScreen, failed, retryJob, deleteJob,
       : succeeded
         ? t("Task completed message")
       : activeJob?.estimatedRemaining
-        ? `${rt(activeJob.stageLabel)} · ${t("Estimated remaining", { time: activeJob.estimatedRemaining })}`
+        ? `${rt(activeJob.stageLabel)} · ${t("Estimated remaining", { time: rt(activeJob.estimatedRemaining) })}`
         : activeJob?.stageLabel ? rt(activeJob.stageLabel) : t("Waiting for daemon events");
   return (
     <div className="wf">
@@ -388,6 +388,7 @@ function languageLabel(language: string, t?: (key: string, values?: Record<strin
 
 export function ConfigPanel({ activeJob, openMock }: Pick<RenderProps, "activeJob" | "openMock">) {
   const t = useT();
+  const rt = useRuntimeText();
   const outputDirectory = activeJob?.outputDirectory || "";
   return (
     <section className="panel">
@@ -395,7 +396,7 @@ export function ConfigPanel({ activeJob, openMock }: Pick<RenderProps, "activeJo
       <div className="summary-grid">
         <span>{t("Task")}<strong>{activeJob?.type ?? "unknown"}</strong></span>
         <span>{t("Language")}<strong>{activeJob?.language ? languageLabel(activeJob.language, t) : activeJob?.result?.language ? languageLabel(activeJob.result.language, t) : t("Not synced")}</strong></span>
-        <span>{t("Provider")}<strong>{activeJob?.providerName ?? "unknown"}</strong></span>
+        <span>{t("Provider")}<strong>{activeJob?.providerName ? rt(activeJob.providerName) : "unknown"}</strong></span>
         <span>{t("Model")}<strong>{activeJob?.modelName ?? "unknown"}</strong></span>
         <span>{t("Output directory")}<strong>{outputDirectory ? <button className="inline-path-button" onClick={() => void openMock(outputDirectory)} type="button">{outputDirectory}</button> : t("Not set")}</strong></span>
       </div>

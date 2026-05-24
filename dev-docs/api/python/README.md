@@ -32,9 +32,12 @@ Optional extras:
 | `local-asr` | Installs `faster-whisper` for the local STT worker. |
 | `local-translate` | Installs `ctranslate2` and `sentencepiece` for local NLLB translation. |
 
-`web-translate` is intentionally not declared. The previous `translators`
-dependency chain pulled in vulnerable `js2py` releases, so web translation
-support is disabled from packaged extras until the upstream chain is safe.
+`web-translate` is intentionally not declared. The previous Python
+`translators` dependency chain pulled in vulnerable `js2py` releases. Packaged
+desktop web translation now runs through the ASAR-outside JS helper injected by
+the Go/Electron runtime. Standalone Python CLI web translation requires
+`FAST_SUB_WEB_TRANSLATE_HELPER_COMMAND` and `FAST_SUB_WEB_TRANSLATE_HELPER_ARGS`
+from that packaged/runtime boundary.
 
 ## Provider Contract
 
