@@ -13,11 +13,16 @@ Current Windows artifacts are unsigned preview builds. SmartScreen or antivirus 
 
 ## Missing FFmpeg Or FFprobe
 
-The desktop app can install FFmpeg/FFprobe into app-private user data on Windows. If installation fails:
+FFmpeg / FFprobe are needed for transcription media handling and burn-in, but their absence should not block opening the app. Subtitle/text translation, model installation, Provider settings, and diagnostics can still be used.
 
-- Retry from the environment check or diagnostics page.
+On Windows, choose an existing directory that contains both `ffmpeg.exe` and `ffprobe.exe`, or explicitly start the app-private FFmpeg download. A system `PATH` source is accepted only when both binaries resolve to the same directory.
+
+If installation fails:
+
+- Retry only from the explicit FFmpeg download action.
 - Check network access.
-- Try a package manager fallback if available.
+- Prefer choosing an existing FFmpeg directory if you already have one.
+- Report a bug if status refresh or Provider checks keep retrying downloads automatically.
 
 ## Missing Models
 

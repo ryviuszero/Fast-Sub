@@ -972,7 +972,7 @@ function providerDefaultBlockReason(provider: ProviderStatus, t: (key: string) =
   }
 }
 
-export function SettingsDiagnostics({ environment, cleanupLocalData }: RenderProps) {
+export function SettingsDiagnostics({ environment, cleanupLocalData, checkNativeDependencies, chooseFFmpegDirectory, installFFmpeg, clearFFmpegDirectory }: RenderProps) {
   const t = useT();
   const rt = useRuntimeText();
   const health = environment?.health ?? "checking";
@@ -1008,6 +1008,26 @@ export function SettingsDiagnostics({ environment, cleanupLocalData }: RenderPro
         <KV k={t("Local transcription")} v={environment?.localTranscriptionReady ? t("Ready") : t("Missing model")} />
         <KV k={t("Local translation")} v={environment?.localTranslationReady ? t("Ready") : t("Missing model")} />
         <KV k={t("Sensitive info")} v={t("Redacted")} />
+      </section>
+      <section className="panel paper-muted">
+        <h3>{t("Native dependencies")}</h3>
+        <KV k="FFmpeg / FFprobe" v={environment?.nativeDependencies?.ffmpegPair.ready ? t("Ready") : t("Needs repair")} />
+        <KV k={t("Source")} v={t(`FFmpeg source ${environment?.nativeDependencies?.ffmpegPair.source ?? "missing"}`)} />
+        <KV k={t("Folder")} v={environment?.nativeDependencies?.ffmpegPair.displayPath ?? t("Not set")} mono />
+        <KV k={t("FFmpeg versions")} v={[environment?.nativeDependencies?.ffmpegPair.ffmpegVersion, environment?.nativeDependencies?.ffmpegPair.ffprobeVersion].filter(Boolean).join(" / ") || t("Unknown")} />
+        {(environment?.ffmpegInstalling || environment?.nativeDependencies?.ffmpegPair.installing) && (
+          <div className="progress accent" aria-label={t("FFmpeg install progress")}>
+            <i style={{ width: `${Math.max(5, environment.ffmpegInstallProgressPercent || environment.nativeDependencies?.ffmpegPair.progressPercent || 0)}%` }} />
+          </div>
+        )}
+        {environment?.nativeDependencies?.ffmpegPair.lastError && !environment.nativeDependencies.ffmpegPair.installing && <p className="caption warn-text no-margin">{redactSecretText(rt(environment.nativeDependencies.ffmpegPair.lastError))}</p>}
+        <KV k={t("Download accelerator")} v={environment?.nativeDependencies?.aria2?.ready ? t(`FFmpeg source ${environment.nativeDependencies.aria2.source}`) : t("Normal HTTPS fallback")} />
+        <div className="row gap-8 wrap">
+          <button className="btn sm" onClick={() => void checkNativeDependencies()} type="button">{t("Recheck")}</button>
+          <button className="btn sm" onClick={() => void chooseFFmpegDirectory()} type="button">{t("Choose FFmpeg directory")}</button>
+          <button className="btn sm" onClick={() => void installFFmpeg()} type="button">{t("Download FFmpeg")}</button>
+          <button className="btn sm ghost" onClick={() => void clearFFmpegDirectory()} type="button">{t("Clear FFmpeg directory")}</button>
+        </div>
       </section>
       <section className="panel dashed">
         <h3>{t("Diagnostics summary")}</h3>

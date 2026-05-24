@@ -9,6 +9,8 @@ Fast Sub does not bundle speech or translation models with the installer.
 
 Models are downloaded into a local model store when you choose to install them.
 
+FFmpeg / FFprobe are handled separately from models. They are not bundled with the Windows installer. If they are missing, you can still enter the app to configure providers, install models, or translate existing subtitle/text files. Transcription and burn-in will ask you to choose an existing FFmpeg directory or explicitly download FFmpeg before creating a job.
+
 ## Why Models Are Separate
 
 Models can be large, hardware-dependent, and license-sensitive. Keeping them outside the installer helps:

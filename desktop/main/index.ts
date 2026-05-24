@@ -4,7 +4,7 @@ import type { Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { registerFastSubClientIpc } from "./client/ipc";
-import { ensureFFmpegInstalled, ensureWhisperCPPInstalled } from "./client/nativeDependencies";
+import { checkFFmpegAvailable, ensureFFmpegInstalled, ensureWhisperCPPInstalled, getNativeDependencyViews, setFFmpegDirectory } from "./client/nativeDependencies";
 import { DaemonProcessManager } from "./client/daemonProcess";
 
 const DEV_SERVER_URL = process.env.ELECTRON_RENDERER_URL ?? (!app.isPackaged ? "http://localhost:5173" : "");
@@ -20,6 +20,11 @@ const SKIPPED_FOLDER_SCAN_DIRS = new Set([".git", ".hg", ".svn", ".venv", "venv"
 const HELP_DOCUMENT_URL = "https://ryviuszero.github.io/Fast-Sub/";
 const startupBase = Date.now();
 const STARTUP_TIMING_ENABLED = !app.isPackaged || process.env.FAST_SUB_STARTUP_TIMING === "1";
+
+if (NATIVE_DEPS_SMOKE_MODE || DAEMON_REPAIR_SMOKE_MODE) {
+  app.commandLine.appendSwitch("disable-gpu");
+  app.disableHardwareAcceleration();
+}
 
 if (process.env.FAST_SUB_SMOKE_USER_DATA) {
   app.setPath("userData", process.env.FAST_SUB_SMOKE_USER_DATA);
@@ -283,6 +288,39 @@ async function runNativeDependencySmoke(): Promise<Record<string, unknown>> {
         const status = await pollDependency(() => ensureFFmpegInstalled(), 30 * 60 * 1000);
         results.ffmpeg = summarizeDependency(status);
         ok = ok && status.available;
+      } else if (check === "ffmpeg-install") {
+        const status = await pollFFmpegInstall(30 * 60 * 1000);
+        const views = await getNativeDependencyViews();
+        results.ffmpeg = { ...summarizeDependency(status), nativeDependencies: summarizeNativeDependencyViews(views) };
+        ok = ok && status.available && status.source === "app-private";
+      } else if (check === "ffmpeg-detect") {
+        const status = await checkFFmpegAvailable();
+        results.ffmpeg = summarizeDependency(status);
+        ok = ok && status.available;
+      } else if (check === "ffmpeg-missing") {
+        const status = await checkFFmpegAvailable();
+        const views = await getNativeDependencyViews();
+        results.ffmpeg = { ...summarizeDependency(status), nativeDependencies: summarizeNativeDependencyViews(views) };
+        ok = ok && !status.available && !status.installing;
+      } else if (check === "ffmpeg-custom") {
+        const binDir = process.env.FAST_SUB_SMOKE_FFMPEG_BIN_DIR;
+        if (!binDir) {
+          throw new Error("FAST_SUB_SMOKE_FFMPEG_BIN_DIR is required for ffmpeg-custom smoke.");
+        }
+        const status = await setFFmpegDirectory(binDir);
+        const views = await getNativeDependencyViews();
+        results.ffmpeg = { ...summarizeDependency(status), nativeDependencies: summarizeNativeDependencyViews(views) };
+        ok = ok && status.available && status.source === "custom";
+      } else if (check === "ffmpeg-app-private") {
+        const status = await checkFFmpegAvailable();
+        const views = await getNativeDependencyViews();
+        results.ffmpeg = { ...summarizeDependency(status), nativeDependencies: summarizeNativeDependencyViews(views) };
+        ok = ok && status.available && status.source === "app-private";
+      } else if (check === "ffmpeg-system-path") {
+        const status = await checkFFmpegAvailable();
+        const views = await getNativeDependencyViews();
+        results.ffmpeg = { ...summarizeDependency(status), nativeDependencies: summarizeNativeDependencyViews(views) };
+        ok = ok && status.available && status.source === "system-path";
       } else if (check === "whisper-cpp") {
         const status = await pollDependency(() => ensureWhisperCPPInstalled(), 30 * 60 * 1000);
         results.whisperCpp = summarizeDependency(status);
@@ -296,7 +334,20 @@ async function runNativeDependencySmoke(): Promise<Record<string, unknown>> {
       ok = false;
     }
   }
-  return { ok, userData: app.getPath("userData"), results };
+  return { ok, userData: "[redacted-user-data]", results };
+}
+
+async function pollFFmpegInstall(timeoutMs: number): Promise<Awaited<ReturnType<typeof checkFFmpegAvailable>>> {
+  const started = Date.now();
+  await ensureFFmpegInstalled();
+  let latest = await checkFFmpegAvailable();
+  let views = await getNativeDependencyViews();
+  while (!(latest.available && latest.source === "app-private") && views.ffmpegPair.installing && Date.now() - started < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    latest = await checkFFmpegAvailable();
+    views = await getNativeDependencyViews();
+  }
+  return latest;
 }
 
 async function pollDependency<T extends { available: boolean; installing: boolean }>(fn: () => Promise<T>, timeoutMs: number): Promise<T> {
@@ -309,16 +360,41 @@ async function pollDependency<T extends { available: boolean; installing: boolea
   return latest;
 }
 
-function summarizeDependency(status: { available: boolean; installedNow: boolean; installing: boolean; progressPercent: number; binDir?: string; message?: string; logs: string[] }): Record<string, unknown> {
+function summarizeDependency(status: { available: boolean; installedNow: boolean; installing: boolean; progressPercent: number; binDir?: string; source?: string; message?: string; logs: string[] }): Record<string, unknown> {
   return {
     available: status.available,
     installedNow: status.installedNow,
     installing: status.installing,
     progressPercent: status.progressPercent,
-    binDir: status.binDir,
-    message: status.message,
-    logs: status.logs.slice(-8)
+    source: status.source,
+    binDir: status.binDir ? "[redacted-bin-dir]" : undefined,
+    message: status.message ? redactSmokeText(status.message) : undefined,
+    logs: status.logs.slice(-8).map(redactSmokeText)
   };
+}
+
+function summarizeNativeDependencyViews(views: Awaited<ReturnType<typeof getNativeDependencyViews>>): Record<string, unknown> {
+  return {
+    ffmpegPair: {
+      ready: views.ffmpegPair.ready,
+      source: views.ffmpegPair.source,
+      displayPath: views.ffmpegPair.displayPath,
+      installing: views.ffmpegPair.installing,
+      lastError: views.ffmpegPair.lastError ? redactSmokeText(views.ffmpegPair.lastError) : undefined
+    },
+    aria2: views.aria2 ? {
+      ready: views.aria2.ready,
+      source: views.aria2.source,
+      displayPath: views.aria2.displayPath,
+      lastError: views.aria2.lastError ? redactSmokeText(views.aria2.lastError) : undefined
+    } : undefined
+  };
+}
+
+function redactSmokeText(value: string): string {
+  return value
+    .replaceAll(app.getPath("userData"), "[redacted-user-data]")
+    .replaceAll(process.cwd(), "[redacted-cwd]");
 }
 
 async function runDaemonRepairSmoke(): Promise<Record<string, unknown>> {
@@ -333,10 +409,10 @@ async function runDaemonRepairSmoke(): Promise<Record<string, unknown>> {
       ok: firstHealth.status === 200 && secondHealth.status === 200 && first.pid > 0 && second.pid > 0 && first.pid !== second.pid,
       first: { pid: first.pid, owned: first.owned, health: firstHealth.status },
       second: { pid: second.pid, owned: second.owned, health: secondHealth.status },
-      userData: app.getPath("userData")
+      userData: "[redacted-user-data]"
     };
   } catch (error) {
     await manager.stop().catch(() => undefined);
-    return { ok: false, message: error instanceof Error ? error.message : String(error), userData: app.getPath("userData") };
+    return { ok: false, message: redactSmokeText(error instanceof Error ? error.message : String(error)), userData: "[redacted-user-data]" };
   }
 }

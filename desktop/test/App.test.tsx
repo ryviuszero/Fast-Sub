@@ -6,7 +6,7 @@ import { MainGenerating } from "../renderer/src/app/screens/main";
 import { QueueDetail } from "../renderer/src/app/screens/queue";
 import { SettingsDiagnostics } from "../renderer/src/app/screens/settings";
 import { MockFastSubClient } from "../renderer/src/client/MockFastSubClient";
-import { baseModels, baseProviders, createSeedJob, defaultConfig } from "../renderer/src/client/mockFixtures";
+import { baseEnvironment, baseModels, baseProviders, createSeedJob, defaultConfig } from "../renderer/src/client/mockFixtures";
 import type { ConfigViewModel, CreateJobRequest, EnvironmentStatus, JobDetail, JobEventHandlers, JobSummary, LocalDataCleanupTarget, ModelStatus, ProviderStatus, UiError } from "../shared/contracts/types";
 
 beforeEach(() => {
@@ -87,6 +87,27 @@ function progressCardPercent(): number {
   return Number(text.replace("%", ""));
 }
 
+function missingFFmpegEnvironment(): EnvironmentStatus {
+  return {
+    ...baseEnvironment,
+    health: "degraded",
+    ffmpegReady: false,
+    ffmpegInstalling: false,
+    ffmpegInstallProgressPercent: 0,
+    nativeDependencies: {
+      ...baseEnvironment.nativeDependencies,
+      ffmpegPair: {
+        ready: false,
+        source: "missing",
+        displayPath: "FFmpeg / FFprobe",
+        lastError: "FFmpeg and FFprobe must be available in the same directory.",
+        logs: []
+      }
+    },
+    warnings: ["FFmpeg / FFprobe missing"]
+  };
+}
+
 describe("Fast Sub renderer flow", () => {
   async function enterMainScreen() {
     const enterButton = await screen.findByRole("button", { name: "进入主界面" });
@@ -107,6 +128,72 @@ describe("Fast Sub renderer flow", () => {
     expect(document.body.textContent).not.toContain("mock-1");
     expect(document.body.textContent).not.toContain("SSE");
     expect(document.body.textContent).not.toContain("Authorization");
+  });
+
+  it("allows entering the main screen when FFmpeg is missing", async () => {
+    class MissingFFmpegClient extends MockFastSubClient {
+      override async getEnvironmentStatus(): Promise<EnvironmentStatus> {
+        return missingFFmpegEnvironment();
+      }
+      override async checkNativeDependencies(): Promise<EnvironmentStatus> {
+        return missingFFmpegEnvironment();
+      }
+    }
+    render(<App client={new MissingFFmpegClient()} />);
+    expect(await screen.findByText("转写和烧录需要 FFmpeg / FFprobe；你也可以先进入应用使用字幕翻译、模型安装和 Provider 设置。")).toBeInTheDocument();
+    const enterButton = await screen.findByRole("button", { name: "进入主界面" });
+    expect(enterButton).toBeEnabled();
+  });
+
+  it("blocks transcription before creating a job when FFmpeg is missing", async () => {
+    class MissingFFmpegClient extends MockFastSubClient {
+      createJobCalls = 0;
+      override async getEnvironmentStatus(): Promise<EnvironmentStatus> {
+        return missingFFmpegEnvironment();
+      }
+      override async checkNativeDependencies(): Promise<EnvironmentStatus> {
+        return missingFFmpegEnvironment();
+      }
+      override async createJob(request: CreateJobRequest): Promise<JobDetail> {
+        this.createJobCalls += 1;
+        return super.createJob(request);
+      }
+    }
+    window.localStorage.setItem("fast-sub:onboarding-complete", "1");
+    const client = new MissingFFmpegClient();
+    render(<App client={client} />);
+    await waitForLocalReady();
+    fireEvent.click(await screen.findByRole("button", { name: "添加视频" }));
+    await chooseVideo();
+    fireEvent.click(screen.getAllByRole("button", { name: "生成字幕" }).at(-1) as HTMLElement);
+    expect(await screen.findByRole("heading", { name: "需要 FFmpeg / FFprobe" })).toBeInTheDocument();
+    expect(client.createJobCalls).toBe(0);
+  });
+
+  it("does not block subtitle translation when FFmpeg is missing", async () => {
+    class MissingFFmpegClient extends MockFastSubClient {
+      createJobCalls = 0;
+      override async getEnvironmentStatus(): Promise<EnvironmentStatus> {
+        return missingFFmpegEnvironment();
+      }
+      override async checkNativeDependencies(): Promise<EnvironmentStatus> {
+        return missingFFmpegEnvironment();
+      }
+      override async createJob(request: CreateJobRequest): Promise<JobDetail> {
+        this.createJobCalls += 1;
+        return super.createJob(request);
+      }
+    }
+    window.localStorage.setItem("fast-sub:onboarding-complete", "1");
+    const client = new MissingFFmpegClient();
+    render(<App client={client} />);
+    fireEvent.click(await screen.findByRole("button", { name: "窗口" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "翻译SRT" }));
+    const input = await screen.findByLabelText("选择字幕或文本文件");
+    fireEvent.change(input, { target: { files: [new File(["1\n00:00:00,000 --> 00:00:01,000\nHi"], "sample.srt", { type: "text/plain" })] } });
+    fireEvent.click(await screen.findByRole("button", { name: "开始翻译" }));
+    await waitFor(() => expect(client.createJobCalls).toBe(1));
+    expect(screen.queryByRole("heading", { name: "需要 FFmpeg / FFprobe" })).not.toBeInTheDocument();
   });
 
   it("uses the system language for the default interface language", async () => {

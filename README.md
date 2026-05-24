@@ -19,6 +19,7 @@ Fast Sub is at the desktop public-preview / release-candidate stage.
 - Windows builds are currently unsigned preview builds.
 - macOS builds are currently ad-hoc signed and not notarized; Gatekeeper may require manual user approval.
 - Models are not bundled with the installer; first-start model installation is managed by the app/model store.
+- FFmpeg / FFprobe are not bundled. The desktop app can use a user-selected directory, an app-private explicit download, or a same-directory system `PATH` pair. Missing FFmpeg does not block opening the app, but transcription and burn-in require it before a job starts.
 - The default local translation model is not bundled and is license-sensitive; the current default NLLB manifest is marked `CC-BY-NC-4.0`.
 
 See [dev-docs/current-status.md](dev-docs/current-status.md) for the current project snapshot.

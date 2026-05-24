@@ -26,7 +26,8 @@ function outputTypeLabel(type: ConfigViewModel["outputType"], t: (key: string) =
   return t(labels[type]);
 }
 
-export function MainEmpty({ setScreen, openProviderSettings, addFiles, addFolder, addDroppedFiles, asrReady, translationReady, config, providers, jobs, activeJob, updateConfig }: RenderProps) {
+export function MainEmpty(props: RenderProps) {
+  const { setScreen, openProviderSettings, addFiles, addFolder, addDroppedFiles, asrReady, translationReady, config, providers, jobs, activeJob, updateConfig } = props;
   const t = useT();
   const [translationOutputWarning, setTranslationOutputWarning] = useState(false);
   const [openQuickSelect, setOpenQuickSelect] = useState<"source" | "target" | "output" | null>(null);
@@ -65,6 +66,7 @@ export function MainEmpty({ setScreen, openProviderSettings, addFiles, addFolder
     <div className="wf">
       <Chrome right={<><Chip tone={asrReady ? "ok" : "warn"}>{asrReady ? t("Local transcription ready") : t("Local transcription not ready")}</Chip><Chip tone={translationReady ? "ok" : "warn"}>{translationReady ? t("Translation ready") : t("Translation not ready")}</Chip></>} />
       <main className="main-empty">
+        <FFmpegWarningBanner {...props} />
         <section
           className="drop-zone"
           onClick={handleDropZoneClick}
@@ -157,6 +159,7 @@ export function MainFiles(props: RenderProps & { advanced: boolean }) {
     <div className="wf">
       <Chrome right={<Chip tone={localReady ? "ok" : "warn"}>{localReady ? t("Ready") : t("Not ready")}</Chip>} />
       <main className="content-flow">
+        <FFmpegWarningBanner {...props} />
         <div className="between">
           <h2>{props.fileImportPending ? t("Preparing selected files") : t("Files added", { count: files.length })}</h2>
           <button className="btn sm ghost" disabled={props.fileImportPending} onClick={() => void props.addFiles()}>{t("+ Add more")}</button>
@@ -200,6 +203,30 @@ export function MainFiles(props: RenderProps & { advanced: boolean }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function FFmpegWarningBanner(props: Pick<RenderProps, "environment" | "setScreen" | "chooseFFmpegDirectory" | "installFFmpeg">) {
+  const t = useT();
+  const ffmpegReady = props.environment?.nativeDependencies?.ffmpegPair.ready ?? props.environment?.ffmpegReady;
+  const installing = props.environment?.nativeDependencies?.ffmpegPair.installing ?? props.environment?.ffmpegInstalling;
+  if (ffmpegReady || installing) {
+    return null;
+  }
+  return (
+    <section className="panel warn-panel">
+      <div className="between">
+        <div>
+          <h3>{t("FFmpeg not ready")}</h3>
+          <p className="caption no-margin">{t("FFmpeg main warning")}</p>
+        </div>
+        <div className="row gap-8 wrap">
+          <button className="btn sm" onClick={() => void props.chooseFFmpegDirectory()} type="button">{t("Choose FFmpeg directory")}</button>
+          <button className="btn sm" onClick={() => void props.installFFmpeg()} type="button">{t("Download FFmpeg")}</button>
+          <button className="btn sm ghost" onClick={() => props.setScreen("settings-diagnostics")} type="button">{t("Open diagnostics")}</button>
+        </div>
+      </div>
+    </section>
   );
 }
 

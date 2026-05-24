@@ -3,7 +3,7 @@ import { CheckItem, Chrome, Divider } from "../components";
 import { useRuntimeText, useT } from "../i18n";
 
 export function SetupCheck(props: RenderProps) {
-  const { environment, models, setScreen, installModel, repairDaemon, installFFmpegWithPackageManager } = props;
+  const { environment, models, setScreen, installModel, repairDaemon, installFFmpeg, chooseFFmpegDirectory } = props;
   const t = useT();
   const rt = useRuntimeText();
   const disconnected = environment?.health === "disconnected";
@@ -14,13 +14,12 @@ export function SetupCheck(props: RenderProps) {
   const localWorkerStatus = localWorkerCheckStatus(props);
   const asrInstallJob = asr ? props.modelInstallJobs[asr.id] : undefined;
   const asrInstalling = asr?.state === "installing" || asrInstallJob?.status === "queued" || asrInstallJob?.status === "running";
-  const asrInstallBlocked = ffmpegInstalling;
+  const asrInstallBlocked = false;
   const asrInstallProgress = Math.max(0, Math.min(100, asrInstallJob?.progressPercent ?? asr?.progressPercent ?? 0));
   const memory = environment?.memory ? rt(environment.memory) : t("16 GB available");
   const disk = environment?.disk ? rt(environment.disk) : t("240 GB available");
   const ffmpegProgress = Math.max(0, Math.min(100, environment?.ffmpegInstallProgressPercent ?? 0));
   const ffmpegLogs = environment?.ffmpegInstallLogs ?? [];
-  const ffmpegPackageManagers = packageManagersForOS(environment?.os);
   return (
     <div className="wf">
       <main className="content-flow setup-flow">
@@ -51,12 +50,11 @@ export function SetupCheck(props: RenderProps) {
         {ffmpegMissing && (
           <section className="panel warn-panel">
             <h2>{t("FFmpeg not ready")}</h2>
-            <p>{t("FFmpeg auto install failed hint")}</p>
+            <p>{t("FFmpeg nonblocking setup hint")}</p>
             <div className="row gap-8 wrap">
-              <button className="btn primary" onClick={() => void repairDaemon()}>{t("Retry environment repair")}</button>
-              {ffmpegPackageManagers.map((manager) => (
-                <button className="btn" key={manager.id} onClick={() => void installFFmpegWithPackageManager(manager.id)}>{t(manager.label)}</button>
-              ))}
+              <button className="btn primary" onClick={() => void chooseFFmpegDirectory()}>{t("Choose FFmpeg directory")}</button>
+              <button className="btn" onClick={() => void installFFmpeg()}>{t("Download FFmpeg")}</button>
+              <button className="btn ghost" onClick={() => void repairDaemon()}>{t("Recheck")}</button>
             </div>
           </section>
         )}
@@ -80,26 +78,12 @@ export function SetupCheck(props: RenderProps) {
             <button className="btn primary" disabled={asrInstalling || asrInstallBlocked} onClick={() => void installModel("whisper-small")}>{asrInstalling ? t("Downloading") : t("Download default model")}</button>
           </section>
         )}
-        <div className="progress accent"><i style={{ width: disconnected || ffmpegMissing || ffmpegInstalling ? "45%" : "100%" }} /></div>
-        <p className="center-text caption">{disconnected || ffmpegMissing || ffmpegInstalling ? t("Waiting for service repair") : t("Check complete 6 of 6")}</p>
-        <button className="btn primary setup-next" disabled={disconnected || ffmpegMissing || ffmpegInstalling} onClick={() => setScreen(asrModelKnownMissing ? "main-empty" : "setup-done")}>{t("Enter app")}</button>
+        <div className="progress accent"><i style={{ width: disconnected ? "45%" : "100%" }} /></div>
+        <p className="center-text caption">{disconnected ? t("Waiting for service repair") : t("Check complete 6 of 6")}</p>
+        <button className="btn primary setup-next" disabled={disconnected} onClick={() => setScreen(asrModelKnownMissing ? "main-empty" : "setup-done")}>{t("Enter app")}</button>
       </main>
     </div>
   );
-}
-
-function packageManagersForOS(os: string | undefined): Array<{ id: "scoop" | "winget" | "choco" | "brew"; label: string }> {
-  if (os === "darwin") {
-    return [{ id: "brew", label: "Install with Homebrew" }];
-  }
-  if (os === "win32" || !os) {
-    return [
-      { id: "scoop", label: "Install with Scoop" },
-      { id: "winget", label: "Install with Winget" },
-      { id: "choco", label: "Install with Chocolatey" }
-    ];
-  }
-  return [];
 }
 
 function localWorkerCheckStatus(props: RenderProps): "ready" | "checking" | "missing" {

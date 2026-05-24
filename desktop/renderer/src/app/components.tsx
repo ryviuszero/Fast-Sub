@@ -97,6 +97,28 @@ export function RemoteConfirmDialog({ provider, files, onCancel, onConfirm }: { 
   );
 }
 
+export function NativeDependencyDialog({ message, onCancel, onChooseDirectory, onInstall }: { message: string; onCancel: () => void; onChooseDirectory: () => void; onInstall: () => void }) {
+  const t = useT();
+  const rt = useRuntimeText();
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-card upload-confirm">
+        <div className="between"><h2>{t("FFmpeg required title")}</h2><span className="warn-symbol">!</span></div>
+        <p>{t("FFmpeg required body")}</p>
+        <section className="panel warn-panel upload-confirm-body">
+          <p className="caption no-margin">{rt(message)}</p>
+          <p className="caption no-margin">{t("FFmpeg private download note")}</p>
+        </section>
+        <div className="row gap-8 end upload-confirm-actions">
+          <button className="btn ghost" onClick={onCancel} type="button">{t("Cancel")}</button>
+          <button className="btn" onClick={onChooseDirectory} type="button">{t("Choose FFmpeg directory")}</button>
+          <button className="btn primary" onClick={onInstall} type="button">{t("Download FFmpeg")}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function DebugPanel({ screen, setScreen, scenario, setScenario, disabledScenario }: { screen: Screen; setScreen: (screen: Screen) => void; scenario: MockScenario; setScenario: (scenario: MockScenario) => void; disabledScenario: boolean }) {
   const t = useT();
   const groups = [

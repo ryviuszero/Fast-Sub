@@ -23,8 +23,12 @@ export interface FastSubClientBridge {
   health(): Promise<HealthStatus>;
   version(): Promise<string>;
   getEnvironmentStatus(): Promise<EnvironmentStatus>;
+  checkNativeDependencies(): Promise<EnvironmentStatus>;
   repairDaemon(): Promise<EnvironmentStatus>;
+  installFFmpeg(): Promise<EnvironmentStatus>;
   installFFmpegWithPackageManager(manager: FFmpegPackageManager): Promise<EnvironmentStatus>;
+  chooseFFmpegDirectory(): Promise<EnvironmentStatus>;
+  clearFFmpegDirectory(): Promise<EnvironmentStatus>;
   installProviderDependency(providerId: string): Promise<ProviderStatus>;
   getConfig(): Promise<ConfigViewModel>;
   updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel>;
@@ -55,8 +59,12 @@ export class DaemonFastSubClient implements FastSubClient {
   health(): Promise<HealthStatus> { return this.bridge.health(); }
   version(): Promise<string> { return this.bridge.version(); }
   getEnvironmentStatus(): Promise<EnvironmentStatus> { return this.bridge.getEnvironmentStatus(); }
+  checkNativeDependencies(): Promise<EnvironmentStatus> { return this.bridge.checkNativeDependencies(); }
   repairDaemon(): Promise<EnvironmentStatus> { return this.bridge.repairDaemon(); }
+  installFFmpeg(): Promise<EnvironmentStatus> { return this.bridge.installFFmpeg(); }
   installFFmpegWithPackageManager(manager: FFmpegPackageManager): Promise<EnvironmentStatus> { return this.bridge.installFFmpegWithPackageManager(manager); }
+  chooseFFmpegDirectory(): Promise<EnvironmentStatus> { return this.bridge.chooseFFmpegDirectory(); }
+  clearFFmpegDirectory(): Promise<EnvironmentStatus> { return this.bridge.clearFFmpegDirectory(); }
   installProviderDependency(providerId: string): Promise<ProviderStatus> { return this.bridge.installProviderDependency(providerId); }
   getConfig(): Promise<ConfigViewModel> { return this.bridge.getConfig(); }
   updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel> { return this.bridge.updateConfig(patch); }

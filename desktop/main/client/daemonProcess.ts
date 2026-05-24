@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { redactSecretText } from "../../shared/privacy/redaction";
 import { daemonTransportLog } from "./transportLog";
-import { ffmpegBinDirectory, prependNativeDependencyPath, whisperCPPCommandPath, whisperCPPBinDirectory } from "./nativeDependencies";
+import { prependNativeDependencyPath, resolvedFFmpegBinDirectory, whisperCPPCommandPath, whisperCPPBinDirectory } from "./nativeDependencies";
 import { packagedDaemonPath, privatePythonRuntimeCommands, prependPathDirs, webTranslateHelperRuntime } from "./runtimeResources";
 import { uiError } from "./uiError";
 
@@ -199,7 +199,10 @@ async function scrubbedEnv(): Promise<NodeJS.ProcessEnv> {
   env.FAST_SUB_GO_CONFIG = env.FAST_SUB_GO_CONFIG ?? join(app.getPath("userData"), "fast-sub-go.toml");
   if (app.isPackaged) {
     env.FAST_SUB_PACKAGED_RUNTIME_ONLY = "1";
-    env.FAST_SUB_FFMPEG_BIN_DIR = ffmpegBinDirectory();
+    const ffmpegBinDir = await resolvedFFmpegBinDirectory();
+    if (ffmpegBinDir) {
+      env.FAST_SUB_FFMPEG_BIN_DIR = ffmpegBinDir;
+    }
     env.FAST_SUB_WHISPER_CPP_BIN_DIR = whisperCPPBinDirectory();
     const whisperCPPCommand = whisperCPPCommandPath();
     if (whisperCPPCommand) {

@@ -1,4 +1,4 @@
-import { app, ipcMain, type WebContents } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, type WebContents } from "electron";
 import type { CreateJobRequest, FFmpegPackageManager, JobEventHandlers } from "../../shared/contracts/types";
 import { DaemonProcessManager } from "./daemonProcess";
 import { MainDaemonFastSubClient } from "./daemonClient";
@@ -17,8 +17,21 @@ export function registerFastSubClientIpc(): void {
   handle("fast-sub-client:health", () => client.health());
   handle("fast-sub-client:version", () => client.version());
   handle("fast-sub-client:get-environment-status", () => client.getEnvironmentStatus());
+  handle("fast-sub-client:check-native-dependencies", () => client.checkNativeDependencies());
   handle("fast-sub-client:repair-daemon", () => client.repairDaemon());
+  handle("fast-sub-client:install-ffmpeg", () => client.installFFmpeg());
   handle("fast-sub-client:install-ffmpeg-package-manager", (_event, manager: unknown) => client.installFFmpegWithPackageManager(normalizeFFmpegPackageManager(manager)));
+  handle("fast-sub-client:choose-ffmpeg-directory", async (event) => {
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+    const result = parent
+      ? await dialog.showOpenDialog(parent, { properties: ["openDirectory"] })
+      : await dialog.showOpenDialog({ properties: ["openDirectory"] });
+    if (result.canceled || !result.filePaths[0]) {
+      return client.checkNativeDependencies();
+    }
+    return client.setFFmpegDirectory(result.filePaths[0]);
+  });
+  handle("fast-sub-client:clear-ffmpeg-directory", () => client.clearFFmpegDirectory());
   handle("fast-sub-client:install-provider-dependency", (_event, providerId: unknown) => client.installProviderDependency(String(providerId)));
   handle("fast-sub-client:get-config", () => client.getConfig());
   handle("fast-sub-client:update-config", (_event, patch: unknown) => client.updateConfig(patch as Parameters<typeof client.updateConfig>[0]));

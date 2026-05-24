@@ -36,6 +36,7 @@ desktop/dist-electron/
 desktop/dist-release/
 desktop/out/
 desktop/.vite/
+desktop/.dev-user-data/
 desktop/.gocache-release/
 desktop/coverage/
 desktop/test-results/

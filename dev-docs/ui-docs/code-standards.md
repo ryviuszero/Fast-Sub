@@ -125,6 +125,7 @@
 - 不在默认测试中调用真实 daemon、真实模型、真实 ffmpeg、真实 API 或真实网络。
 - 修改 Electron `extraResources`、`afterPack`、app 私有 runtime、ASAR 外 helper 或 packaged provider 依赖时，必须增加或更新 packaged smoke 断言，验证最终 `dist-release/*/resources` 内的运行时文件和生产依赖真实存在。不能只验证源码目录、`desktop/resources` staging 目录或仓库内 `win-unpacked` 能运行，因为 Node module resolution 可能向上命中工作区 `desktop/node_modules`，导致安装版缺依赖的假阳性。
 - Packaged helper smoke 必须尽量验证自包含性：helper runtime command、helper entry、生产 `node_modules`、关键 provider dependency 目录、ASAR 外路径和 redaction 约束。真实网络 provider 验证仍只放手动 release smoke，但依赖存在性检查必须进入默认 packaged runtime smoke。
+- Round 15 native dependency smoke 必须分层：默认/CI-like 场景只跑离线 deterministic 检查和 fake binaries，覆盖 FFmpeg missing/custom/app-private/system-PATH pair、bundled aria2 资源存在性和 detect-only 不下载；真实 `ffmpeg-install` 只放手动 release validation。任何 aria2 下载测试都不能把目标文件大小达到 Content-Length 当作完成条件，必须等待 aria2 code 0 或 fake aria2 的等价完成信号后才允许解压。
 
 ## File Organization
 

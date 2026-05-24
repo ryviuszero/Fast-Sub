@@ -47,9 +47,9 @@ Round 13 package content scan of `desktop/dist-release/win-unpacked/resources` f
 
 | Component | Source / current resolver | License summary | Round 13 policy | Notes |
 | --- | --- | --- | --- | --- |
-| FFmpeg / FFprobe | Runtime download from `https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip` on Windows | LGPL/GPL build variant must be verified from source package | `download-only` | Current app downloads to `userData/native-binaries/ffmpeg/bin`; do not bundle until variant, source offer, and notice are reviewed. |
-| aria2 | Runtime download from `github.com/aria2/aria2` Windows release | GPL-2.0-or-later | `download-only` | Current app uses it only as a downloader accelerator and falls back to HTTPS. Do not bundle in installer without GPL obligations review. |
-| System package managers | Scoop, Winget, Chocolatey commands | External package manager terms | `manual-user-install` | App only offers explicit fixed commands for FFmpeg fallback. |
+| FFmpeg / FFprobe | Explicit runtime download from `https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip` on Windows; user may also choose an existing local directory | LGPL/GPL build variant must be verified from source package | `download-only` / `needs-review` before public release | Round 15 downloads only after explicit user action into `userData/native-binaries/ffmpeg/bin` and writes `download-manifest.json` with platform, arch, source URL, computed archive SHA256, version, license evidence note, and extracted bin layout. Formal public release must verify the upstream SHA256/license evidence before marking the path release-ready. |
+| aria2 | `github.com/aria2/aria2` Windows release 1.37.0 (`aria2-1.37.0-win-64bit-build1.zip`) | GPL-2.0-or-later | `bundle-ok` | Windows package includes `resources/bin/win32-x64/aria2/aria2c.exe` as the FFmpeg download accelerator. Source access: https://github.com/aria2/aria2/releases/tag/release-1.37.0. Binary SHA256 is recorded in `desktop/vendor/aria2/win32-x64/SOURCE.txt`. |
+| System package managers | Scoop, Winget, Chocolatey commands | External package manager terms | `manual-user-install` | Advanced fallback only; ordinary UI restoration uses choosing an existing FFmpeg / FFprobe directory or explicit app-private FFmpeg download. |
 
 ## Models
 

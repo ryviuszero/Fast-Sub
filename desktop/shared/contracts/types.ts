@@ -24,6 +24,7 @@ export type JobEventType = "snapshot" | "progress" | "log_tail" | "succeeded" | 
 export type RecoveryAction = "retry" | "install_model" | "open_settings" | "open_diagnostics" | "repair_daemon" | "dismiss";
 export type FFmpegPackageManager = "scoop" | "winget" | "choco" | "brew";
 export type LocalDataCleanupTarget = "jobs" | "native-binaries" | "cache";
+export type NativeDependencySource = "custom" | "app-private" | "system-path" | "bundled" | "missing" | "installing" | "failed";
 export type MockScenario =
   | "setupReady"
   | "missingAsr"
@@ -59,10 +60,39 @@ export interface EnvironmentStatus {
   ffmpegInstalling?: boolean;
   ffmpegInstallProgressPercent?: number;
   ffmpegInstallLogs?: string[];
+  nativeDependencies?: {
+    ffmpegPair: FFmpegDependencyView;
+    aria2?: NativeDependencyView;
+  };
   modelDirectoryReady: boolean;
   daemonReady: boolean;
   warnings: string[];
   error?: UiError;
+}
+
+export interface NativeDependencyView {
+  ready: boolean;
+  source: NativeDependencySource;
+  binDir?: string;
+  displayPath?: string;
+  version?: string;
+  installing?: boolean;
+  progressPercent?: number;
+  lastError?: string;
+  logs?: string[];
+}
+
+export interface FFmpegDependencyView {
+  ready: boolean;
+  source: NativeDependencySource;
+  binDir?: string;
+  displayPath?: string;
+  ffmpegVersion?: string;
+  ffprobeVersion?: string;
+  installing?: boolean;
+  progressPercent?: number;
+  lastError?: string;
+  logs?: string[];
 }
 
 export interface ModelStatus {
@@ -228,8 +258,12 @@ export interface FastSubClient {
   health(): Promise<HealthStatus>;
   version(): Promise<string>;
   getEnvironmentStatus(): Promise<EnvironmentStatus>;
+  checkNativeDependencies(): Promise<EnvironmentStatus>;
   repairDaemon(): Promise<EnvironmentStatus>;
+  installFFmpeg(): Promise<EnvironmentStatus>;
   installFFmpegWithPackageManager(manager: FFmpegPackageManager): Promise<EnvironmentStatus>;
+  chooseFFmpegDirectory(): Promise<EnvironmentStatus>;
+  clearFFmpegDirectory(): Promise<EnvironmentStatus>;
   installProviderDependency(providerId: string): Promise<ProviderStatus>;
   getConfig(): Promise<ConfigViewModel>;
   updateConfig(patch: Partial<ConfigViewModel>): Promise<ConfigViewModel>;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type
 import type { ConfigViewModel, CreateJobRequest, EnvironmentStatus, FastSubClient, FFmpegPackageManager, JobDetail, JobEvent, JobStatus, JobSummary, LocalDataCleanupTarget, MockScenario, ModelStatus, ProviderStatus } from "../../../shared/contracts/types";
 import { containsSecret } from "../../../shared/privacy/redaction";
 import { defaultConfig, mockPaths } from "../client/mockFixtures";
-import { AppMenu, DebugPanel, RemoteConfirmDialog } from "./components";
+import { AppMenu, DebugPanel, NativeDependencyDialog, RemoteConfirmDialog } from "./components";
 import { createClient, filterSupportedMediaPaths, makeFile, makeFilesFromList } from "./fixtures";
 import { I18nProvider, useT } from "./i18n";
 import { renderScreen } from "./renderScreen";
@@ -17,6 +17,11 @@ type PendingRemoteConfirmation = {
   provider?: ProviderStatus;
   files: MediaFile[];
   onConfirm: () => void;
+};
+
+type PendingNativeDependencyGate = {
+  onReady: () => void;
+  message: string;
 };
 
 export function App({ client: providedClient }: { client?: FastSubClient }) {
@@ -45,6 +50,7 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   const [outputDirectoryPath, setOutputDirectoryPath] = useState(mockPaths.output);
   const [openNotice, setOpenNotice] = useState<{ message: string; tone: "ok" | "warn" } | null>(null);
   const [remoteConfirmRequest, setRemoteConfirmRequest] = useState<PendingRemoteConfirmation | null>(null);
+  const [nativeDependencyGate, setNativeDependencyGate] = useState<PendingNativeDependencyGate | null>(null);
   const backStackRef = useRef<Screen[]>([]);
   const forwardStackRef = useRef<Screen[]>([]);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
@@ -169,6 +175,19 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
       ffmpegInstalling: false,
       ffmpegInstallProgressPercent: 0,
       ffmpegInstallLogs: [],
+      nativeDependencies: {
+        ffmpegPair: {
+          ready: false,
+          source: "missing",
+          displayPath: "FFmpeg / FFprobe",
+          lastError: "FFmpeg / FFprobe status unavailable."
+        },
+        aria2: {
+          ready: false,
+          source: "missing",
+          displayPath: "HTTPS fallback"
+        }
+      },
       modelDirectoryReady: false,
       daemonReady: false,
       warnings: ["Fast Sub service unavailable"],
@@ -645,6 +664,29 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     });
   };
 
+  const ensureFFmpegReadyForTask = async (onReady: () => void): Promise<boolean> => {
+    const env = await client.checkNativeDependencies();
+    setEnvironment(env);
+    if (env.nativeDependencies?.ffmpegPair.ready ?? env.ffmpegReady) {
+      return true;
+    }
+    setNativeDependencyGate({
+      onReady,
+      message: env.nativeDependencies?.ffmpegPair.lastError || "FFmpeg / FFprobe is required for this task."
+    });
+    return false;
+  };
+
+  const pollFFmpegInstall = async (initial: EnvironmentStatus): Promise<EnvironmentStatus> => {
+    let latest = initial;
+    for (let attempt = 0; attempt < 900 && (latest.ffmpegInstalling || latest.nativeDependencies?.ffmpegPair.installing); attempt += 1) {
+      await delay(1000);
+      latest = await client.checkNativeDependencies();
+      setEnvironment(latest);
+    }
+    return latest;
+  };
+
   const startJob = async (options: { conflictResolved?: boolean; inputPaths?: string[]; outputConflict?: ConfigViewModel["outputConflict"]; outputPath?: string; remoteUploadConfirmed?: boolean } = {}) => {
     const conflictResolved = options.conflictResolved ?? false;
     const outputConflict = options.outputConflict ?? config.outputConflict;
@@ -675,6 +717,11 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
     const inputPaths = options.inputPaths?.length ? options.inputPaths : files.map((file) => file.path);
     if (inputPaths.length === 0) {
       setScreen("main-empty");
+      return;
+    }
+    if (!await ensureFFmpegReadyForTask(() => {
+      void startJob({ ...options, inputPaths });
+    })) {
       return;
     }
     const asrRemoteProvider = providers.find((provider) => provider.id === asrSelection.providerId && provider.requiresUploadConfirmation);
@@ -733,6 +780,11 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
   };
 
   const startToolJob = async (type: "translate_srt" | "burn_in", inputPaths: string[], options: { remoteUploadConfirmed?: boolean } = {}) => {
+    if (type === "burn_in" && !await ensureFFmpegReadyForTask(() => {
+      void startToolJob(type, inputPaths, options);
+    })) {
+      return null;
+    }
     const translationRemoteProvider = type === "translate_srt"
       ? providers.find((provider) => provider.id === config.translationProvider && provider.requiresUploadConfirmation)
       : undefined;
@@ -940,6 +992,43 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
             }}
           />
         )}
+        {nativeDependencyGate && (
+          <NativeDependencyDialog
+            message={nativeDependencyGate.message}
+            onCancel={() => setNativeDependencyGate(null)}
+            onChooseDirectory={async () => {
+              const pending = nativeDependencyGate;
+              try {
+                const env = await client.chooseFFmpegDirectory();
+                setEnvironment(env);
+                if (env.nativeDependencies?.ffmpegPair.ready ?? env.ffmpegReady) {
+                  setNativeDependencyGate(null);
+                  pending.onReady();
+                }
+              } catch (error) {
+                setOpenNotice({ message: error instanceof Error ? error.message : "FFmpeg directory failed", tone: "warn" });
+              }
+            }}
+            onInstall={async () => {
+              const pending = nativeDependencyGate;
+              try {
+                const env = await client.installFFmpeg();
+                setEnvironment(env);
+                setNativeDependencyGate({ ...pending, message: env.nativeDependencies?.ffmpegPair.lastError || "FFmpeg installation is in progress." });
+                const latest = await pollFFmpegInstall(env);
+                const ffmpegPair = latest.nativeDependencies?.ffmpegPair;
+                if ((ffmpegPair?.ready ?? latest.ffmpegReady) && !ffmpegPair?.lastError) {
+                  setNativeDependencyGate(null);
+                  pending.onReady();
+                  return;
+                }
+                setNativeDependencyGate({ ...pending, message: ffmpegPair?.lastError || "FFmpeg download failed." });
+              } catch (error) {
+                setNativeDependencyGate({ ...nativeDependencyGate, message: error instanceof Error ? error.message : "FFmpeg download failed." });
+              }
+            }}
+          />
+        )}
         {renderScreen({
           screen,
           setScreen: navigateFromScreen,
@@ -1021,6 +1110,24 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
             setEnvironment(await client.repairDaemon());
             setScreen("setup-check");
           },
+          checkNativeDependencies: async () => {
+            setEnvironment(await client.checkNativeDependencies());
+          },
+          installFFmpeg: async () => {
+            setEnvironment((current) => current ? {
+              ...current,
+              ffmpegInstalling: true,
+              ffmpegInstallProgressPercent: 5,
+              ffmpegInstallLogs: ["Installing FFmpeg."],
+              nativeDependencies: current.nativeDependencies ? {
+                ...current.nativeDependencies,
+                ffmpegPair: { ...current.nativeDependencies.ffmpegPair, installing: true, source: "installing", progressPercent: 5 }
+              } : current.nativeDependencies
+            } : current);
+            const started = await client.installFFmpeg();
+            setEnvironment(started);
+            await pollFFmpegInstall(started);
+          },
           installFFmpegWithPackageManager: async (manager: FFmpegPackageManager) => {
             setEnvironment((current) => current ? {
               ...current,
@@ -1030,6 +1137,12 @@ export function App({ client: providedClient }: { client?: FastSubClient }) {
             } : current);
             setEnvironment(await client.installFFmpegWithPackageManager(manager));
             setScreen("setup-check");
+          },
+          chooseFFmpegDirectory: async () => {
+            setEnvironment(await client.chooseFFmpegDirectory());
+          },
+          clearFFmpegDirectory: async () => {
+            setEnvironment(await client.clearFFmpegDirectory());
           },
           installProviderDependency: async (id) => {
             const installed = await client.installProviderDependency(id);
@@ -1072,6 +1185,10 @@ function onboardingComplete(): boolean {
   } catch {
     return false;
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function markOnboardingComplete(): void {

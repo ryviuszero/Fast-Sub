@@ -52,6 +52,23 @@ export const baseEnvironment: EnvironmentStatus = {
   ffmpegInstalling: false,
   ffmpegInstallProgressPercent: 100,
   ffmpegInstallLogs: [],
+  nativeDependencies: {
+    ffmpegPair: {
+      ready: true,
+      source: "app-private",
+      displayPath: "app-private FFmpeg",
+      ffmpegVersion: "ffmpeg version mock",
+      ffprobeVersion: "ffprobe version mock",
+      progressPercent: 100,
+      logs: []
+    },
+    aria2: {
+      ready: false,
+      source: "missing",
+      displayPath: "HTTPS fallback",
+      lastError: "aria2 unavailable; using HTTPS fallback."
+    }
+  },
   modelDirectoryReady: true,
   daemonReady: true,
   warnings: []

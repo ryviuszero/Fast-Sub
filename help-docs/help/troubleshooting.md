@@ -11,12 +11,24 @@ Start with the diagnostics page. It should show app, daemon, platform, FFmpeg, m
 
 FFmpeg/FFprobe is needed for media probing, audio extraction, and burn-in.
 
-On Windows, the desktop app can install FFmpeg into app-private user data. If this fails:
+Missing FFmpeg does not stop you from opening Fast Sub. Subtitle/text translation, model installation, Provider settings, and diagnostics remain available.
 
-- Retry from setup or diagnostics.
+On Windows, the desktop app can use:
+
+- A directory you choose that contains both `ffmpeg.exe` and `ffprobe.exe`.
+- An app-private FFmpeg download that you start explicitly.
+- A system `PATH` source only when `ffmpeg.exe` and `ffprobe.exe` resolve to the same directory.
+
+Only one of `ffmpeg` or `ffprobe`, or two binaries from different directories, is treated as not ready.
+
+If automatic download fails:
+
+- Retry from setup or diagnostics only when you intentionally click download.
 - Check your network.
-- Use a package manager fallback if offered.
+- Choose an existing FFmpeg directory if you already have FFmpeg installed.
 - Open diagnostics and review the redacted error.
+
+Environment refresh, Provider checks, and opening settings should not keep retrying FFmpeg download. If they do, report it as a bug.
 
 ## The ASR Model Is Missing
 

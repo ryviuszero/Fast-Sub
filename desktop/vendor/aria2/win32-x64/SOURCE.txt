@@ -1,0 +1,11 @@
+aria2c.exe
+
+Version: 1.37.0
+Platform: Windows x64
+Upstream: https://github.com/aria2/aria2/releases/tag/release-1.37.0
+Archive: aria2-1.37.0-win-64bit-build1.zip
+License: GPL-2.0-or-later
+SHA256(aria2c.exe): BE2099C214F63A3CB4954B09A0BECD6E2E34660B886D4C898D260FEBFE9D70C2
+
+Release packaging copies this executable into:
+resources/bin/win32-x64/aria2/aria2c.exe

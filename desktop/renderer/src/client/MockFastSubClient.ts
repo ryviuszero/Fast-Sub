@@ -215,7 +215,38 @@ export class MockFastSubClient implements FastSubClient {
     return this.getEnvironmentStatus();
   }
 
+  async checkNativeDependencies(): Promise<EnvironmentStatus> {
+    return this.getEnvironmentStatus();
+  }
+
+  async installFFmpeg(): Promise<EnvironmentStatus> {
+    return this.getEnvironmentStatus();
+  }
+
   async installFFmpegWithPackageManager(_manager: FFmpegPackageManager): Promise<EnvironmentStatus> {
+    return this.getEnvironmentStatus();
+  }
+
+  async chooseFFmpegDirectory(): Promise<EnvironmentStatus> {
+    const env = await this.getEnvironmentStatus();
+    return {
+      ...env,
+      ffmpegReady: true,
+      nativeDependencies: env.nativeDependencies ? {
+        ...env.nativeDependencies,
+        ffmpegPair: {
+          ...env.nativeDependencies.ffmpegPair,
+          ready: true,
+          source: "custom",
+          displayPath: "selected FFmpeg",
+          ffmpegVersion: "ffmpeg version mock",
+          ffprobeVersion: "ffprobe version mock"
+        }
+      } : env.nativeDependencies
+    };
+  }
+
+  async clearFFmpegDirectory(): Promise<EnvironmentStatus> {
     return this.getEnvironmentStatus();
   }
 

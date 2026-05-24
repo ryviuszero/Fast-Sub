@@ -44,7 +44,10 @@ function cleanupCandidates(userData: string, target: LocalDataCleanupTarget): st
     case "jobs":
       return [join(userData, ".fast-sub", "jobs")];
     case "native-binaries":
-      return [join(userData, "native-binaries")];
+      return [
+        join(userData, "native-binaries", "ffmpeg"),
+        join(userData, "native-binaries", "whisper-cpp")
+      ];
     case "cache":
       return cacheDirectoryNames.map((name) => join(userData, name));
   }

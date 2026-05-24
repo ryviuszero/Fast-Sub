@@ -17,7 +17,7 @@ import { mapDaemonEventToJobEvent, type DaemonEventType } from "../../shared/con
 import { existsSync } from "node:fs";
 import { redactSecretText } from "../../shared/privacy/redaction";
 import { type DaemonSession, DaemonProcessManager } from "./daemonProcess";
-import { ensureFFmpegInstalled, ensureWhisperCPPInstalled, installFFmpegWithPackageManager } from "./nativeDependencies";
+import { checkFFmpegAvailable, clearFFmpegDirectory, getNativeDependencyViews, installFFmpeg, ensureWhisperCPPInstalled, installFFmpegWithPackageManager, setFFmpegDirectory } from "./nativeDependencies";
 import { defaultSecretStorePath, SafeStorageSecretStore } from "./secretStore";
 import { daemonTransportLog } from "./transportLog";
 import { errorFromUnknown, uiError } from "./uiError";
@@ -315,7 +315,12 @@ export class MainDaemonFastSubClient {
   }
 
   async getEnvironmentStatus(): Promise<EnvironmentStatus> {
-    const ffmpeg = await ensureFFmpegInstalled();
+    return this.checkNativeDependencies();
+  }
+
+  async checkNativeDependencies(): Promise<EnvironmentStatus> {
+    const nativeDependencies = await getNativeDependencyViews();
+    const ffmpeg = await checkFFmpegAvailable();
     if (ffmpeg.installedNow) {
       this.pendingNativeDependencyRepair = true;
     }
@@ -335,7 +340,7 @@ export class MainDaemonFastSubClient {
     const translationReady = models.some((model) => model.kind === "translation" && model.state === "ready");
     const warnings = [
       ...(health === "ok" ? [] : ["本地服务连接中断"]),
-      ...(ffmpeg.available ? [] : [`FFmpeg 未安装或安装失败：${ffmpeg.message ?? "请检查网络后重试"}`])
+      ...(ffmpeg.available || ffmpeg.installing ? [] : [`FFmpeg 未安装或安装失败：${ffmpeg.message ?? "请检查网络后重试"}`])
     ];
     return {
       health: health === "ok" && !ffmpeg.available ? "degraded" : health,
@@ -349,6 +354,7 @@ export class MainDaemonFastSubClient {
       ffmpegInstalling: ffmpeg.installing,
       ffmpegInstallProgressPercent: ffmpeg.progressPercent,
       ffmpegInstallLogs: ffmpeg.logs,
+      nativeDependencies,
       modelDirectoryReady: health === "ok",
       daemonReady: health === "ok",
       warnings,
@@ -370,6 +376,34 @@ export class MainDaemonFastSubClient {
       this.nativeDependenciesSynced = true;
       this.pendingNativeDependencyRepair = false;
     }
+    return this.getEnvironmentStatus();
+  }
+
+  async installFFmpeg(): Promise<EnvironmentStatus> {
+    const ffmpeg = await installFFmpeg();
+    if (ffmpeg.available) {
+      await this.processManager.repair().catch(() => undefined);
+      this.nativeDependenciesSynced = true;
+      this.pendingNativeDependencyRepair = false;
+    }
+    return this.getEnvironmentStatus();
+  }
+
+  async setFFmpegDirectory(binDir: string): Promise<EnvironmentStatus> {
+    const ffmpeg = await setFFmpegDirectory(binDir);
+    if (!ffmpeg.available) {
+      throw uiError("invalid_ffmpeg_directory", "FFmpeg / FFprobe 目录不可用", ffmpeg.message ?? "请选择同时包含 ffmpeg 和 ffprobe 的目录。", "重新选择目录");
+    }
+    await this.processManager.repair().catch(() => undefined);
+    this.nativeDependenciesSynced = true;
+    this.pendingNativeDependencyRepair = false;
+    return this.getEnvironmentStatus();
+  }
+
+  async clearFFmpegDirectory(): Promise<EnvironmentStatus> {
+    await clearFFmpegDirectory();
+    await this.processManager.repair().catch(() => undefined);
+    this.nativeDependenciesSynced = false;
     return this.getEnvironmentStatus();
   }
 
@@ -523,7 +557,7 @@ export class MainDaemonFastSubClient {
       return await this.createDaemonJob(body);
     } catch (error) {
       if (isFFmpegDependencyError(error)) {
-        const ffmpeg = await ensureFFmpegInstalled();
+        const ffmpeg = await checkFFmpegAvailable();
         if (ffmpeg.available) {
           await this.processManager.repair().catch(() => undefined);
           return this.createDaemonJob(body);
@@ -537,9 +571,9 @@ export class MainDaemonFastSubClient {
     if (this.nativeDependenciesSynced) {
       return;
     }
-    const ffmpeg = await ensureFFmpegInstalled();
+    const ffmpeg = await checkFFmpegAvailable();
     if (!ffmpeg.available || ffmpeg.installing) {
-      return;
+      throw uiError("native_dependency_missing", "需要 FFmpeg / FFprobe", "当前任务需要 FFmpeg / FFprobe 读取媒体、提取音频或烧录字幕。请选择已有目录或手动下载后重试。", "配置 FFmpeg");
     }
     await this.processManager.repair().catch(() => undefined);
     this.nativeDependenciesSynced = true;
